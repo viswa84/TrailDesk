@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { departures as initialDepartures, guides } from '../data/data';
+import { useDepartures } from '../hooks/useDepartures';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isSameDay, differenceInDays, addMonths, subMonths } from 'date-fns';
@@ -22,7 +22,7 @@ const trekColors = [
 ];
 
 export default function DeparturesPage() {
-  const [deps, setDeps] = useState(initialDepartures);
+  const { data: deps, guides, loading, error, add: addDep, update: updateDep, remove: removeDep } = useDepartures();
   const [view, setView] = useState('list');
   const [selectedDep, setSelectedDep] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -50,16 +50,15 @@ export default function DeparturesPage() {
   };
 
   const handleSave = () => {
-    const guide = guides.find(g => g.id === Number(formData.guideId));
     if (editingDep) {
-      setDeps(prev => prev.map(d => d.id === editingDep.id ? { ...d, ...formData, capacity: Number(formData.capacity), price: Number(formData.price), guideId: Number(formData.guideId), guideName: guide?.name || '', booked: d.booked } : d));
+      updateDep(editingDep.id, formData);
     } else {
-      setDeps(prev => [...prev, { ...formData, id: `DEP-${String(prev.length + 1).padStart(3, '0')}`, capacity: Number(formData.capacity), price: Number(formData.price), guideId: Number(formData.guideId), guideName: guide?.name || '', booked: 0 }]);
+      addDep(formData);
     }
     setShowForm(false);
   };
 
-  const handleDelete = (id) => { setDeps(prev => prev.filter(d => d.id !== id)); setShowDeleteConfirm(null); };
+  const handleDelete = (id) => { removeDep(id); setShowDeleteConfirm(null); };
 
   // Calendar helpers
   const monthStart = startOfMonth(calendarDate);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { customers as initialCustomers } from '../data/data';
+import { useCustomers } from '../hooks/useCustomers';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { Search, Plus, Edit, Trash2, Users, Mail, Phone, X } from 'lucide-react';
@@ -7,7 +7,7 @@ import { Search, Plus, Edit, Trash2, Users, Mail, Phone, X } from 'lucide-react'
 const emptyCustomer = { name: '', email: '', phone: '', city: '', tags: [] };
 
 export default function CustomersPage() {
-  const [customersList, setCustomersList] = useState(initialCustomers);
+  const { data: customersList, loading, error, add: addCustomer, update: updateCustomer, remove: removeCustomer } = useCustomers();
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('All');
   const [showForm, setShowForm] = useState(false);
@@ -16,7 +16,7 @@ export default function CustomersPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [newTag, setNewTag] = useState('');
 
-  const allTags = ['All', ...new Set(initialCustomers.flatMap(c => c.tags))];
+  const allTags = ['All', ...new Set(customersList.flatMap(c => c.tags))];
 
   const filtered = customersList.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search);
@@ -34,14 +34,14 @@ export default function CustomersPage() {
 
   const handleSave = () => {
     if (editingCustomer) {
-      setCustomersList(prev => prev.map(c => c.id === editingCustomer.id ? { ...c, ...formData } : c));
+      updateCustomer(editingCustomer.id, { ...formData });
     } else {
-      setCustomersList(prev => [...prev, { ...formData, id: Date.now(), totalTreks: 0, ltv: 0, joinDate: new Date().toISOString().slice(0, 10) }]);
+      addCustomer({ ...formData });
     }
     setShowForm(false);
   };
 
-  const handleDelete = (id) => { setCustomersList(prev => prev.filter(c => c.id !== id)); setShowDeleteConfirm(null); };
+  const handleDelete = (id) => { removeCustomer(id); setShowDeleteConfirm(null); };
 
   const addTag = () => {
     if (newTag.trim() && !formData.tags.includes(newTag.trim())) {

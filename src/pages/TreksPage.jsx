@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { treks as initialTreks } from '../data/data';
+import { useTreks } from '../hooks/useTreks';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { Search, Plus, Filter, Star, Clock, IndianRupee, MapPin, Edit, Trash2, Mountain, X } from 'lucide-react';
@@ -13,7 +13,7 @@ const difficultyColors = {
 const emptyTrek = { name: '', region: 'Himalayas', state: '', difficulty: 'Easy', duration: '', altitude: '', price: '', season: 'Winter', description: '', image: 'https://images.unsplash.com/photo-1486870591958-9b9d0d1dda99?w=400&h=250&fit=crop' };
 
 export default function TreksPage() {
-  const [treksList, setTreksList] = useState(initialTreks);
+  const { data: treksList, loading, error, add: addTrek, update: updateTrek, remove: removeTrek } = useTreks();
   const [search, setSearch] = useState('');
   const [regionFilter, setRegionFilter] = useState('All');
   const [difficultyFilter, setDifficultyFilter] = useState('All');
@@ -23,7 +23,7 @@ export default function TreksPage() {
   const [formData, setFormData] = useState(emptyTrek);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
-  const regions = ['All', ...new Set(initialTreks.map(t => t.region))];
+  const regions = ['All', ...new Set(treksList.map(t => t.region))];
   const difficulties = ['All', 'Easy', 'Moderate', 'Difficult'];
   const seasons = ['All', 'Winter', 'Summer', 'Monsoon', 'Spring'];
 
@@ -49,15 +49,15 @@ export default function TreksPage() {
 
   const handleSave = () => {
     if (editingTrek) {
-      setTreksList(prev => prev.map(t => t.id === editingTrek.id ? { ...t, ...formData, price: Number(formData.price) } : t));
+      updateTrek(editingTrek.id, { ...formData, price: Number(formData.price) });
     } else {
-      setTreksList(prev => [...prev, { ...formData, id: Date.now(), price: Number(formData.price), rating: 0, totalBookings: 0 }]);
+      addTrek({ ...formData, price: Number(formData.price) });
     }
     setShowModal(false);
   };
 
   const handleDelete = (id) => {
-    setTreksList(prev => prev.filter(t => t.id !== id));
+    removeTrek(id);
     setShowDeleteConfirm(null);
   };
 

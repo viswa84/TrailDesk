@@ -1,15 +1,13 @@
 import { useState } from 'react';
-import { invoices as initialInvoices, payments as initialPayments, refunds as initialRefunds } from '../data/data';
+import { useFinance } from '../hooks/useFinance';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { format } from 'date-fns';
 import { Search, Plus, Edit, Trash2, Download, FileText, CreditCard, RotateCcw } from 'lucide-react';
 
 export default function FinancePage() {
+  const { invoices: invoicesList, payments: paymentsList, refunds: refundsList, loading, error, addInvoice: addInv, updateInvoice: updateInv, removeInvoice: removeInv } = useFinance();
   const [activeTab, setActiveTab] = useState('invoices');
-  const [invoicesList, setInvoicesList] = useState(initialInvoices);
-  const [paymentsList] = useState(initialPayments);
-  const [refundsList] = useState(initialRefunds);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -36,15 +34,14 @@ export default function FinancePage() {
 
   const handleSaveInvoice = () => {
     if (editingItem) {
-      setInvoicesList(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...formData, amount: Number(formData.amount) } : i));
+      updateInv(editingItem.id, { ...formData, amount: Number(formData.amount) });
     } else {
-      const newId = `INV-${3000 + invoicesList.length + 1}`;
-      setInvoicesList(prev => [...prev, { ...formData, id: newId, amount: Number(formData.amount), date: new Date().toISOString().slice(0, 10), bookingId: '' }]);
+      addInv({ ...formData, amount: Number(formData.amount) });
     }
     setShowForm(false);
   };
 
-  const handleDeleteInvoice = (id) => { setInvoicesList(prev => prev.filter(i => i.id !== id)); setShowDeleteConfirm(null); };
+  const handleDeleteInvoice = (id) => { removeInv(id); setShowDeleteConfirm(null); };
 
   return (
     <div className="space-y-6 animate-fade-in">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { bookings as initialBookings, departures, treks } from '../data/data';
+import { useBookings } from '../hooks/useBookings';
 import Modal from '../components/ui/Modal';
 import Drawer from '../components/ui/Drawer';
 import StatusBadge from '../components/ui/StatusBadge';
@@ -9,7 +9,7 @@ import { Search, Plus, Eye, Edit, Trash2, BookOpen, Users, AlertCircle } from 'l
 const emptyBooking = { customerName: '', trekName: '', departureId: '', amount: '', paymentStatus: 'Unpaid', bookingStatus: 'Pending', participants: [{ name: '', age: '', medical: '' }] };
 
 export default function BookingsPage() {
-  const [bookingsList, setBookingsList] = useState(initialBookings);
+  const { data: bookingsList, loading, error, add: addBooking, update: updateBooking, remove: removeBooking } = useBookings();
   const [search, setSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -36,15 +36,14 @@ export default function BookingsPage() {
 
   const handleSave = () => {
     if (editingBooking) {
-      setBookingsList(prev => prev.map(b => b.id === editingBooking.id ? { ...b, ...formData, amount: Number(formData.amount) } : b));
+      updateBooking(editingBooking.id, { ...formData, amount: Number(formData.amount) });
     } else {
-      const newId = `BK-${2600 + bookingsList.length + 1}`;
-      setBookingsList(prev => [...prev, { ...formData, id: newId, amount: Number(formData.amount), date: formData.date || new Date().toISOString().slice(0, 10), bookedOn: new Date().toISOString().slice(0, 10) }]);
+      addBooking({ ...formData, amount: Number(formData.amount), date: formData.date || new Date().toISOString().slice(0, 10) });
     }
     setShowForm(false);
   };
 
-  const handleDelete = (id) => { setBookingsList(prev => prev.filter(b => b.id !== id)); setShowDeleteConfirm(null); };
+  const handleDelete = (id) => { removeBooking(id); setShowDeleteConfirm(null); };
 
   const addParticipant = () => { setFormData({ ...formData, participants: [...formData.participants, { name: '', age: '', medical: '' }] }); };
   const removeParticipant = (idx) => { setFormData({ ...formData, participants: formData.participants.filter((_, i) => i !== idx) }); };

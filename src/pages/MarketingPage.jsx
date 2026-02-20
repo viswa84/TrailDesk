@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { campaigns as initialCampaigns } from '../data/data';
+import { useCampaigns } from '../hooks/useCampaigns';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { Search, Plus, Edit, Trash2, Megaphone, TrendingUp, DollarSign, Users, Target } from 'lucide-react';
@@ -7,7 +7,7 @@ import { Search, Plus, Edit, Trash2, Megaphone, TrendingUp, DollarSign, Users, T
 const emptyCampaign = { name: '', platform: 'Google Ads', spend: '', leads: '', conversions: '', status: 'Active', startDate: '', endDate: '' };
 
 export default function MarketingPage() {
-  const [list, setList] = useState(initialCampaigns);
+  const { data: list, kpis, loading, error, add: addCampaign, update: updateCampaign, remove: removeCampaign } = useCampaigns();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -19,10 +19,10 @@ export default function MarketingPage() {
     c.platform.toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalSpend = list.reduce((s, c) => s + c.spend, 0);
-  const totalLeads = list.reduce((s, c) => s + c.leads, 0);
-  const totalConv = list.reduce((s, c) => s + c.conversions, 0);
-  const avgROAS = (list.reduce((s, c) => s + c.roas, 0) / list.length).toFixed(2);
+  const totalSpend = kpis.totalSpend;
+  const totalLeads = kpis.totalLeads;
+  const totalConv = kpis.totalConversions;
+  const avgROAS = kpis.avgROAS;
 
   const openAdd = () => { setEditing(null); setFormData(emptyCampaign); setShowForm(true); };
   const openEdit = (c) => { setEditing(c); setFormData({ ...c, spend: String(c.spend), leads: String(c.leads), conversions: String(c.conversions) }); setShowForm(true); };
@@ -32,9 +32,9 @@ export default function MarketingPage() {
     const cpl = leads > 0 ? Math.round(spend / leads) : 0;
     const roas = spend > 0 ? Number(((conv * 8500) / spend).toFixed(2)) : 0;
     if (editing) {
-      setList(p => p.map(c => c.id === editing.id ? { ...c, ...formData, spend, leads, conversions: conv, cpl, roas } : c));
+      updateCampaign(editing.id, { ...formData, spend, leads, conversions: conv, cpl, roas });
     } else {
-      setList(p => [...p, { ...formData, id: Date.now(), spend, leads, conversions: conv, cpl, roas }]);
+      addCampaign({ ...formData, spend, leads, conversions: conv, cpl, roas });
     }
     setShowForm(false);
   };
@@ -132,7 +132,7 @@ export default function MarketingPage() {
         <p className="text-sm text-slate-600 mb-4">Delete this campaign?</p>
         <div className="flex justify-end gap-3">
           <button onClick={() => setDelId(null)} className="btn-secondary">Cancel</button>
-          <button onClick={() => { setList(p => p.filter(c => c.id !== delId)); setDelId(null); }} className="btn-danger">Delete</button>
+          <button onClick={() => { removeCampaign(delId); setDelId(null); }} className="btn-danger">Delete</button>
         </div>
       </Modal>
     </div>
