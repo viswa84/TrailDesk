@@ -1,11 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Mountain, CalendarRange, BookOpen, Users,
-  Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft
+  Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft, Shield
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/treks', label: 'Treks', icon: Mountain },
   { path: '/departures', label: 'Departures', icon: CalendarRange },
   { path: '/bookings', label: 'Bookings', icon: BookOpen },
@@ -18,6 +19,8 @@ const navItems = [
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const location = useLocation();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'superadmin';
 
   return (
     <>
@@ -76,6 +79,32 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
               );
             })}
           </div>
+
+          {/* Super Admin link — visible only to superadmin role */}
+          {isSuperAdmin && (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              {!collapsed && (
+                <p className="px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">
+                  Platform
+                </p>
+              )}
+              <NavLink
+                to="/superadmin"
+                onClick={onClose}
+                title={collapsed ? 'Super Admin' : undefined}
+                className={`flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-200 group
+                  ${collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
+                  ${location.pathname.startsWith('/superadmin')
+                    ? 'bg-violet-50 text-violet-700'
+                    : 'text-slate-600 hover:bg-violet-50 hover:text-violet-700'
+                  }
+                `}
+              >
+                <Shield className={`w-[18px] h-[18px] shrink-0 ${location.pathname.startsWith('/superadmin') ? 'text-violet-600' : 'text-slate-400 group-hover:text-violet-500'}`} />
+                {!collapsed && <span>Super Admin</span>}
+              </NavLink>
+            </div>
+          )}
         </nav>
 
         {/* Collapse Toggle (desktop only) */}
@@ -92,3 +121,5 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
     </>
   );
 }
+
+

@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useDepartures } from '../hooks/useDepartures';
+import { useToast } from '../context/ToastContext';
+import { v, validateForm } from '../utils/validators';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isSameDay, differenceInDays, addMonths, subMonths } from 'date-fns';
 import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, MoreHorizontal, X, Eye, AlertTriangle } from 'lucide-react';
 
-const emptyDeparture = { trekName: '', startDate: '', endDate: '', capacity: '', guideId: '', price: '', meetingPoint: '', status: 'Open' };
+const emptyDeparture = { trekId: '', trekName: '', startDate: '', endDate: '', capacity: '', guideId: '', price: '', meetingPoint: '', status: 'Open' };
 
 // Color palette for different treks in the calendar
 const trekColors = [
@@ -22,7 +24,8 @@ const trekColors = [
 ];
 
 export default function DeparturesPage() {
-  const { data: deps, guides, loading, error, add: addDep, update: updateDep, remove: removeDep } = useDepartures();
+  const { data: deps, guides, treks, loading, error, add: addDep, update: updateDep, remove: removeDep, cancel: cancelDep } = useDepartures();
+  const toast = useToast();
   const [view, setView] = useState('list');
   const [selectedDep, setSelectedDep] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -30,7 +33,10 @@ export default function DeparturesPage() {
   const [formData, setFormData] = useState(emptyDeparture);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [calendarDate, setCalendarDate] = useState(new Date(2026, 1, 1));
-  const [expandedDay, setExpandedDay] = useState(null); // for "See all" popover
+  const [expandedDay, setExpandedDay] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   // Assign consistent colors to unique trek names
   const trekColorMap = useMemo(() => {
@@ -40,25 +46,51 @@ export default function DeparturesPage() {
     return map;
   }, [deps]);
 
-  const handleAdd = () => { setEditingDep(null); setFormData(emptyDeparture); setShowForm(true); };
+  const handleAdd = () => { setEditingDep(null); setFormData(emptyDeparture); setErrors({}); setShowForm(true); };
 
   const handleEdit = (dep, e) => {
     if (e) e.stopPropagation();
     setEditingDep(dep);
     setFormData({ ...dep, capacity: String(dep.capacity), price: String(dep.price), guideId: String(dep.guideId) });
+    setErrors({});
     setShowForm(true);
   };
 
   const handleSave = () => {
+    const { valid, errors: errs } = validateForm({
+      trekName: v.required(formData.trekName, 'Trek name'),
+      startDate: v.dateRequired(formData.startDate, 'Start date'),
+      endDate: v.dateRequired(formData.endDate, 'End date'),
+      capacity: Number(v.positiveNumber(formData.capacity, 'Capacity')),
+      price: Number(v.positiveNumber(formData.price, 'Price')),
+      dateRange: v.dateRange(formData.startDate, formData.endDate),
+    });
+    if (!valid) { setErrors(errs); toast.error('Please fix the form errors'); return; }
+    const payload = { ...formData, capacity: parseInt(formData.capacity, 10), price: parseFloat(formData.price) };
     if (editingDep) {
-      updateDep(editingDep.id, formData);
+      updateDep(editingDep.id, payload);
+      toast.success('Batch updated successfully');
     } else {
-      addDep(formData);
+      addDep(payload);
+      toast.success('Batch created successfully');
     }
     setShowForm(false);
+    setErrors({});
   };
 
-  const handleDelete = (id) => { removeDep(id); setShowDeleteConfirm(null); };
+  const handleDelete = (id) => { removeDep(id); setShowDeleteConfirm(null); toast.success('Batch deleted'); };
+
+  const handleCancelBatch = async () => {
+    if (!cancelTarget || !cancelReason.trim()) { toast.error('Please provide a cancellation reason'); return; }
+    try {
+      await cancelDep(cancelTarget.id || cancelTarget._id, cancelReason);
+      toast.success('Batch canceled successfully');
+      setCancelTarget(null);
+      setCancelReason('');
+    } catch (err) {
+      toast.error(err.message || 'Failed to cancel batch');
+    }
+  };
 
   // Calendar helpers
   const monthStart = startOfMonth(calendarDate);
@@ -88,6 +120,9 @@ export default function DeparturesPage() {
     if (ratio >= 0.85) return 'Closing Soon';
     return dep.status;
   };
+
+  const fieldClass = (name) => `input-field ${errors[name] ? 'input-error' : ''}`;
+  const errMsg = (name) => errors[name] ? <p className="text-xs text-red-500 mt-1">{errors[name]}</p> : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -145,6 +180,9 @@ export default function DeparturesPage() {
                     <div className="flex flex-wrap items-center gap-2 mb-1">
                       <h3 className="text-base font-semibold text-slate-900 truncate">{dep.trekName}</h3>
                       <StatusBadge status={statusLabel} />
+                      {dep.status === 'Canceled' && dep.cancellationReason && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-red-50 text-red-600 border border-red-200" title={dep.cancellationReason}>Reason: {dep.cancellationReason}</span>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                       <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{duration} Days</span>
@@ -194,6 +232,11 @@ export default function DeparturesPage() {
                     <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(dep.id); }} className="p-2 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                       <Trash2 className="w-4 h-4 text-red-400" />
                     </button>
+                    {dep.status !== 'Canceled' && (
+                      <button onClick={(e) => { e.stopPropagation(); setCancelTarget(dep); }} className="p-2 hover:bg-amber-50 rounded-lg transition-colors" title="Cancel Batch">
+                        <X className="w-4 h-4 text-amber-500" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -421,11 +464,39 @@ export default function DeparturesPage() {
       {/* ──────────────────── CRUD FORM MODAL ──────────────────── */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingDep ? 'Edit Departure' : 'New Departure'} size="lg">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Trek Name</label><input value={formData.trekName} onChange={(e) => setFormData({...formData, trekName: e.target.value})} className="input-field" placeholder="e.g. Kedarkantha Winter Trek" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label><input type="date" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="input-field" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">End Date</label><input type="date" value={formData.endDate} onChange={(e) => setFormData({...formData, endDate: e.target.value})} className="input-field" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Capacity</label><input type="number" value={formData.capacity} onChange={(e) => setFormData({...formData, capacity: e.target.value})} className="input-field" placeholder="e.g. 20" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Price (₹)</label><input type="number" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="input-field" placeholder="e.g. 8500" /></div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-slate-700 mb-1">Trek *</label>
+            <select value={formData.trekId} onChange={(e) => {
+              const selected = treks.find(t => t._id === e.target.value);
+              setFormData({...formData, trekId: e.target.value, trekName: selected?.name || ''});
+              if (errors.trekName) setErrors({...errors, trekName: null});
+            }} className={fieldClass('trekName')}>
+              <option value="">Select a trek</option>
+              {treks.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+            </select>
+            {errMsg('trekName')}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Start Date *</label>
+            <input type="date" value={formData.startDate} onChange={(e) => { setFormData({...formData, startDate: e.target.value}); if (errors.startDate || errors.dateRange) setErrors({...errors, startDate: null, dateRange: null}); }} className={fieldClass('startDate')} />
+            {errMsg('startDate')}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">End Date *</label>
+            <input type="date" value={formData.endDate} onChange={(e) => { setFormData({...formData, endDate: e.target.value}); if (errors.endDate || errors.dateRange) setErrors({...errors, endDate: null, dateRange: null}); }} className={fieldClass('endDate')} />
+            {errMsg('endDate')}
+            {errMsg('dateRange')}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Capacity *</label>
+            <input type="number" value={formData.capacity} onChange={(e) => { setFormData({...formData, capacity: e.target.value}); if (errors.capacity) setErrors({...errors, capacity: null}); }} className={fieldClass('capacity')} placeholder="e.g. 20" />
+            {errMsg('capacity')}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Price (₹) *</label>
+            <input type="number" value={formData.price} onChange={(e) => { setFormData({...formData, price: e.target.value}); if (errors.price) setErrors({...errors, price: null}); }} className={fieldClass('price')} placeholder="e.g. 8500" />
+            {errMsg('price')}
+          </div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Guide</label>
             <select value={formData.guideId} onChange={(e) => setFormData({...formData, guideId: e.target.value})} className="select-field">
               <option value="">Select Guide</option>
@@ -453,6 +524,26 @@ export default function DeparturesPage() {
         <div className="flex justify-end gap-3">
           <button onClick={() => setShowDeleteConfirm(null)} className="btn-secondary">Cancel</button>
           <button onClick={() => handleDelete(showDeleteConfirm)} className="btn-danger">Delete</button>
+        </div>
+      </Modal>
+
+      {/* ──────────────────── CANCEL BATCH MODAL ──────────────────── */}
+      <Modal isOpen={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }} title={`Cancel Batch: ${cancelTarget?.trekName || ''}`} size="sm">
+        <p className="text-sm text-slate-600 mb-3">Why are you canceling this batch? This will notify all relevant parties.</p>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-700 mb-1">Reason *</label>
+          <textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            className="input-field min-h-[80px]"
+            placeholder="e.g. Heavy rain forecast, Guide unavailable, Low registrations"
+          />
+        </div>
+        <div className="flex justify-end gap-3">
+          <button onClick={() => { setCancelTarget(null); setCancelReason(''); }} className="btn-secondary">Keep Active</button>
+          <button onClick={handleCancelBatch} disabled={!cancelReason.trim()} className="btn-danger flex items-center gap-2">
+            <X className="w-4 h-4" /> Cancel Batch
+          </button>
         </div>
       </Modal>
     </div>

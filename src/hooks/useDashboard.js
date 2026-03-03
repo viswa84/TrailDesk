@@ -1,35 +1,32 @@
-import { useState } from 'react';
 import { useQuery } from '@apollo/client/react';
-import { isGraphQLEnabled } from '../graphql/client';
 import { GET_DASHBOARD } from '../graphql/queries';
-import { dashboardKPIs, revenueByMonth, bookingsByRegion, recentActivity, alerts } from '../data/data';
 
 /**
- * Hook for dashboard data.
+ * Hook for dashboard data — fetches real KPIs from the backend.
  * @returns {{ kpis, revenueByMonth, bookingsByRegion, recentActivity, alerts, loading, error }}
  */
 export function useDashboard() {
-  const staticResult = {
-    kpis: dashboardKPIs,
-    revenueByMonth,
-    bookingsByRegion,
-    recentActivity,
-    alerts,
-    loading: false,
-    error: null,
+  const { data, loading, error } = useQuery(GET_DASHBOARD);
+
+  const dashboard = data?.getDashboard;
+
+  return {
+    kpis: dashboard?.kpis || {
+      totalBookings: 0,
+      revenue: 0,
+      activeTreks: 0,
+      totalChats: 0,
+      bookingsChange: 0,
+      revenueChange: 0,
+      treksChange: 0,
+      conversionRate: 0,
+      conversionChange: 0,
+    },
+    revenueByMonth: dashboard?.revenueByMonth || [],
+    bookingsByRegion: dashboard?.bookingsByRegion || [],
+    recentActivity: dashboard?.recentActivity || [],
+    alerts: dashboard?.alerts || [],
+    loading,
+    error,
   };
-
-  const gqlQuery = useQuery(GET_DASHBOARD, { skip: !isGraphQLEnabled });
-
-  const gqlResult = {
-    kpis: gqlQuery.data?.dashboardKPIs || {},
-    revenueByMonth: gqlQuery.data?.revenueByMonth || [],
-    bookingsByRegion: gqlQuery.data?.bookingsByRegion || [],
-    recentActivity: gqlQuery.data?.recentActivity || [],
-    alerts: gqlQuery.data?.alerts || [],
-    loading: gqlQuery.loading,
-    error: gqlQuery.error,
-  };
-
-  return isGraphQLEnabled ? gqlResult : staticResult;
 }

@@ -1,23 +1,36 @@
 import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
+import { setContext } from '@apollo/client/link/context';
 
 const httpLink = createHttpLink({
-  uri: import.meta.env.VITE_GRAPHQL_URL || 'http://localhost:4000/graphql',
+  uri: import.meta.env.VITE_GRAPHQL_URL || 'http://localhost:8080/graphql',
+});
+
+// Attach JWT token to every request
+const authLink = setContext((_, { headers }) => {
+  const token = localStorage.getItem('traildesk_token');
+  return {
+    headers: {
+      ...headers,
+      authorization: token ? `Bearer ${token}` : '',
+    },
+  };
 });
 
 export const apolloClient = new ApolloClient({
-  link: httpLink,
+  link: authLink.concat(httpLink),
   cache: new InMemoryCache({
     typePolicies: {
       Query: {
         fields: {
-          treks:       { merge: false },
-          departures:  { merge: false },
-          bookings:    { merge: false },
-          customers:   { merge: false },
-          invoices:    { merge: false },
-          payments:    { merge: false },
-          refunds:     { merge: false },
-          campaigns:   { merge: false },
+          getTreks: { merge: false },
+          getBookings: { merge: false },
+          getCustomers: { merge: false },
+          getDepartures: { merge: false },
+          getCampaigns: { merge: false },
+          getInvoices: { merge: false },
+          getPayments: { merge: false },
+          getRefunds: { merge: false },
+          getNotifications: { merge: false },
         },
       },
     },
@@ -27,9 +40,4 @@ export const apolloClient = new ApolloClient({
   },
 });
 
-/**
- * Whether the GraphQL backend is enabled.
- * Set VITE_GRAPHQL_ENABLED=true in your .env to activate API calls.
- * When false (default), hooks fall back to static data.
- */
-export const isGraphQLEnabled = import.meta.env.VITE_GRAPHQL_ENABLED === 'true';
+export default apolloClient;

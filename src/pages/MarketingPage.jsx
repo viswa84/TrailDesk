@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useCampaigns } from '../hooks/useCampaigns';
+import { useToast } from '../context/ToastContext';
+import { v, validateForm } from '../utils/validators';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { Search, Plus, Edit, Trash2, Megaphone, TrendingUp, DollarSign, Users, Target } from 'lucide-react';
@@ -8,15 +10,17 @@ const emptyCampaign = { name: '', platform: 'Google Ads', spend: '', leads: '', 
 
 export default function MarketingPage() {
   const { data: list, kpis, loading, error, add: addCampaign, update: updateCampaign, remove: removeCampaign } = useCampaigns();
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState(emptyCampaign);
   const [delId, setDelId] = useState(null);
+  const [errors, setErrors] = useState({});
 
   const filtered = list.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.platform.toLowerCase().includes(search.toLowerCase())
+    (c.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (c.platform || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const totalSpend = kpis.totalSpend;
@@ -24,20 +28,33 @@ export default function MarketingPage() {
   const totalConv = kpis.totalConversions;
   const avgROAS = kpis.avgROAS;
 
-  const openAdd = () => { setEditing(null); setFormData(emptyCampaign); setShowForm(true); };
-  const openEdit = (c) => { setEditing(c); setFormData({ ...c, spend: String(c.spend), leads: String(c.leads), conversions: String(c.conversions) }); setShowForm(true); };
+  const openAdd = () => { setEditing(null); setFormData(emptyCampaign); setErrors({}); setShowForm(true); };
+  const openEdit = (c) => { setEditing(c); setFormData({ ...c, spend: String(c.spend), leads: String(c.leads), conversions: String(c.conversions) }); setErrors({}); setShowForm(true); };
 
   const save = () => {
+    const { valid, errors: errs } = validateForm({
+      name: v.required(formData.name, 'Campaign name'),
+      spend: v.number(formData.spend, 'Spend'),
+      leads: v.number(formData.leads, 'Leads'),
+      conversions: v.number(formData.conversions, 'Conversions'),
+    });
+    if (!valid) { setErrors(errs); toast.error('Please fix the form errors'); return; }
     const spend = Number(formData.spend), leads = Number(formData.leads), conv = Number(formData.conversions);
     const cpl = leads > 0 ? Math.round(spend / leads) : 0;
     const roas = spend > 0 ? Number(((conv * 8500) / spend).toFixed(2)) : 0;
     if (editing) {
       updateCampaign(editing.id, { ...formData, spend, leads, conversions: conv, cpl, roas });
+      toast.success('Campaign updated');
     } else {
       addCampaign({ ...formData, spend, leads, conversions: conv, cpl, roas });
+      toast.success('Campaign added');
     }
     setShowForm(false);
+    setErrors({});
   };
+
+  const fieldClass = (name) => `input-field ${errors[name] ? 'input-error' : ''}`;
+  const errMsg = (name) => errors[name] ? <p className="text-xs text-red-500 mt-1">{errors[name]}</p> : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -105,7 +122,11 @@ export default function MarketingPage() {
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editing ? 'Edit Campaign' : 'Add Campaign'} size="md">
         <div className="space-y-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Name</label><input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="input-field" /></div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
+            <input value={formData.name} onChange={e => { setFormData({...formData, name: e.target.value}); if (errors.name) setErrors({...errors, name: null}); }} className={fieldClass('name')} />
+            {errMsg('name')}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Platform</label>
               <select value={formData.platform} onChange={e => setFormData({...formData, platform: e.target.value})} className="select-field">
@@ -117,9 +138,21 @@ export default function MarketingPage() {
               </select></div>
           </div>
           <div className="grid grid-cols-3 gap-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Spend (₹)</label><input type="number" value={formData.spend} onChange={e => setFormData({...formData, spend: e.target.value})} className="input-field" /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Leads</label><input type="number" value={formData.leads} onChange={e => setFormData({...formData, leads: e.target.value})} className="input-field" /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Conversions</label><input type="number" value={formData.conversions} onChange={e => setFormData({...formData, conversions: e.target.value})} className="input-field" /></div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Spend (₹) *</label>
+              <input type="number" value={formData.spend} onChange={e => { setFormData({...formData, spend: e.target.value}); if (errors.spend) setErrors({...errors, spend: null}); }} className={fieldClass('spend')} />
+              {errMsg('spend')}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Leads *</label>
+              <input type="number" value={formData.leads} onChange={e => { setFormData({...formData, leads: e.target.value}); if (errors.leads) setErrors({...errors, leads: null}); }} className={fieldClass('leads')} />
+              {errMsg('leads')}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Conversions *</label>
+              <input type="number" value={formData.conversions} onChange={e => { setFormData({...formData, conversions: e.target.value}); if (errors.conversions) setErrors({...errors, conversions: null}); }} className={fieldClass('conversions')} />
+              {errMsg('conversions')}
+            </div>
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
@@ -132,7 +165,7 @@ export default function MarketingPage() {
         <p className="text-sm text-slate-600 mb-4">Delete this campaign?</p>
         <div className="flex justify-end gap-3">
           <button onClick={() => setDelId(null)} className="btn-secondary">Cancel</button>
-          <button onClick={() => { removeCampaign(delId); setDelId(null); }} className="btn-danger">Delete</button>
+          <button onClick={() => { removeCampaign(delId); setDelId(null); toast.success('Campaign deleted'); }} className="btn-danger">Delete</button>
         </div>
       </Modal>
     </div>

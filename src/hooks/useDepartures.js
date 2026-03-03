@@ -1,89 +1,60 @@
-import { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { isGraphQLEnabled } from '../graphql/client';
-import { GET_DEPARTURES } from '../graphql/queries';
-import { CREATE_DEPARTURE, UPDATE_DEPARTURE, DELETE_DEPARTURE } from '../graphql/mutations';
-import { departures as staticDepartures, guides } from '../data/data';
+import { GET_DEPARTURES, GET_GUIDES, GET_TREKS } from '../graphql/queries';
+import { CREATE_DEPARTURE, UPDATE_DEPARTURE, DELETE_DEPARTURE, CANCEL_DEPARTURE } from '../graphql/mutations';
 
 /**
- * Hook for managing departures/batches.
+ * Hook for managing departures/batches via GraphQL.
  * @param {Object} filters - Optional filters { trekId, status }
- * @returns {{ data, loading, error, guides, add, update, remove }}
+ * @returns {{ data, guides, loading, error, add, update, remove, refetch }}
  */
 export function useDepartures(filters = {}) {
-  const [localData, setLocalData] = useState(staticDepartures);
+  const variables = {};
+  if (filters.trekId) variables.trekId = filters.trekId;
+  if (filters.status) variables.status = filters.status;
 
-  const staticResult = {
-    data: localData.filter(d => {
-      if (filters.trekId && d.trekId !== filters.trekId) return false;
-      if (filters.status && d.status !== filters.status) return false;
-      return true;
-    }),
-    guides,
-    loading: false,
-    error: null,
-    add: (dep) => {
-      const guide = guides.find(g => g.id === Number(dep.guideId));
-      const newDep = {
-        ...dep,
-        id: `DEP-${String(localData.length + 1).padStart(3, '0')}`,
-        capacity: Number(dep.capacity),
-        price: Number(dep.price),
-        guideId: Number(dep.guideId),
-        guideName: guide?.name || '',
-        booked: 0,
-      };
-      setLocalData(prev => [...prev, newDep]);
-      return newDep;
-    },
-    update: (id, updates) => {
-      const guide = guides.find(g => g.id === Number(updates.guideId));
-      setLocalData(prev => prev.map(d => d.id === id ? {
-        ...d,
-        ...updates,
-        capacity: Number(updates.capacity),
-        price: Number(updates.price),
-        guideId: Number(updates.guideId),
-        guideName: guide?.name || d.guideName,
-      } : d));
-    },
-    remove: (id) => {
-      setLocalData(prev => prev.filter(d => d.id !== id));
-    },
-  };
-
-  // ── GraphQL mode ──
-  const gqlQuery = useQuery(GET_DEPARTURES, {
-    variables: filters,
-    skip: !isGraphQLEnabled,
-  });
+  const { data, loading, error, refetch } = useQuery(GET_DEPARTURES, { variables });
+  const { data: guidesData } = useQuery(GET_GUIDES);
 
   const [createDep] = useMutation(CREATE_DEPARTURE, {
-    refetchQueries: isGraphQLEnabled ? [{ query: GET_DEPARTURES }] : [],
+    refetchQueries: [{ query: GET_DEPARTURES }],
   });
   const [updateDep] = useMutation(UPDATE_DEPARTURE, {
-    refetchQueries: isGraphQLEnabled ? [{ query: GET_DEPARTURES }] : [],
+    refetchQueries: [{ query: GET_DEPARTURES }],
   });
   const [deleteDep] = useMutation(DELETE_DEPARTURE, {
-    refetchQueries: isGraphQLEnabled ? [{ query: GET_DEPARTURES }] : [],
+    refetchQueries: [{ query: GET_DEPARTURES }],
+  });
+  const [cancelDep] = useMutation(CANCEL_DEPARTURE, {
+    refetchQueries: [{ query: GET_DEPARTURES }],
   });
 
-  const gqlResult = {
-    data: gqlQuery.data?.departures || [],
+  // Fetch treks for selector dropdown
+  const { data: treksData } = useQuery(GET_TREKS);
+
+  const guides = (guidesData?.getGuides || []).map((g) => ({
+    ...g,
+    id: g._id,
+  }));
+
+  return {
+    data: data?.getDepartures || [],
     guides,
-    loading: gqlQuery.loading,
-    error: gqlQuery.error,
-    add: async (dep) => {
-      const { data } = await createDep({ variables: { input: dep } });
+    treks: (treksData?.getTreks || []).map(t => ({ ...t, id: t._id })),
+    loading,
+    error,
+    refetch,
+    add: async (input) => {
+      const { data } = await createDep({ variables: { input } });
       return data.createDeparture;
     },
-    update: async (id, updates) => {
-      await updateDep({ variables: { id, input: updates } });
+    update: async (id, input) => {
+      await updateDep({ variables: { id, input } });
     },
     remove: async (id) => {
       await deleteDep({ variables: { id } });
     },
+    cancel: async (id, reason) => {
+      await cancelDep({ variables: { id, reason } });
+    },
   };
-
-  return isGraphQLEnabled ? gqlResult : staticResult;
 }
