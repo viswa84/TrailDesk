@@ -21,12 +21,15 @@ export function useDashboard() {
 
   const gqlQuery = useQuery(GET_DASHBOARD, { skip: !isGraphQLEnabled });
 
+  // The backend now returns a nested getDashboard { kpis, revenueByMonth, ... } structure
+  const dashboard = gqlQuery.data?.getDashboard || {};
+
   const gqlResult = {
-    kpis: gqlQuery.data?.dashboardKPIs || {},
-    revenueByMonth: gqlQuery.data?.revenueByMonth || [],
-    bookingsByRegion: gqlQuery.data?.bookingsByRegion || [],
-    recentActivity: gqlQuery.data?.recentActivity || [],
-    alerts: gqlQuery.data?.alerts || [],
+    kpis: dashboard.kpis || {},
+    revenueByMonth: dashboard.revenueByMonth || [],
+    bookingsByRegion: dashboard.bookingsByRegion || [],
+    recentActivity: dashboard.recentActivity || [],
+    alerts: dashboard.alerts || [],
     loading: gqlQuery.loading,
     error: gqlQuery.error,
   };

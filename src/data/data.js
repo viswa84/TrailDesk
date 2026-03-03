@@ -1,17 +1,23 @@
-// ─── Treks ───────────────────────────────────────────
+// ─── Cities ──────────────────────────────────────────
+export const cities = [
+  { id: 1, name: 'Pune', state: 'Maharashtra', isActive: true },
+  { id: 2, name: 'Mumbai', state: 'Maharashtra', isActive: true },
+  { id: 3, name: 'Nashik', state: 'Maharashtra', isActive: true },
+  { id: 4, name: 'Delhi', state: 'Delhi', isActive: true },
+  { id: 5, name: 'Bangalore', state: 'Karnataka', isActive: true },
+  { id: 6, name: 'Dehradun', state: 'Uttarakhand', isActive: true },
+];
+
+// ─── Treks (Simplified Catalog) ──────────────────────
 export const treks = [
-  { id: 1, name: 'Kedarkantha Winter Trek', region: 'Himalayas', state: 'Uttarakhand', difficulty: 'Easy', duration: '6 Days', altitude: '12,500 ft', price: 8500, season: 'Winter', description: 'A stunning winter trek through snow-covered trails with panoramic views of Himalayan peaks.', rating: 4.8, totalBookings: 342, image: 'https://images.unsplash.com/photo-1486870591958-9b9d0d1dda99?w=400&h=250&fit=crop' },
-  { id: 2, name: 'Hampta Pass Crossing', region: 'Himalayas', state: 'Himachal Pradesh', difficulty: 'Moderate', duration: '5 Days', altitude: '14,100 ft', price: 9500, season: 'Summer', description: 'Cross from lush Kullu Valley to the barren Lahaul Valley on this dramatic pass crossing.', rating: 4.7, totalBookings: 218, image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&h=250&fit=crop' },
-  { id: 3, name: 'Valley of Flowers', region: 'Himalayas', state: 'Uttarakhand', difficulty: 'Easy', duration: '6 Days', altitude: '12,500 ft', price: 7800, season: 'Monsoon', description: 'Walk through a UNESCO World Heritage Site blooming with rare Himalayan flowers.', rating: 4.9, totalBookings: 186, image: 'https://images.unsplash.com/photo-1490682143684-14369e18dce8?w=400&h=250&fit=crop' },
-  { id: 4, name: 'Roopkund Mystery Trek', region: 'Himalayas', state: 'Uttarakhand', difficulty: 'Difficult', duration: '8 Days', altitude: '16,500 ft', price: 12500, season: 'Summer', description: 'Trek to the mysterious skeleton lake at 16,500ft with breathtaking alpine meadows.', rating: 4.6, totalBookings: 94, image: 'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=400&h=250&fit=crop' },
-  { id: 5, name: 'Rajgad Fort Trek', region: 'Sahyadris', state: 'Maharashtra', difficulty: 'Easy', duration: '2 Days', altitude: '4,600 ft', price: 2500, season: 'Monsoon', description: 'Explore the capital fort of the Maratha Empire with stunning Sahyadri views.', rating: 4.5, totalBookings: 412, image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=250&fit=crop' },
-  { id: 6, name: 'Sandakphu Kanchenjunga', region: 'Himalayas', state: 'West Bengal', difficulty: 'Moderate', duration: '7 Days', altitude: '11,930 ft', price: 11000, season: 'Winter', description: 'Witness four of the five highest peaks in the world from the highest point in West Bengal.', rating: 4.8, totalBookings: 156, image: 'https://images.unsplash.com/photo-1585409677983-0f6c41ca9c3b?w=400&h=250&fit=crop' },
-  { id: 7, name: 'Brahmatal Lake Trek', region: 'Himalayas', state: 'Uttarakhand', difficulty: 'Easy', duration: '6 Days', altitude: '12,250 ft', price: 7500, season: 'Winter', description: 'A beautiful winter trek offering views of Mt. Trishul and Mt. Nanda Ghunti.', rating: 4.7, totalBookings: 203, image: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=400&h=250&fit=crop' },
-  { id: 8, name: 'Kalsubai Peak Trek', region: 'Sahyadris', state: 'Maharashtra', difficulty: 'Easy', duration: '1 Day', altitude: '5,400 ft', price: 1500, season: 'Monsoon', description: 'Climb the highest peak in Maharashtra through iron ladders and scenic trails.', rating: 4.3, totalBookings: 567, image: 'https://images.unsplash.com/photo-1483728642387-6c3bdd6c93e5?w=400&h=250&fit=crop' },
-  { id: 9, name: 'Chadar Frozen River', region: 'Himalayas', state: 'Ladakh', difficulty: 'Difficult', duration: '9 Days', altitude: '11,000 ft', price: 22000, season: 'Winter', description: 'Walk on the frozen Zanskar River through dramatic gorges in sub-zero temperatures.', rating: 4.9, totalBookings: 67, image: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400&h=250&fit=crop' },
-  { id: 10, name: 'Goechala Viewpoint', region: 'Himalayas', state: 'Sikkim', difficulty: 'Difficult', duration: '10 Days', altitude: '15,100 ft', price: 15000, season: 'Spring', description: 'Stand face-to-face with Kanchenjunga on this epic Sikkim expedition.', rating: 4.8, totalBookings: 89, image: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=400&h=250&fit=crop' },
-  { id: 11, name: 'Harishchandragad Trek', region: 'Sahyadris', state: 'Maharashtra', difficulty: 'Moderate', duration: '2 Days', altitude: '4,700 ft', price: 3000, season: 'Winter', description: 'Experience the famous Konkan Kada cliff and ancient cave temple.', rating: 4.6, totalBookings: 324, image: 'https://images.unsplash.com/photo-1445363692815-ebcd599af580?w=400&h=250&fit=crop' },
-  { id: 12, name: 'Tarsar Marsar Twin Lakes', region: 'Himalayas', state: 'Kashmir', difficulty: 'Moderate', duration: '7 Days', altitude: '13,000 ft', price: 13000, season: 'Summer', description: 'Discover two pristine alpine lakes set amid the pine forests of Kashmir.', rating: 4.7, totalBookings: 78, image: 'https://images.unsplash.com/photo-1542224566-6e85f2e6772f?w=400&h=250&fit=crop' },
+  { id: 1, name: 'Kedarkantha', image: 'https://images.unsplash.com/photo-1486870591958-9b9d0d1dda99?w=400&h=250&fit=crop', location: 'Uttarakhand', description: 'A classic winter trek through dense pine forests with stunning summit views of the Himalayan peaks.', altitude: '12,500 ft', bestSeason: 'Dec-Apr', difficulty: 'Moderate', isActive: true },
+  { id: 2, name: 'Rajmachi Fort', image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=250&fit=crop', location: 'Maharashtra', description: 'Historic twin forts - Shrivardhan and Manaranjan - amidst the Sahyadri ranges.', altitude: '2,710 ft', bestSeason: 'Oct-Feb', difficulty: 'Easy', isActive: true },
+  { id: 3, name: 'Hampta Pass', image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&h=250&fit=crop', location: 'Himachal Pradesh', description: 'A dramatic crossover trek from the lush Kullu valley to the barren Spiti desert.', altitude: '14,000 ft', bestSeason: 'Jun-Sep', difficulty: 'Moderate', isActive: true },
+  { id: 4, name: 'Valley of Flowers', image: 'https://images.unsplash.com/photo-1490682143684-14369e18dce8?w=400&h=250&fit=crop', location: 'Uttarakhand', description: 'UNESCO World Heritage Site — vibrant alpine meadow with 600+ wildflower species.', altitude: '12,000 ft', bestSeason: 'Jul-Sep', difficulty: 'Moderate', isActive: true },
+  { id: 5, name: 'Kalsubai Peak', image: 'https://images.unsplash.com/photo-1483728642387-6c3bdd6c93e5?w=400&h=250&fit=crop', location: 'Maharashtra', description: 'Highest peak in Maharashtra with iron ladders and stunning sunrise views.', altitude: '5,400 ft', bestSeason: 'Sep-Feb', difficulty: 'Easy', isActive: true },
+  { id: 6, name: 'Roopkund', image: 'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=400&h=250&fit=crop', location: 'Uttarakhand', description: 'The mysterious Skeleton Lake trek through meadows and glaciers.', altitude: '15,696 ft', bestSeason: 'May-Jun, Sep-Oct', difficulty: 'Difficult', isActive: true },
+  { id: 7, name: 'Sandhan Valley', image: 'https://images.unsplash.com/photo-1445363692815-ebcd599af580?w=400&h=250&fit=crop', location: 'Maharashtra', description: 'Valley of Shadows — narrow canyon trek with rappelling and water traverses.', altitude: '3,000 ft', bestSeason: 'Oct-May', difficulty: 'Moderate', isActive: true },
+  { id: 8, name: 'Harishchandragad', image: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=400&h=250&fit=crop', location: 'Maharashtra', description: 'Ancient hill fortress with iconic Konkan Kada cliff and Kedareshwar cave temple.', altitude: '4,670 ft', bestSeason: 'Sep-Feb', difficulty: 'Moderate', isActive: true },
 ];
 
 // ─── Guides ──────────────────────────────────────────
@@ -23,18 +29,16 @@ export const guides = [
   { id: 5, name: 'Kavita Bisht', phone: '+91 54321 09876', experience: '6 years', certifications: ['WFA', 'Rock Climbing'], rating: 4.7, treksLed: 167, avatar: 'KB' },
 ];
 
-// ─── Departures / Batches ────────────────────────────
+// ─── Departures (Live Entity — links Trek + City) ────
 export const departures = [
-  { id: 'DEP-001', trekId: 1, trekName: 'Kedarkantha Winter Trek', startDate: '2026-02-15', endDate: '2026-02-20', capacity: 20, booked: 18, guideId: 1, guideName: 'Ravi Sharma', status: 'Almost Full', price: 8500, meetingPoint: 'Dehradun Railway Station' },
-  { id: 'DEP-002', trekId: 2, trekName: 'Hampta Pass Crossing', startDate: '2026-03-10', endDate: '2026-03-14', capacity: 15, booked: 8, guideId: 2, guideName: 'Priya Negi', status: 'Open', price: 9500, meetingPoint: 'Manali Bus Stand' },
-  { id: 'DEP-003', trekId: 1, trekName: 'Kedarkantha Winter Trek', startDate: '2026-02-22', endDate: '2026-02-27', capacity: 20, booked: 20, guideId: 3, guideName: 'Tenzing Dorji', status: 'Full', price: 8500, meetingPoint: 'Dehradun Railway Station' },
-  { id: 'DEP-004', trekId: 6, trekName: 'Sandakphu Kanchenjunga', startDate: '2026-03-01', endDate: '2026-03-07', capacity: 12, booked: 5, guideId: 4, guideName: 'Ankit Rawat', status: 'Open', price: 11000, meetingPoint: 'NJP Station' },
-  { id: 'DEP-005', trekId: 7, trekName: 'Brahmatal Lake Trek', startDate: '2026-02-18', endDate: '2026-02-23', capacity: 18, booked: 14, guideId: 5, guideName: 'Kavita Bisht', status: 'Open', price: 7500, meetingPoint: 'Kathgodam Station' },
-  { id: 'DEP-006', trekId: 5, trekName: 'Rajgad Fort Trek', startDate: '2026-03-15', endDate: '2026-03-16', capacity: 30, booked: 22, guideId: 1, guideName: 'Ravi Sharma', status: 'Open', price: 2500, meetingPoint: 'Pune Station' },
-  { id: 'DEP-007', trekId: 9, trekName: 'Chadar Frozen River', startDate: '2026-01-20', endDate: '2026-01-28', capacity: 10, booked: 10, guideId: 3, guideName: 'Tenzing Dorji', status: 'Full', price: 22000, meetingPoint: 'Leh Airport' },
-  { id: 'DEP-008', trekId: 3, trekName: 'Valley of Flowers', startDate: '2026-07-15', endDate: '2026-07-20', capacity: 20, booked: 3, guideId: 2, guideName: 'Priya Negi', status: 'Open', price: 7800, meetingPoint: 'Haridwar Station' },
-  { id: 'DEP-009', trekId: 10, trekName: 'Goechala Viewpoint', startDate: '2026-04-05', endDate: '2026-04-14', capacity: 12, booked: 7, guideId: 5, guideName: 'Kavita Bisht', status: 'Open', price: 15000, meetingPoint: 'Bagdogra Airport' },
-  { id: 'DEP-010', trekId: 4, trekName: 'Roopkund Mystery Trek', startDate: '2026-05-20', endDate: '2026-05-27', capacity: 15, booked: 12, guideId: 4, guideName: 'Ankit Rawat', status: 'Almost Full', price: 12500, meetingPoint: 'Kathgodam Station' },
+  { id: 'DEP-001', trekId: 2, trekName: 'Rajmachi Fort', cityId: 1, cityName: 'Pune', startDate: '2026-03-15', endDate: '2026-03-16', duration: '1 Night / 2 Days', price: 2500, capacity: 30, booked: 22, guideId: 1, guideName: 'Ravi Sharma', status: 'Open', itinerary: 'Day 1: Meet at Pune station → Drive to base → Night trek → Camping\nDay 2: Sunrise → Explore → Descend → Return', thingsToCarry: 'Torch, 2L water, raincoat, snacks, comfortable shoes', contact: '9876543210', meetingPoint: 'Pune Railway Station' },
+  { id: 'DEP-002', trekId: 2, trekName: 'Rajmachi Fort', cityId: 2, cityName: 'Mumbai', startDate: '2026-03-15', endDate: '2026-03-16', duration: '1 Night / 2 Days', price: 3000, capacity: 25, booked: 18, guideId: 2, guideName: 'Priya Negi', status: 'Open', itinerary: 'Day 1: Meet at Dadar → Drive to Lonavala → Trek → Camping\nDay 2: Sunrise → Explore → Return to Mumbai', thingsToCarry: 'Torch, 2L water, raincoat, snacks, comfortable shoes', contact: '8765432109', meetingPoint: 'Dadar Station (East)' },
+  { id: 'DEP-003', trekId: 1, trekName: 'Kedarkantha', cityId: 6, cityName: 'Dehradun', startDate: '2026-03-10', endDate: '2026-03-14', duration: '4 Nights / 5 Days', price: 8500, capacity: 20, booked: 8, guideId: 3, guideName: 'Tenzing Dorji', status: 'Open', itinerary: 'Day 1: Dehradun → Sankri\nDay 2: Sankri → Juda Ka Talab\nDay 3: → Base Camp\nDay 4: Summit → Return\nDay 5: → Dehradun', thingsToCarry: 'Warm layers, trekking shoes, sunscreen, headlamp', contact: '7654321098', meetingPoint: 'Dehradun Railway Station' },
+  { id: 'DEP-004', trekId: 1, trekName: 'Kedarkantha', cityId: 4, cityName: 'Delhi', startDate: '2026-03-09', endDate: '2026-03-14', duration: '5 Nights / 6 Days', price: 9500, capacity: 15, booked: 12, guideId: 3, guideName: 'Tenzing Dorji', status: 'Almost Full', itinerary: 'Day 1: Delhi → Dehradun\nDay 2: → Sankri\nDay 3: → Juda Ka Talab\nDay 4: → Base Camp\nDay 5: Summit → Return\nDay 6: → Delhi', thingsToCarry: 'Warm layers, trekking shoes, sunscreen, headlamp, trekking pole', contact: '7654321098', meetingPoint: 'ISBT Kashmere Gate, Delhi' },
+  { id: 'DEP-005', trekId: 5, trekName: 'Kalsubai Peak', cityId: 1, cityName: 'Pune', startDate: '2026-03-22', endDate: '2026-03-23', duration: '1 Night / 2 Days', price: 1800, capacity: 40, booked: 15, guideId: 4, guideName: 'Ankit Rawat', status: 'Open', itinerary: 'Day 1: Pune → Bari village → Night trek → Sunrise\nDay 2: Descend → Breakfast → Return', thingsToCarry: 'Torch, 2L water, sports shoes, warm layer', contact: '6543210987', meetingPoint: 'Shivajinagar Bus Stand, Pune' },
+  { id: 'DEP-006', trekId: 7, trekName: 'Sandhan Valley', cityId: 2, cityName: 'Mumbai', startDate: '2026-04-05', endDate: '2026-04-07', duration: '2 Nights / 3 Days', price: 4500, capacity: 20, booked: 5, guideId: 5, guideName: 'Kavita Bisht', status: 'Open', itinerary: 'Day 1: Mumbai → Samrad → Descent → Camping\nDay 2: Valley exploration → Rappelling → Camping\nDay 3: Exit valley → Drive to Mumbai', thingsToCarry: 'Quick-dry clothes, 3L water, headlamp, sandals, energy bars', contact: '5432109876', meetingPoint: 'Dadar Station (East)' },
+  { id: 'DEP-007', trekId: 3, trekName: 'Hampta Pass', cityId: 4, cityName: 'Delhi', startDate: '2026-06-20', endDate: '2026-06-25', duration: '5 Nights / 6 Days', price: 11000, capacity: 18, booked: 3, guideId: 1, guideName: 'Ravi Sharma', status: 'Open', itinerary: 'Day 1: Delhi → Manali\nDay 2: Manali → Jobra → Chika\nDay 3: → Balu Ka Ghera\nDay 4: Cross Hampta Pass → Shea Goru\nDay 5: → Chandratal Lake\nDay 6: → Manali → Delhi', thingsToCarry: 'Layered clothing, rain gear, trekking poles, sunscreen', contact: '9876543210', meetingPoint: 'ISBT Kashmere Gate, Delhi' },
+  { id: 'DEP-008', trekId: 8, trekName: 'Harishchandragad', cityId: 1, cityName: 'Pune', startDate: '2026-03-29', endDate: '2026-03-30', duration: '1 Night / 2 Days', price: 2200, capacity: 35, booked: 20, guideId: 2, guideName: 'Priya Negi', status: 'Open', itinerary: 'Day 1: Pune → Khireshwar → Trek via Pachnai → Camping\nDay 2: Sunrise at Konkan Kada → Explore → Return', thingsToCarry: 'Torch, 2L water, sturdy shoes, light jacket, camera', contact: '8765432109', meetingPoint: 'Shivajinagar Bus Stand, Pune' },
 ];
 
 // ─── Customers ───────────────────────────────────────
@@ -58,57 +62,52 @@ export const customers = [
 
 // ─── Bookings ────────────────────────────────────────
 export const bookings = [
-  { id: 'BK-2601', customerId: 1, customerName: 'Aarav Mehta', trekName: 'Kedarkantha Winter Trek', departureId: 'DEP-001', date: '2026-02-15', amount: 17000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Aarav Mehta', age: 28, medical: 'None' }, { name: 'Riya Mehta', age: 26, medical: 'Mild asthma - carries inhaler' }], bookedOn: '2026-01-05' },
-  { id: 'BK-2602', customerId: 2, customerName: 'Sneha Iyer', trekName: 'Hampta Pass Crossing', departureId: 'DEP-002', date: '2026-03-10', amount: 9500, paymentStatus: 'Partial', bookingStatus: 'Confirmed', participants: [{ name: 'Sneha Iyer', age: 31, medical: 'None' }], bookedOn: '2026-01-12' },
-  { id: 'BK-2603', customerId: 3, customerName: 'Rohan Kapoor', trekName: 'Kedarkantha Winter Trek', departureId: 'DEP-001', date: '2026-02-15', amount: 8500, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Rohan Kapoor', age: 25, medical: 'None' }], bookedOn: '2026-01-08' },
-  { id: 'BK-2604', customerId: 4, customerName: 'Priya Deshmukh', trekName: 'Chadar Frozen River', departureId: 'DEP-007', date: '2026-01-20', amount: 44000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Priya Deshmukh', age: 34, medical: 'None' }, { name: 'Anand Deshmukh', age: 36, medical: 'None' }], bookedOn: '2025-12-01' },
-  { id: 'BK-2605', customerId: 5, customerName: 'Vikram Singh', trekName: 'Sandakphu Kanchenjunga', departureId: 'DEP-004', date: '2026-03-01', amount: 11000, paymentStatus: 'Unpaid', bookingStatus: 'Pending', participants: [{ name: 'Vikram Singh', age: 29, medical: 'Knee brace recommended' }], bookedOn: '2026-01-20' },
-  { id: 'BK-2606', customerId: 6, customerName: 'Ananya Sharma', trekName: 'Brahmatal Lake Trek', departureId: 'DEP-005', date: '2026-02-18', amount: 15000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Ananya Sharma', age: 27, medical: 'None' }, { name: 'Neha Sharma', age: 24, medical: 'Allergic to sulfa drugs' }], bookedOn: '2026-01-10' },
-  { id: 'BK-2607', customerId: 7, customerName: 'Karthik Nair', trekName: 'Hampta Pass Crossing', departureId: 'DEP-002', date: '2026-03-10', amount: 9500, paymentStatus: 'Unpaid', bookingStatus: 'Canceled', participants: [{ name: 'Karthik Nair', age: 33, medical: 'None' }], bookedOn: '2026-01-15' },
-  { id: 'BK-2608', customerId: 8, customerName: 'Meera Joshi', trekName: 'Kedarkantha Winter Trek', departureId: 'DEP-003', date: '2026-02-22', amount: 25500, paymentStatus: 'Partial', bookingStatus: 'Confirmed', participants: [{ name: 'Meera Joshi', age: 30, medical: 'None' }, { name: 'Raj Joshi', age: 32, medical: 'None' }, { name: 'Tara Joshi', age: 55, medical: 'BP medication - Amlodipine 5mg' }], bookedOn: '2026-01-02' },
-  { id: 'BK-2609', customerId: 9, customerName: 'Arjun Reddy', trekName: 'Rajgad Fort Trek', departureId: 'DEP-006', date: '2026-03-15', amount: 5000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Arjun Reddy', age: 26, medical: 'None' }, { name: 'Suresh Reddy', age: 28, medical: 'None' }], bookedOn: '2026-02-01' },
-  { id: 'BK-2610', customerId: 10, customerName: 'Divya Pillai', trekName: 'Goechala Viewpoint', departureId: 'DEP-009', date: '2026-04-05', amount: 15000, paymentStatus: 'Partial', bookingStatus: 'Confirmed', participants: [{ name: 'Divya Pillai', age: 29, medical: 'None' }], bookedOn: '2026-02-05' },
-  { id: 'BK-2611', customerId: 11, customerName: 'Rahul Gupta', trekName: 'Roopkund Mystery Trek', departureId: 'DEP-010', date: '2026-05-20', amount: 25000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Rahul Gupta', age: 35, medical: 'None' }, { name: 'Sunita Gupta', age: 33, medical: 'None' }], bookedOn: '2026-01-25' },
-  { id: 'BK-2612', customerId: 12, customerName: 'Nisha Patel', trekName: 'Valley of Flowers', departureId: 'DEP-008', date: '2026-07-15', amount: 7800, paymentStatus: 'Unpaid', bookingStatus: 'Pending', participants: [{ name: 'Nisha Patel', age: 24, medical: 'None' }], bookedOn: '2026-02-08' },
-  { id: 'BK-2613', customerId: 13, customerName: 'Siddharth Rao', trekName: 'Brahmatal Lake Trek', departureId: 'DEP-005', date: '2026-02-18', amount: 7500, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Siddharth Rao', age: 31, medical: 'None' }], bookedOn: '2026-01-14' },
-  { id: 'BK-2614', customerId: 14, customerName: 'Pooja Verma', trekName: 'Sandakphu Kanchenjunga', departureId: 'DEP-004', date: '2026-03-01', amount: 11000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Pooja Verma', age: 27, medical: 'None' }], bookedOn: '2026-01-22' },
-  { id: 'BK-2615', customerId: 15, customerName: 'Amit Thakur', trekName: 'Kedarkantha Winter Trek', departureId: 'DEP-001', date: '2026-02-15', amount: 8500, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Amit Thakur', age: 38, medical: 'None' }], bookedOn: '2026-01-03' },
-  { id: 'BK-2616', customerId: 1, customerName: 'Aarav Mehta', trekName: 'Goechala Viewpoint', departureId: 'DEP-009', date: '2026-04-05', amount: 15000, paymentStatus: 'Partial', bookingStatus: 'Confirmed', participants: [{ name: 'Aarav Mehta', age: 28, medical: 'None' }], bookedOn: '2026-02-03' },
-  { id: 'BK-2617', customerId: 4, customerName: 'Priya Deshmukh', trekName: 'Rajgad Fort Trek', departureId: 'DEP-006', date: '2026-03-15', amount: 5000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Priya Deshmukh', age: 34, medical: 'None' }, { name: 'Meena Deshmukh', age: 58, medical: 'Diabetic - insulin' }], bookedOn: '2026-02-06' },
-  { id: 'BK-2618', customerId: 8, customerName: 'Meera Joshi', trekName: 'Sandakphu Kanchenjunga', departureId: 'DEP-004', date: '2026-03-01', amount: 11000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Meera Joshi', age: 30, medical: 'None' }], bookedOn: '2026-01-28' },
-  { id: 'BK-2619', customerId: 6, customerName: 'Ananya Sharma', trekName: 'Roopkund Mystery Trek', departureId: 'DEP-010', date: '2026-05-20', amount: 12500, paymentStatus: 'Unpaid', bookingStatus: 'Pending', participants: [{ name: 'Ananya Sharma', age: 27, medical: 'None' }], bookedOn: '2026-02-09' },
-  { id: 'BK-2620', customerId: 11, customerName: 'Rahul Gupta', trekName: 'Hampta Pass Crossing', departureId: 'DEP-002', date: '2026-03-10', amount: 19000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Rahul Gupta', age: 35, medical: 'None' }, { name: 'Sunita Gupta', age: 33, medical: 'None' }], bookedOn: '2026-02-07' },
+  { id: 'BK-2601', customerId: 1, customerName: 'Aarav Mehta', trekName: 'Rajmachi Fort', departureId: 'DEP-001', date: '2026-03-15', amount: 5000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Aarav Mehta', age: 28, medical: 'None' }, { name: 'Riya Mehta', age: 26, medical: 'None' }], bookedOn: '2026-01-05' },
+  { id: 'BK-2602', customerId: 2, customerName: 'Sneha Iyer', trekName: 'Kedarkantha', departureId: 'DEP-003', date: '2026-03-10', amount: 8500, paymentStatus: 'Partial', bookingStatus: 'Confirmed', participants: [{ name: 'Sneha Iyer', age: 31, medical: 'None' }], bookedOn: '2026-01-12' },
+  { id: 'BK-2603', customerId: 3, customerName: 'Rohan Kapoor', trekName: 'Kedarkantha', departureId: 'DEP-004', date: '2026-03-09', amount: 9500, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Rohan Kapoor', age: 25, medical: 'None' }], bookedOn: '2026-01-08' },
+  { id: 'BK-2604', customerId: 4, customerName: 'Priya Deshmukh', trekName: 'Kalsubai Peak', departureId: 'DEP-005', date: '2026-03-22', amount: 3600, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Priya Deshmukh', age: 34, medical: 'None' }, { name: 'Anand Deshmukh', age: 36, medical: 'None' }], bookedOn: '2025-12-01' },
+  { id: 'BK-2605', customerId: 5, customerName: 'Vikram Singh', trekName: 'Hampta Pass', departureId: 'DEP-007', date: '2026-06-20', amount: 11000, paymentStatus: 'Unpaid', bookingStatus: 'Pending', participants: [{ name: 'Vikram Singh', age: 29, medical: 'Knee brace recommended' }], bookedOn: '2026-01-20' },
+  { id: 'BK-2606', customerId: 6, customerName: 'Ananya Sharma', trekName: 'Rajmachi Fort', departureId: 'DEP-002', date: '2026-03-15', amount: 6000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Ananya Sharma', age: 27, medical: 'None' }, { name: 'Neha Sharma', age: 24, medical: 'None' }], bookedOn: '2026-01-10' },
+  { id: 'BK-2607', customerId: 7, customerName: 'Karthik Nair', trekName: 'Sandhan Valley', departureId: 'DEP-006', date: '2026-04-05', amount: 4500, paymentStatus: 'Unpaid', bookingStatus: 'Canceled', participants: [{ name: 'Karthik Nair', age: 33, medical: 'None' }], bookedOn: '2026-01-15' },
+  { id: 'BK-2608', customerId: 8, customerName: 'Meera Joshi', trekName: 'Harishchandragad', departureId: 'DEP-008', date: '2026-03-29', amount: 6600, paymentStatus: 'Partial', bookingStatus: 'Confirmed', participants: [{ name: 'Meera Joshi', age: 30, medical: 'None' }, { name: 'Raj Joshi', age: 32, medical: 'None' }, { name: 'Tara Joshi', age: 55, medical: 'BP medication' }], bookedOn: '2026-01-02' },
+  { id: 'BK-2609', customerId: 9, customerName: 'Arjun Reddy', trekName: 'Rajmachi Fort', departureId: 'DEP-001', date: '2026-03-15', amount: 5000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Arjun Reddy', age: 26, medical: 'None' }, { name: 'Suresh Reddy', age: 28, medical: 'None' }], bookedOn: '2026-02-01' },
+  { id: 'BK-2610', customerId: 10, customerName: 'Divya Pillai', trekName: 'Kedarkantha', departureId: 'DEP-003', date: '2026-03-10', amount: 8500, paymentStatus: 'Partial', bookingStatus: 'Confirmed', participants: [{ name: 'Divya Pillai', age: 29, medical: 'None' }], bookedOn: '2026-02-05' },
+  { id: 'BK-2611', customerId: 11, customerName: 'Rahul Gupta', trekName: 'Hampta Pass', departureId: 'DEP-007', date: '2026-06-20', amount: 22000, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Rahul Gupta', age: 35, medical: 'None' }, { name: 'Sunita Gupta', age: 33, medical: 'None' }], bookedOn: '2026-01-25' },
+  { id: 'BK-2612', customerId: 12, customerName: 'Nisha Patel', trekName: 'Kalsubai Peak', departureId: 'DEP-005', date: '2026-03-22', amount: 1800, paymentStatus: 'Unpaid', bookingStatus: 'Pending', participants: [{ name: 'Nisha Patel', age: 24, medical: 'None' }], bookedOn: '2026-02-08' },
+  { id: 'BK-2613', customerId: 13, customerName: 'Siddharth Rao', trekName: 'Harishchandragad', departureId: 'DEP-008', date: '2026-03-29', amount: 2200, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Siddharth Rao', age: 31, medical: 'None' }], bookedOn: '2026-01-14' },
+  { id: 'BK-2614', customerId: 14, customerName: 'Pooja Verma', trekName: 'Sandhan Valley', departureId: 'DEP-006', date: '2026-04-05', amount: 4500, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Pooja Verma', age: 27, medical: 'None' }], bookedOn: '2026-01-22' },
+  { id: 'BK-2615', customerId: 15, customerName: 'Amit Thakur', trekName: 'Kedarkantha', departureId: 'DEP-004', date: '2026-03-09', amount: 9500, paymentStatus: 'Paid', bookingStatus: 'Confirmed', participants: [{ name: 'Amit Thakur', age: 38, medical: 'None' }], bookedOn: '2026-01-03' },
 ];
 
 // ─── Invoices ────────────────────────────────────────
 export const invoices = [
-  { id: 'INV-3001', bookingId: 'BK-2601', customerName: 'Aarav Mehta', date: '2026-01-05', amount: 17000, status: 'Paid', dueDate: '2026-01-20' },
-  { id: 'INV-3002', bookingId: 'BK-2602', customerName: 'Sneha Iyer', date: '2026-01-12', amount: 9500, status: 'Partial', dueDate: '2026-02-12' },
-  { id: 'INV-3003', bookingId: 'BK-2603', customerName: 'Rohan Kapoor', date: '2026-01-08', amount: 8500, status: 'Paid', dueDate: '2026-01-23' },
-  { id: 'INV-3004', bookingId: 'BK-2604', customerName: 'Priya Deshmukh', date: '2025-12-01', amount: 44000, status: 'Paid', dueDate: '2025-12-15' },
+  { id: 'INV-3001', bookingId: 'BK-2601', customerName: 'Aarav Mehta', date: '2026-01-05', amount: 5000, status: 'Paid', dueDate: '2026-01-20' },
+  { id: 'INV-3002', bookingId: 'BK-2602', customerName: 'Sneha Iyer', date: '2026-01-12', amount: 8500, status: 'Partial', dueDate: '2026-02-12' },
+  { id: 'INV-3003', bookingId: 'BK-2603', customerName: 'Rohan Kapoor', date: '2026-01-08', amount: 9500, status: 'Paid', dueDate: '2026-01-23' },
+  { id: 'INV-3004', bookingId: 'BK-2604', customerName: 'Priya Deshmukh', date: '2025-12-01', amount: 3600, status: 'Paid', dueDate: '2025-12-15' },
   { id: 'INV-3005', bookingId: 'BK-2605', customerName: 'Vikram Singh', date: '2026-01-20', amount: 11000, status: 'Sent', dueDate: '2026-02-20' },
-  { id: 'INV-3006', bookingId: 'BK-2606', customerName: 'Ananya Sharma', date: '2026-01-10', amount: 15000, status: 'Paid', dueDate: '2026-01-25' },
-  { id: 'INV-3007', bookingId: 'BK-2608', customerName: 'Meera Joshi', date: '2026-01-02', amount: 25500, status: 'Partial', dueDate: '2026-02-02' },
+  { id: 'INV-3006', bookingId: 'BK-2606', customerName: 'Ananya Sharma', date: '2026-01-10', amount: 6000, status: 'Paid', dueDate: '2026-01-25' },
+  { id: 'INV-3007', bookingId: 'BK-2608', customerName: 'Meera Joshi', date: '2026-01-02', amount: 6600, status: 'Partial', dueDate: '2026-02-02' },
   { id: 'INV-3008', bookingId: 'BK-2609', customerName: 'Arjun Reddy', date: '2026-02-01', amount: 5000, status: 'Paid', dueDate: '2026-02-15' },
-  { id: 'INV-3009', bookingId: 'BK-2611', customerName: 'Rahul Gupta', date: '2026-01-25', amount: 25000, status: 'Paid', dueDate: '2026-02-10' },
-  { id: 'INV-3010', bookingId: 'BK-2612', customerName: 'Nisha Patel', date: '2026-02-08', amount: 7800, status: 'Sent', dueDate: '2026-03-08' },
+  { id: 'INV-3009', bookingId: 'BK-2611', customerName: 'Rahul Gupta', date: '2026-01-25', amount: 22000, status: 'Paid', dueDate: '2026-02-10' },
+  { id: 'INV-3010', bookingId: 'BK-2612', customerName: 'Nisha Patel', date: '2026-02-08', amount: 1800, status: 'Sent', dueDate: '2026-03-08' },
 ];
 
 // ─── Payments ────────────────────────────────────────
 export const payments = [
-  { id: 'PAY-4001', invoiceId: 'INV-3001', customerName: 'Aarav Mehta', date: '2026-01-06', amount: 17000, method: 'UPI', reference: 'UPI-2026010612345' },
+  { id: 'PAY-4001', invoiceId: 'INV-3001', customerName: 'Aarav Mehta', date: '2026-01-06', amount: 5000, method: 'UPI', reference: 'UPI-2026010612345' },
   { id: 'PAY-4002', invoiceId: 'INV-3002', customerName: 'Sneha Iyer', date: '2026-01-13', amount: 5000, method: 'Bank Transfer', reference: 'NEFT-20260113001' },
-  { id: 'PAY-4003', invoiceId: 'INV-3003', customerName: 'Rohan Kapoor', date: '2026-01-09', amount: 8500, method: 'UPI', reference: 'UPI-2026010923456' },
-  { id: 'PAY-4004', invoiceId: 'INV-3004', customerName: 'Priya Deshmukh', date: '2025-12-02', amount: 44000, method: 'Credit Card', reference: 'CC-2025120234567' },
-  { id: 'PAY-4005', invoiceId: 'INV-3006', customerName: 'Ananya Sharma', date: '2026-01-11', amount: 15000, method: 'UPI', reference: 'UPI-2026011134567' },
-  { id: 'PAY-4006', invoiceId: 'INV-3007', customerName: 'Meera Joshi', date: '2026-01-03', amount: 15000, method: 'Bank Transfer', reference: 'NEFT-20260103002' },
+  { id: 'PAY-4003', invoiceId: 'INV-3003', customerName: 'Rohan Kapoor', date: '2026-01-09', amount: 9500, method: 'UPI', reference: 'UPI-2026010923456' },
+  { id: 'PAY-4004', invoiceId: 'INV-3004', customerName: 'Priya Deshmukh', date: '2025-12-02', amount: 3600, method: 'Credit Card', reference: 'CC-2025120234567' },
+  { id: 'PAY-4005', invoiceId: 'INV-3006', customerName: 'Ananya Sharma', date: '2026-01-11', amount: 6000, method: 'UPI', reference: 'UPI-2026011134567' },
+  { id: 'PAY-4006', invoiceId: 'INV-3007', customerName: 'Meera Joshi', date: '2026-01-03', amount: 3000, method: 'Bank Transfer', reference: 'NEFT-20260103002' },
   { id: 'PAY-4007', invoiceId: 'INV-3008', customerName: 'Arjun Reddy', date: '2026-02-02', amount: 5000, method: 'UPI', reference: 'UPI-2026020245678' },
-  { id: 'PAY-4008', invoiceId: 'INV-3009', customerName: 'Rahul Gupta', date: '2026-01-26', amount: 25000, method: 'Credit Card', reference: 'CC-2026012656789' },
+  { id: 'PAY-4008', invoiceId: 'INV-3009', customerName: 'Rahul Gupta', date: '2026-01-26', amount: 22000, method: 'Credit Card', reference: 'CC-2026012656789' },
 ];
 
 // ─── Refunds ─────────────────────────────────────────
 export const refunds = [
-  { id: 'REF-5001', bookingId: 'BK-2607', customerName: 'Karthik Nair', date: '2026-01-18', amount: 9500, reason: 'Trek canceled by customer', status: 'Processed', method: 'Original Payment Method' },
+  { id: 'REF-5001', bookingId: 'BK-2607', customerName: 'Karthik Nair', date: '2026-01-18', amount: 4500, reason: 'Trek canceled by customer', status: 'Processed', method: 'Original Payment Method' },
   { id: 'REF-5002', bookingId: 'BK-2605', customerName: 'Vikram Singh', date: '2026-02-05', amount: 2750, reason: 'Partial refund - date change', status: 'Pending', method: 'Bank Transfer' },
 ];
 
@@ -146,32 +145,33 @@ export const revenueByMonth = [
 ];
 
 export const bookingsByRegion = [
-  { name: 'Himalayas', value: 68, color: '#059669' },
-  { name: 'Sahyadris', value: 22, color: '#0891b2' },
-  { name: 'Western Ghats', value: 6, color: '#7c3aed' },
-  { name: 'Northeast', value: 4, color: '#ea580c' },
+  { name: 'Pune', value: 35, color: '#059669' },
+  { name: 'Mumbai', value: 25, color: '#0891b2' },
+  { name: 'Delhi', value: 22, color: '#7c3aed' },
+  { name: 'Dehradun', value: 12, color: '#ea580c' },
+  { name: 'Bangalore', value: 6, color: '#dc2626' },
 ];
 
 export const recentActivity = [
-  { id: 1, type: 'booking', message: 'Aarav Mehta booked Kedarkantha Winter Trek', time: '2 hours ago', status: 'Confirmed' },
-  { id: 2, type: 'payment', message: 'Payment received from Rahul Gupta - ₹25,000', time: '4 hours ago', status: 'Paid' },
-  { id: 3, type: 'booking', message: 'Nisha Patel booked Valley of Flowers', time: '6 hours ago', status: 'Pending' },
-  { id: 4, type: 'cancellation', message: 'Karthik Nair canceled Hampta Pass booking', time: '1 day ago', status: 'Canceled' },
-  { id: 5, type: 'booking', message: 'Ananya Sharma booked Roopkund Mystery Trek', time: '1 day ago', status: 'Pending' },
+  { id: 1, type: 'booking', message: 'Aarav Mehta booked Rajmachi Fort from Pune', time: '2 hours ago', status: 'Confirmed' },
+  { id: 2, type: 'payment', message: 'Payment received from Rahul Gupta - ₹22,000', time: '4 hours ago', status: 'Paid' },
+  { id: 3, type: 'booking', message: 'Nisha Patel booked Kalsubai Peak from Pune', time: '6 hours ago', status: 'Pending' },
+  { id: 4, type: 'cancellation', message: 'Karthik Nair canceled Sandhan Valley booking', time: '1 day ago', status: 'Canceled' },
+  { id: 5, type: 'booking', message: 'Ananya Sharma booked Rajmachi Fort from Mumbai', time: '1 day ago', status: 'Confirmed' },
 ];
 
 export const alerts = [
-  { id: 1, type: 'warning', title: 'Low Seats Alert', message: 'Kedarkantha Batch DEP-001 has only 2 seats left', priority: 'high' },
-  { id: 2, type: 'info', title: 'Permit Renewal', message: 'Roopkund trek permit expires on March 15, 2026', priority: 'medium' },
-  { id: 3, type: 'warning', title: 'Payment Overdue', message: 'Vikram Singh - ₹11,000 payment overdue by 5 days', priority: 'high' },
+  { id: 1, type: 'warning', title: 'Low Seats Alert', message: 'Kedarkantha (Delhi) DEP-004 has only 3 seats left', priority: 'high' },
+  { id: 2, type: 'info', title: 'New City Added', message: 'Bangalore added as departure city', priority: 'medium' },
+  { id: 3, type: 'warning', title: 'Payment Overdue', message: 'Vikram Singh - ₹11,000 payment overdue for Hampta Pass', priority: 'high' },
   { id: 4, type: 'info', title: 'Guide Availability', message: 'Tenzing Dorji unavailable Mar 5-12 for personal leave', priority: 'low' },
 ];
 
 // ─── Notifications ───────────────────────────────────
 export const notifications = [
-  { id: 1, title: 'New Booking', message: 'Aarav Mehta booked Kedarkantha', time: '2h ago', read: false },
-  { id: 2, title: 'Payment Received', message: '₹25,000 from Rahul Gupta', time: '4h ago', read: false },
-  { id: 3, title: 'Batch Full', message: 'Kedarkantha DEP-003 is now full', time: '1d ago', read: true },
+  { id: 1, title: 'New Booking', message: 'Aarav Mehta booked Rajmachi Fort', time: '2h ago', read: false },
+  { id: 2, title: 'Payment Received', message: '₹22,000 from Rahul Gupta', time: '4h ago', read: false },
+  { id: 3, title: 'Batch Full', message: 'Kedarkantha DEP-004 almost full', time: '1d ago', read: true },
   { id: 4, title: 'Cancellation', message: 'Karthik Nair canceled booking', time: '1d ago', read: true },
-  { id: 5, title: 'Low Seats', message: 'Only 2 seats left on DEP-001', time: '2d ago', read: true },
+  { id: 5, title: 'Low Seats', message: 'Only 3 seats left on DEP-004', time: '2d ago', read: true },
 ];

@@ -1,41 +1,36 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Mountain, Phone, KeyRound, ArrowRight, Loader2 } from 'lucide-react';
+import { Mountain, Phone, KeyRound, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [step, setStep] = useState(1);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSendOtp = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     if (phone.length < 10) {
       setError('Please enter a valid 10-digit phone number');
       return;
     }
-    setError('');
-    setLoading(true);
-    setTimeout(() => {
-      setStep(2);
-      setLoading(false);
-    }, 800);
-  };
+    if (!password) {
+      setError('Please enter your password');
+      return;
+    }
 
-  const handleVerifyOtp = (e) => {
-    e.preventDefault();
     setError('');
     setLoading(true);
-    setTimeout(() => {
-      if (otp === '9999') {
-        login(phone);
-      } else {
-        setError('Invalid OTP. Please enter 9999 to login.');
-        setLoading(false);
-      }
-    }, 800);
+    try {
+      await login(phone, password);
+    } catch (err) {
+      const msg = err?.message || 'Login failed. Please try again.';
+      // Clean up Apollo GraphQL error prefixes
+      setError(msg.replace(/^GraphQL error:\s*/i, ''));
+      setLoading(false);
+    }
   };
 
   return (
@@ -97,116 +92,78 @@ export default function LoginPage() {
 
           <div className="space-y-2 mb-8">
             <h2 className="text-2xl font-bold text-slate-900">Welcome back</h2>
-            <p className="text-slate-500">
-              {step === 1
-                ? 'Enter your phone number to get started'
-                : 'Enter the OTP sent to your phone'}
-            </p>
+            <p className="text-slate-500">Sign in with your phone number and password</p>
           </div>
 
-          {step === 1 ? (
-            <form onSubmit={handleSendOtp} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Phone Number
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => {
-                      setPhone(e.target.value.replace(/\D/g, '').slice(0, 10));
-                      setError('');
-                    }}
-                    placeholder="Enter 10-digit number"
-                    className="input-field pl-10"
-                    autoFocus
-                  />
-                </div>
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Phone Number
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(e.target.value.replace(/\D/g, '').slice(0, 10));
+                    setError('');
+                  }}
+                  placeholder="Enter 10-digit number"
+                  className="input-field pl-10"
+                  autoFocus
+                />
               </div>
+            </div>
 
-              {error && (
-                <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg animate-fade-in">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading || phone.length < 10}
-                className="btn-primary w-full flex items-center justify-center gap-2 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    Send OTP
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp} className="space-y-5 animate-fade-in">
-              <div className="bg-primary-50 text-primary-700 text-sm px-4 py-3 rounded-lg">
-                OTP sent to <span className="font-semibold">+91 {phone}</span>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError('');
+                  }}
+                  placeholder="Enter your password"
+                  className="input-field pl-10 pr-10"
+                />
                 <button
                   type="button"
-                  onClick={() => { setStep(1); setOtp(''); setError(''); }}
-                  className="ml-2 underline text-primary-600 hover:text-primary-800"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 transition-colors"
+                  tabIndex={-1}
                 >
-                  Change
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  One-Time Password
-                </label>
-                <div className="relative">
-                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={otp}
-                    onChange={(e) => {
-                      setOtp(e.target.value.replace(/\D/g, '').slice(0, 4));
-                      setError('');
-                    }}
-                    placeholder="Enter 4-digit OTP"
-                    className="input-field pl-10 tracking-[0.5em] text-center font-mono text-lg"
-                    maxLength={4}
-                    autoFocus
-                  />
-                </div>
+            {error && (
+              <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg animate-fade-in">
+                {error}
               </div>
+            )}
 
-              {error && (
-                <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg animate-fade-in">
-                  {error}
-                </div>
+            <button
+              type="submit"
+              disabled={loading || phone.length < 10 || !password}
+              className="btn-primary w-full flex items-center justify-center gap-2 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  Sign In
+                  <ArrowRight className="w-4 h-4" />
+                </>
               )}
-
-              <button
-                type="submit"
-                disabled={loading || otp.length < 4}
-                className="btn-primary w-full flex items-center justify-center gap-2 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    Verify & Login
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-
-              <p className="text-center text-sm text-slate-400">
-                Demo OTP: <span className="font-mono font-semibold text-slate-600">9999</span>
-              </p>
-            </form>
-          )}
+            </button>
+          </form>
         </div>
       </div>
     </div>

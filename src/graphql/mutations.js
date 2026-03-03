@@ -1,94 +1,212 @@
 import { gql } from '@apollo/client';
 
+// ─── Auth Mutations ──────────────────────────────────
+export const LOGIN_MUTATION = gql`
+  mutation Login($phone: String!, $password: String!) {
+    login(phone: $phone, password: $password) {
+      token
+      user {
+        _id
+        name
+        email
+        phone
+        role
+        avatar
+        tenantId
+        tenantName
+      }
+    }
+  }
+`;
+
+export const REGISTER_MUTATION = gql`
+  mutation Register($input: RegisterInput!) {
+    register(input: $input) {
+      token
+      user {
+        _id
+        name
+        email
+        phone
+        role
+        tenantId
+        tenantName
+      }
+    }
+  }
+`;
+
+// ─── City Mutations ──────────────────────────────────
+export const CREATE_CITY = gql`
+  mutation CreateCity($input: CreateCityInput!) {
+    createCity(input: $input) {
+      _id
+      name
+      state
+      isActive
+    }
+  }
+`;
+
+export const UPDATE_CITY = gql`
+  mutation UpdateCity($id: ID!, $input: UpdateCityInput!) {
+    updateCity(id: $id, input: $input) {
+      _id
+      name
+      state
+      isActive
+    }
+  }
+`;
+
+export const DELETE_CITY = gql`
+  mutation DeleteCity($id: ID!) {
+    deleteCity(id: $id) {
+      message
+    }
+  }
+`;
+
 // ─── Trek Mutations ──────────────────────────────────
 export const CREATE_TREK = gql`
-  mutation CreateTrek($input: TrekInput!) {
+  mutation CreateTrek($input: CreateTrekInput!) {
     createTrek(input: $input) {
-      id
+      _id
       name
-      region
-      state
-      difficulty
-      duration
-      altitude
-      price
-      season
-      description
-      rating
-      totalBookings
       image
+      location
+      description
+      altitude
+      bestSeason
+      difficulty
+      isActive
     }
   }
 `;
 
 export const UPDATE_TREK = gql`
-  mutation UpdateTrek($id: ID!, $input: TrekInput!) {
+  mutation UpdateTrek($id: ID!, $input: UpdateTrekInput!) {
     updateTrek(id: $id, input: $input) {
-      id
+      _id
       name
-      region
-      state
-      difficulty
-      duration
-      altitude
-      price
-      season
-      description
-      rating
-      totalBookings
       image
+      location
+      description
+      altitude
+      bestSeason
+      difficulty
+      isActive
     }
   }
 `;
 
 export const DELETE_TREK = gql`
   mutation DeleteTrek($id: ID!) {
-    deleteTrek(id: $id)
+    deleteTrek(id: $id) {
+      message
+    }
   }
 `;
 
 // ─── Departure Mutations ─────────────────────────────
 export const CREATE_DEPARTURE = gql`
-  mutation CreateDeparture($input: DepartureInput!) {
+  mutation CreateDeparture($input: CreateDepartureInput!) {
     createDeparture(input: $input) {
-      id
+      _id
       trekId
       trekName
+      cityId
+      cityName
       startDate
       endDate
+      duration
+      price
       capacity
       booked
+      itinerary
+      thingsToCarry
+      contact
+      meetingPoint
       guideId
       guideName
       status
-      price
-      meetingPoint
     }
   }
 `;
 
 export const UPDATE_DEPARTURE = gql`
-  mutation UpdateDeparture($id: ID!, $input: DepartureInput!) {
+  mutation UpdateDeparture($id: ID!, $input: UpdateDepartureInput!) {
     updateDeparture(id: $id, input: $input) {
-      id
+      _id
       trekId
       trekName
+      cityId
+      cityName
       startDate
       endDate
+      duration
+      price
       capacity
       booked
+      itinerary
+      thingsToCarry
+      contact
+      meetingPoint
       guideId
       guideName
       status
-      price
-      meetingPoint
     }
   }
 `;
 
 export const DELETE_DEPARTURE = gql`
   mutation DeleteDeparture($id: ID!) {
-    deleteDeparture(id: $id)
+    deleteDeparture(id: $id) {
+      message
+    }
+  }
+`;
+
+// ─── Campaign Mutations ──────────────────────────────
+export const CREATE_CAMPAIGN = gql`
+  mutation CreateCampaign($input: CampaignInput!) {
+    createCampaign(input: $input) {
+      _id
+      name
+      platform
+      spend
+      leads
+      conversions
+      cpl
+      roas
+      status
+      startDate
+      endDate
+    }
+  }
+`;
+
+export const UPDATE_CAMPAIGN = gql`
+  mutation UpdateCampaign($id: ID!, $input: CampaignInput!) {
+    updateCampaign(id: $id, input: $input) {
+      _id
+      name
+      platform
+      spend
+      leads
+      conversions
+      cpl
+      roas
+      status
+      startDate
+      endDate
+    }
+  }
+`;
+
+export const DELETE_CAMPAIGN = gql`
+  mutation DeleteCampaign($id: ID!) {
+    deleteCampaign(id: $id)
   }
 `;
 
@@ -96,7 +214,7 @@ export const DELETE_DEPARTURE = gql`
 export const CREATE_BOOKING = gql`
   mutation CreateBooking($input: BookingInput!) {
     createBooking(input: $input) {
-      id
+      _id
       customerId
       customerName
       trekName
@@ -118,7 +236,7 @@ export const CREATE_BOOKING = gql`
 export const UPDATE_BOOKING = gql`
   mutation UpdateBooking($id: ID!, $input: BookingInput!) {
     updateBooking(id: $id, input: $input) {
-      id
+      _id
       customerId
       customerName
       trekName
@@ -139,7 +257,9 @@ export const UPDATE_BOOKING = gql`
 
 export const DELETE_BOOKING = gql`
   mutation DeleteBooking($id: ID!) {
-    deleteBooking(id: $id)
+    deleteBooking(id: $id) {
+      message
+    }
   }
 `;
 
@@ -147,7 +267,7 @@ export const DELETE_BOOKING = gql`
 export const CREATE_CUSTOMER = gql`
   mutation CreateCustomer($input: CustomerInput!) {
     createCustomer(input: $input) {
-      id
+      _id
       name
       email
       phone
@@ -163,7 +283,7 @@ export const CREATE_CUSTOMER = gql`
 export const UPDATE_CUSTOMER = gql`
   mutation UpdateCustomer($id: ID!, $input: CustomerInput!) {
     updateCustomer(id: $id, input: $input) {
-      id
+      _id
       name
       email
       phone
@@ -178,7 +298,9 @@ export const UPDATE_CUSTOMER = gql`
 
 export const DELETE_CUSTOMER = gql`
   mutation DeleteCustomer($id: ID!) {
-    deleteCustomer(id: $id)
+    deleteCustomer(id: $id) {
+      message
+    }
   }
 `;
 
@@ -186,7 +308,7 @@ export const DELETE_CUSTOMER = gql`
 export const CREATE_INVOICE = gql`
   mutation CreateInvoice($input: InvoiceInput!) {
     createInvoice(input: $input) {
-      id
+      _id
       bookingId
       customerName
       date
@@ -200,7 +322,7 @@ export const CREATE_INVOICE = gql`
 export const UPDATE_INVOICE = gql`
   mutation UpdateInvoice($id: ID!, $input: InvoiceInput!) {
     updateInvoice(id: $id, input: $input) {
-      id
+      _id
       bookingId
       customerName
       date
@@ -213,49 +335,17 @@ export const UPDATE_INVOICE = gql`
 
 export const DELETE_INVOICE = gql`
   mutation DeleteInvoice($id: ID!) {
-    deleteInvoice(id: $id)
-  }
-`;
-
-// ─── Campaign Mutations ──────────────────────────────
-export const CREATE_CAMPAIGN = gql`
-  mutation CreateCampaign($input: CampaignInput!) {
-    createCampaign(input: $input) {
-      id
-      name
-      platform
-      spend
-      leads
-      conversions
-      cpl
-      roas
-      status
-      startDate
-      endDate
+    deleteInvoice(id: $id) {
+      message
     }
   }
 `;
 
-export const UPDATE_CAMPAIGN = gql`
-  mutation UpdateCampaign($id: ID!, $input: CampaignInput!) {
-    updateCampaign(id: $id, input: $input) {
-      id
-      name
-      platform
-      spend
-      leads
-      conversions
-      cpl
-      roas
+// ─── Chat Mutations ──────────────────────────────────
+export const SEND_MESSAGE = gql`
+  mutation SendMessage($phone: String!, $text: String!) {
+    sendMessage(phone: $phone, text: $text) {
       status
-      startDate
-      endDate
     }
-  }
-`;
-
-export const DELETE_CAMPAIGN = gql`
-  mutation DeleteCampaign($id: ID!) {
-    deleteCampaign(id: $id)
   }
 `;

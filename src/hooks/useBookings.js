@@ -55,7 +55,7 @@ export function useBookings(filters = {}) {
   });
 
   const gqlResult = {
-    data: gqlQuery.data?.bookings || [],
+    data: gqlQuery.data?.getBookings || [],
     loading: gqlQuery.loading,
     error: gqlQuery.error,
     add: async (booking) => {

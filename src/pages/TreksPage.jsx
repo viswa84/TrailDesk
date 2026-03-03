@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useTreks } from '../hooks/useTreks';
 import Modal from '../components/ui/Modal';
-import StatusBadge from '../components/ui/StatusBadge';
-import { Search, Plus, Filter, Star, Clock, IndianRupee, MapPin, Edit, Trash2, Mountain, X } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Mountain, MapPin } from 'lucide-react';
 
 const difficultyColors = {
   Easy: 'badge-green',
@@ -10,56 +9,43 @@ const difficultyColors = {
   Difficult: 'badge-red',
 };
 
-const emptyTrek = { name: '', region: 'Himalayas', state: '', difficulty: 'Easy', duration: '', altitude: '', price: '', season: 'Winter', description: '', image: 'https://images.unsplash.com/photo-1486870591958-9b9d0d1dda99?w=400&h=250&fit=crop' };
+const emptyTrek = { name: '', location: '', difficulty: 'Easy', altitude: '', bestSeason: '', description: '', image: 'https://images.unsplash.com/photo-1486870591958-9b9d0d1dda99?w=400&h=250&fit=crop' };
 
 export default function TreksPage() {
   const { data: treksList, loading, error, add: addTrek, update: updateTrek, remove: removeTrek } = useTreks();
   const [search, setSearch] = useState('');
-  const [regionFilter, setRegionFilter] = useState('All');
   const [difficultyFilter, setDifficultyFilter] = useState('All');
-  const [seasonFilter, setSeasonFilter] = useState('All');
   const [showModal, setShowModal] = useState(false);
   const [editingTrek, setEditingTrek] = useState(null);
   const [formData, setFormData] = useState(emptyTrek);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
-  const regions = ['All', ...new Set(treksList.map(t => t.region))];
   const difficulties = ['All', 'Easy', 'Moderate', 'Difficult'];
-  const seasons = ['All', 'Winter', 'Summer', 'Monsoon', 'Spring'];
 
   const filtered = treksList.filter(t => {
-    const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.state.toLowerCase().includes(search.toLowerCase());
-    const matchesRegion = regionFilter === 'All' || t.region === regionFilter;
+    const matchesSearch = (t.name || '').toLowerCase().includes(search.toLowerCase()) || (t.location || '').toLowerCase().includes(search.toLowerCase());
     const matchesDifficulty = difficultyFilter === 'All' || t.difficulty === difficultyFilter;
-    const matchesSeason = seasonFilter === 'All' || t.season === seasonFilter;
-    return matchesSearch && matchesRegion && matchesDifficulty && matchesSeason;
+    return matchesSearch && matchesDifficulty;
   });
 
-  const handleAdd = () => {
-    setEditingTrek(null);
-    setFormData(emptyTrek);
-    setShowModal(true);
-  };
+  const handleAdd = () => { setEditingTrek(null); setFormData(emptyTrek); setShowModal(true); };
 
   const handleEdit = (trek) => {
     setEditingTrek(trek);
-    setFormData({ ...trek, price: String(trek.price) });
+    setFormData({ ...trek });
     setShowModal(true);
   };
 
   const handleSave = () => {
     if (editingTrek) {
-      updateTrek(editingTrek.id, { ...formData, price: Number(formData.price) });
+      updateTrek(editingTrek.id || editingTrek._id, formData);
     } else {
-      addTrek({ ...formData, price: Number(formData.price) });
+      addTrek(formData);
     }
     setShowModal(false);
   };
 
-  const handleDelete = (id) => {
-    removeTrek(id);
-    setShowDeleteConfirm(null);
-  };
+  const handleDelete = (id) => { removeTrek(id); setShowDeleteConfirm(null); };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -79,22 +65,10 @@ export default function TreksPage() {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search treks..."
-              className="input-field pl-10"
-            />
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search treks..." className="input-field pl-10" />
           </div>
-          <select value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)} className="select-field sm:w-40">
-            {regions.map(r => <option key={r} value={r}>{r === 'All' ? 'All Regions' : r}</option>)}
-          </select>
           <select value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value)} className="select-field sm:w-40">
             {difficulties.map(d => <option key={d} value={d}>{d === 'All' ? 'All Difficulty' : d}</option>)}
-          </select>
-          <select value={seasonFilter} onChange={(e) => setSeasonFilter(e.target.value)} className="select-field sm:w-36">
-            {seasons.map(s => <option key={s} value={s}>{s === 'All' ? 'All Seasons' : s}</option>)}
           </select>
         </div>
       </div>
@@ -102,7 +76,7 @@ export default function TreksPage() {
       {/* Trek Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filtered.map(trek => (
-          <div key={trek.id} className="card overflow-hidden group">
+          <div key={trek.id || trek._id} className="card overflow-hidden group">
             <div className="relative h-44 overflow-hidden">
               <img
                 src={trek.image}
@@ -117,33 +91,27 @@ export default function TreksPage() {
                 <button onClick={() => handleEdit(trek)} className="p-1.5 bg-white/90 backdrop-blur rounded-lg hover:bg-white transition-colors shadow-sm">
                   <Edit className="w-3.5 h-3.5 text-slate-600" />
                 </button>
-                <button onClick={() => setShowDeleteConfirm(trek.id)} className="p-1.5 bg-white/90 backdrop-blur rounded-lg hover:bg-white transition-colors shadow-sm">
+                <button onClick={() => setShowDeleteConfirm(trek.id || trek._id)} className="p-1.5 bg-white/90 backdrop-blur rounded-lg hover:bg-white transition-colors shadow-sm">
                   <Trash2 className="w-3.5 h-3.5 text-red-500" />
                 </button>
               </div>
               <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent" />
               <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
                 <span className="text-white text-xs font-medium flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> {trek.state}
+                  <MapPin className="w-3 h-3" /> {trek.location}
                 </span>
-                {trek.rating > 0 && (
-                  <span className="text-white text-xs font-medium flex items-center gap-1">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> {trek.rating}
-                  </span>
-                )}
               </div>
             </div>
 
             <div className="p-4 space-y-3">
               <h3 className="font-semibold text-slate-900 text-sm leading-tight line-clamp-2 min-h-[2.5rem]">{trek.name}</h3>
               <div className="flex items-center gap-4 text-xs text-slate-500">
-                <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {trek.duration}</span>
                 <span className="flex items-center gap-1"><Mountain className="w-3 h-3" /> {trek.altitude}</span>
+                {trek.bestSeason && <span>{trek.bestSeason}</span>}
               </div>
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                <span className="text-lg font-bold text-primary-700">₹{trek.price.toLocaleString()}</span>
-                <span className="text-xs text-slate-400">{trek.season}</span>
-              </div>
+              {trek.description && (
+                <p className="text-xs text-slate-400 line-clamp-2">{trek.description}</p>
+              )}
             </div>
           </div>
         ))}
@@ -165,25 +133,16 @@ export default function TreksPage() {
         </div>
       </Modal>
 
-      {/* Add/Edit Modal */}
+      {/* Add/Edit Modal — Simplified Trek */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingTrek ? 'Edit Trek' : 'Add New Trek'} size="lg">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1">Trek Name</label>
-            <input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="input-field" placeholder="e.g. Kedarkantha Winter Trek" />
+            <input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="input-field" placeholder="e.g. Kedarkantha" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Region</label>
-            <select value={formData.region} onChange={(e) => setFormData({ ...formData, region: e.target.value })} className="select-field">
-              <option value="Himalayas">Himalayas</option>
-              <option value="Sahyadris">Sahyadris</option>
-              <option value="Western Ghats">Western Ghats</option>
-              <option value="Northeast">Northeast</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">State</label>
-            <input value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} className="input-field" placeholder="e.g. Uttarakhand" />
+            <label className="block text-sm font-medium text-slate-700 mb-1">Location / Place</label>
+            <input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} className="input-field" placeholder="e.g. Uttarakhand" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Difficulty</label>
@@ -194,33 +153,20 @@ export default function TreksPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Duration</label>
-            <input value={formData.duration} onChange={(e) => setFormData({ ...formData, duration: e.target.value })} className="input-field" placeholder="e.g. 6 Days" />
-          </div>
-          <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Altitude</label>
             <input value={formData.altitude} onChange={(e) => setFormData({ ...formData, altitude: e.target.value })} className="input-field" placeholder="e.g. 12,500 ft" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Price (₹)</label>
-            <input type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="input-field" placeholder="e.g. 8500" />
+            <label className="block text-sm font-medium text-slate-700 mb-1">Best Season</label>
+            <input value={formData.bestSeason} onChange={(e) => setFormData({ ...formData, bestSeason: e.target.value })} className="input-field" placeholder="e.g. Dec-Apr" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Season</label>
-            <select value={formData.season} onChange={(e) => setFormData({ ...formData, season: e.target.value })} className="select-field">
-              <option value="Winter">Winter</option>
-              <option value="Summer">Summer</option>
-              <option value="Monsoon">Monsoon</option>
-              <option value="Spring">Spring</option>
-            </select>
-          </div>
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1">Image URL</label>
             <input value={formData.image} onChange={(e) => setFormData({ ...formData, image: e.target.value })} className="input-field" placeholder="https://..." />
           </div>
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-            <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="input-field min-h-[80px] resize-none" placeholder="Describe the trek..." />
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description (About the place)</label>
+            <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="input-field min-h-[80px] resize-none" placeholder="Describe the trek location..." />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">

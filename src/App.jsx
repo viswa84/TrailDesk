@@ -4,6 +4,7 @@ import AppLayout from './components/layout/AppLayout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import TreksPage from './pages/TreksPage';
+import CitiesPage from './pages/CitiesPage';
 import DeparturesPage from './pages/DeparturesPage';
 import BookingsPage from './pages/BookingsPage';
 import CustomersPage from './pages/CustomersPage';
@@ -26,6 +27,7 @@ function App() {
           <Route path="/login" element={<AuthRedirect><LoginPage /></AuthRedirect>} />
           <Route element={<AppLayout />}>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/cities" element={<CitiesPage />} />
             <Route path="/treks" element={<TreksPage />} />
             <Route path="/departures" element={<DeparturesPage />} />
             <Route path="/bookings" element={<BookingsPage />} />

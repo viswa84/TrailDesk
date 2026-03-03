@@ -1,126 +1,164 @@
 import { gql } from '@apollo/client';
 
+// ─── City Queries ─────────────────────────────────────
+export const GET_CITIES = gql`
+  query GetCities($isActive: Boolean) {
+    getCities(isActive: $isActive) {
+      _id
+      name
+      state
+      isActive
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 // ─── Trek Queries ────────────────────────────────────
 export const GET_TREKS = gql`
-  query GetTreks($region: String, $difficulty: String, $season: String) {
-    treks(region: $region, difficulty: $difficulty, season: $season) {
-      id
+  query GetTreks($isActive: Boolean) {
+    getTreks(isActive: $isActive) {
+      _id
       name
-      region
-      state
-      difficulty
-      duration
-      altitude
-      price
-      season
-      description
-      rating
-      totalBookings
       image
+      location
+      description
+      altitude
+      bestSeason
+      difficulty
+      isActive
+      createdAt
     }
   }
 `;
 
 export const GET_TREK_BY_ID = gql`
   query GetTrekById($id: ID!) {
-    trek(id: $id) {
-      id
+    getTrek(id: $id) {
+      _id
       name
-      region
-      state
-      difficulty
-      duration
-      altitude
-      price
-      season
-      description
-      rating
-      totalBookings
       image
+      location
+      description
+      altitude
+      bestSeason
+      difficulty
+      isActive
     }
   }
 `;
 
 // ─── Departure Queries ───────────────────────────────
 export const GET_DEPARTURES = gql`
-  query GetDepartures($trekId: ID, $status: String) {
-    departures(trekId: $trekId, status: $status) {
-      id
+  query GetDepartures($trekId: ID, $cityId: ID, $status: String) {
+    getDepartures(trekId: $trekId, cityId: $cityId, status: $status) {
+      _id
+      uniqueId
       trekId
       trekName
+      cityId
+      cityName
       startDate
       endDate
+      duration
+      nights
+      days
+      price
       capacity
       booked
+      itinerary
+      thingsToCarry
+      contact
+      meetingPoint
       guideId
       guideName
       status
-      price
-      meetingPoint
     }
   }
 `;
 
 export const GET_DEPARTURE_BY_ID = gql`
   query GetDepartureById($id: ID!) {
-    departure(id: $id) {
-      id
+    getDeparture(id: $id) {
+      _id
+      uniqueId
       trekId
       trekName
+      cityId
+      cityName
       startDate
       endDate
+      duration
+      nights
+      days
+      price
       capacity
       booked
+      itinerary
+      thingsToCarry
+      contact
+      meetingPoint
       guideId
       guideName
       status
+    }
+  }
+`;
+
+export const GET_DEPARTURES_BY_CITY = gql`
+  query GetDeparturesByCity($cityId: ID!) {
+    getDeparturesByCity(cityId: $cityId) {
+      _id
+      trekId
+      trekName
+      cityId
+      cityName
+      startDate
+      endDate
+      duration
       price
-      meetingPoint
+      capacity
+      booked
+      status
     }
   }
 `;
 
 // ─── Booking Queries ─────────────────────────────────
 export const GET_BOOKINGS = gql`
-  query GetBookings($paymentStatus: String, $bookingStatus: String) {
-    bookings(paymentStatus: $paymentStatus, bookingStatus: $bookingStatus) {
-      id
-      customerId
-      customerName
+  query GetBookings($status: String) {
+    getBookings(status: $status) {
+      _id
+      txnid
+      trek
       trekName
       departureId
-      date
+      cityName
+      phone
+      peopleCount
       amount
-      paymentStatus
-      bookingStatus
-      bookedOn
-      participants {
-        name
-        age
-        medical
-      }
+      status
+      paymentLink
+      createdAt
     }
   }
 `;
 
 export const GET_BOOKING_BY_ID = gql`
   query GetBookingById($id: ID!) {
-    booking(id: $id) {
-      id
-      customerId
-      customerName
+    getBooking(id: $id) {
+      _id
+      txnid
+      trek
       trekName
       departureId
-      date
+      cityName
+      phone
+      peopleCount
       amount
-      paymentStatus
-      bookingStatus
-      bookedOn
-      participants {
-        name
-        age
-        medical
-      }
+      status
+      paymentLink
+      createdAt
     }
   }
 `;
@@ -128,24 +166,8 @@ export const GET_BOOKING_BY_ID = gql`
 // ─── Customer Queries ────────────────────────────────
 export const GET_CUSTOMERS = gql`
   query GetCustomers($search: String) {
-    customers(search: $search) {
-      id
-      name
-      email
-      phone
-      totalTreks
-      ltv
-      tags
-      joinDate
-      city
-    }
-  }
-`;
-
-export const GET_CUSTOMER_BY_ID = gql`
-  query GetCustomerById($id: ID!) {
-    customer(id: $id) {
-      id
+    getCustomers(search: $search) {
+      _id
       name
       email
       phone
@@ -161,8 +183,8 @@ export const GET_CUSTOMER_BY_ID = gql`
 // ─── Finance Queries ─────────────────────────────────
 export const GET_INVOICES = gql`
   query GetInvoices($status: String) {
-    invoices(status: $status) {
-      id
+    getInvoices(status: $status) {
+      _id
       bookingId
       customerName
       date
@@ -175,8 +197,8 @@ export const GET_INVOICES = gql`
 
 export const GET_PAYMENTS = gql`
   query GetPayments {
-    payments {
-      id
+    getPayments {
+      _id
       invoiceId
       customerName
       date
@@ -189,8 +211,8 @@ export const GET_PAYMENTS = gql`
 
 export const GET_REFUNDS = gql`
   query GetRefunds {
-    refunds {
-      id
+    getRefunds {
+      _id
       bookingId
       customerName
       date
@@ -205,8 +227,8 @@ export const GET_REFUNDS = gql`
 // ─── Campaign Queries ────────────────────────────────
 export const GET_CAMPAIGNS = gql`
   query GetCampaigns {
-    campaigns {
-      id
+    getCampaigns {
+      _id
       name
       platform
       spend
@@ -224,38 +246,41 @@ export const GET_CAMPAIGNS = gql`
 // ─── Dashboard Queries ───────────────────────────────
 export const GET_DASHBOARD = gql`
   query GetDashboard {
-    dashboardKPIs {
-      totalBookings
-      revenue
-      activeTreks
-      conversionRate
-      bookingsChange
-      revenueChange
-      treksChange
-      conversionChange
-    }
-    revenueByMonth {
-      month
-      revenue
-    }
-    bookingsByRegion {
-      name
-      value
-      color
-    }
-    recentActivity {
-      id
-      type
-      message
-      time
-      status
-    }
-    alerts {
-      id
-      type
-      title
-      message
-      priority
+    getDashboard {
+      kpis {
+        totalBookings
+        revenue
+        activeTreks
+        totalChats
+        bookingsChange
+        revenueChange
+        treksChange
+        conversionRate
+        conversionChange
+      }
+      revenueByMonth {
+        month
+        revenue
+      }
+      bookingsByRegion {
+        name
+        value
+        color
+      }
+      recentActivity {
+        id
+        type
+        message
+        time
+        status
+      }
+      alerts {
+        id
+        type
+        title
+        message
+        priority
+      }
     }
   }
 `;
@@ -263,8 +288,8 @@ export const GET_DASHBOARD = gql`
 // ─── Guides Query ────────────────────────────────────
 export const GET_GUIDES = gql`
   query GetGuides {
-    guides {
-      id
+    getGuides {
+      _id
       name
       phone
       experience
@@ -272,6 +297,33 @@ export const GET_GUIDES = gql`
       rating
       treksLed
       avatar
+    }
+  }
+`;
+
+// ─── Chat Queries ────────────────────────────────────
+export const GET_CHATS = gql`
+  query GetChats {
+    getChats {
+      phone
+      lastMessage
+      lastMessageTime
+      messageCount
+      source
+      step
+    }
+  }
+`;
+
+export const GET_MESSAGES = gql`
+  query GetMessages($phone: String!) {
+    getMessages(phone: $phone) {
+      _id
+      phone
+      direction
+      message
+      raw
+      createdAt
     }
   }
 `;
