@@ -1,5 +1,10 @@
 import { useState } from 'react';
+import { useQuery } from '@apollo/client/react';
 import { useFinance } from '../hooks/useFinance';
+import { useToast } from '../context/ToastContext';
+import { v, validateForm } from '../utils/validators';
+import { MY_ORGANIZATION } from '../graphql/queries';
+import { generateInvoicePDF } from '../utils/invoicePdf';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { format } from 'date-fns';
@@ -7,12 +12,15 @@ import { Search, Plus, Edit, Trash2, Download, FileText, CreditCard, RotateCcw }
 
 export default function FinancePage() {
   const { invoices: invoicesList, payments: paymentsList, refunds: refundsList, loading, error, addInvoice: addInv, updateInvoice: updateInv, removeInvoice: removeInv } = useFinance();
+  const { data: orgData } = useQuery(MY_ORGANIZATION);
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState('invoices');
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [formData, setFormData] = useState({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [errors, setErrors] = useState({});
 
   const tabs = [
     { id: 'invoices', label: 'Invoices', icon: FileText, count: invoicesList.length },
@@ -23,25 +31,39 @@ export default function FinancePage() {
   const handleAddInvoice = () => {
     setEditingItem(null);
     setFormData({ customerName: '', amount: '', status: 'Sent', dueDate: '' });
+    setErrors({});
     setShowForm(true);
   };
 
   const handleEditInvoice = (inv) => {
     setEditingItem(inv);
     setFormData({ ...inv, amount: String(inv.amount) });
+    setErrors({});
     setShowForm(true);
   };
 
   const handleSaveInvoice = () => {
+    const { valid, errors: errs } = validateForm({
+      customerName: v.required(formData.customerName, 'Customer name'),
+      amount: v.positiveNumber(formData.amount, 'Amount'),
+      dueDate: v.dateRequired(formData.dueDate, 'Due date'),
+    });
+    if (!valid) { setErrors(errs); toast.error('Please fix the form errors'); return; }
     if (editingItem) {
       updateInv(editingItem.id, { ...formData, amount: Number(formData.amount) });
+      toast.success('Invoice updated');
     } else {
       addInv({ ...formData, amount: Number(formData.amount) });
+      toast.success('Invoice created');
     }
     setShowForm(false);
+    setErrors({});
   };
 
-  const handleDeleteInvoice = (id) => { removeInv(id); setShowDeleteConfirm(null); };
+  const handleDeleteInvoice = (id) => { removeInv(id); setShowDeleteConfirm(null); toast.success('Invoice deleted'); };
+
+  const fieldClass = (name) => `input-field ${errors[name] ? 'input-error' : ''}`;
+  const errMsg = (name) => errors[name] ? <p className="text-xs text-red-500 mt-1">{errors[name]}</p> : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -97,7 +119,7 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {invoicesList.filter(i => i.customerName.toLowerCase().includes(search.toLowerCase()) || i.id.toLowerCase().includes(search.toLowerCase())).map(inv => (
+                {invoicesList.filter(i => (i.customerName || '').toLowerCase().includes(search.toLowerCase()) || (i.id || i._id || '').toLowerCase().includes(search.toLowerCase())).map(inv => (
                   <tr key={inv.id} className="table-row">
                     <td className="table-cell font-mono text-xs text-slate-500">{inv.id}</td>
                     <td className="table-cell font-medium text-slate-900">{inv.customerName}</td>
@@ -107,7 +129,13 @@ export default function FinancePage() {
                     <td className="table-cell"><StatusBadge status={inv.status} /></td>
                     <td className="table-cell text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" title="Download PDF"><Download className="w-4 h-4 text-slate-400" /></button>
+                        <button onClick={() => {
+                          const org = orgData?.myOrganization || {};
+                          generateInvoicePDF({
+                            booking: { _id: inv.id || inv._id, txnid: inv.id || inv._id || 'INV', trekName: inv.customerName || 'Invoice', phone: '', peopleCount: 1, amount: inv.amount || 0, status: inv.status === 'Paid' ? 'paid' : 'pending', createdAt: inv.date },
+                            company: { name: org.name || '', address: org.address || '', gst: org.gst || '', website: org.website || '', logo: org.logo || '' },
+                          });
+                        }} className="p-1.5 hover:bg-primary-50 rounded-lg transition-colors" title="Download PDF"><Download className="w-4 h-4 text-primary-500" /></button>
                         <button onClick={() => handleEditInvoice(inv)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><Edit className="w-4 h-4 text-slate-400" /></button>
                         <button onClick={() => setShowDeleteConfirm(inv.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4 text-red-400" /></button>
                       </div>
@@ -137,7 +165,7 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {paymentsList.filter(p => p.customerName.toLowerCase().includes(search.toLowerCase())).map(pay => (
+                {paymentsList.filter(p => (p.customerName || '').toLowerCase().includes(search.toLowerCase())).map(pay => (
                   <tr key={pay.id} className="table-row">
                     <td className="table-cell font-mono text-xs text-slate-500">{pay.id}</td>
                     <td className="table-cell font-mono text-xs text-slate-500">{pay.invoiceId}</td>
@@ -171,7 +199,7 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {refundsList.filter(r => r.customerName.toLowerCase().includes(search.toLowerCase())).map(ref => (
+                {refundsList.filter(r => (r.customerName || '').toLowerCase().includes(search.toLowerCase())).map(ref => (
                   <tr key={ref.id} className="table-row">
                     <td className="table-cell font-mono text-xs text-slate-500">{ref.id}</td>
                     <td className="table-cell font-mono text-xs text-slate-500">{ref.bookingId}</td>
@@ -191,10 +219,22 @@ export default function FinancePage() {
       {/* Invoice Form Modal */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingItem ? 'Edit Invoice' : 'New Invoice'} size="md">
         <div className="space-y-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Customer Name</label><input value={formData.customerName || ''} onChange={(e) => setFormData({...formData, customerName: e.target.value})} className="input-field" /></div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Customer Name *</label>
+            <input value={formData.customerName || ''} onChange={(e) => { setFormData({...formData, customerName: e.target.value}); if (errors.customerName) setErrors({...errors, customerName: null}); }} className={fieldClass('customerName')} />
+            {errMsg('customerName')}
+          </div>
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹)</label><input type="number" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="input-field" /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label><input type="date" value={formData.dueDate || ''} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="input-field" /></div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹) *</label>
+              <input type="number" value={formData.amount || ''} onChange={(e) => { setFormData({...formData, amount: e.target.value}); if (errors.amount) setErrors({...errors, amount: null}); }} className={fieldClass('amount')} />
+              {errMsg('amount')}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Due Date *</label>
+              <input type="date" value={formData.dueDate || ''} onChange={(e) => { setFormData({...formData, dueDate: e.target.value}); if (errors.dueDate) setErrors({...errors, dueDate: null}); }} className={fieldClass('dueDate')} />
+              {errMsg('dueDate')}
+            </div>
           </div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
             <select value={formData.status || 'Sent'} onChange={(e) => setFormData({...formData, status: e.target.value})} className="select-field">

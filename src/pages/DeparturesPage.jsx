@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useDepartures } from '../hooks/useDepartures';
-import { useTreks } from '../hooks/useTreks';
 import { useCities } from '../hooks/useCities';
+import { useToast } from '../context/ToastContext';
+import { v, validateForm } from '../utils/validators';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isSameDay, differenceInDays, addMonths, subMonths } from 'date-fns';
 import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, X, Eye, AlertTriangle, IndianRupee, Building2, Phone, FileText } from 'lucide-react';
 
-const emptyDeparture = { trekId: '', cityId: '', startDate: '', endDate: '', nights: '', days: '', capacity: '', guideId: '', price: '', meetingPoint: '', itinerary: '', thingsToCarry: '', contact: '', status: 'Open' };
+const emptyDeparture = { trekId: '', trekName: '', cityId: '', startDate: '', endDate: '', nights: '', days: '', capacity: '', guideId: '', price: '', meetingPoint: '', itinerary: '', thingsToCarry: '', contact: '', status: 'Open' };
 
 const trekColors = [
   { bg: 'bg-emerald-100', text: 'text-emerald-800', dot: 'bg-emerald-500', border: 'border-emerald-200' },
@@ -23,9 +24,9 @@ const trekColors = [
 ];
 
 export default function DeparturesPage() {
-  const { data: deps, guides, loading, error, add: addDep, update: updateDep, remove: removeDep } = useDepartures();
-  const { data: treksList } = useTreks();
+  const { data: deps, guides, treks: treksList, loading, error, add: addDep, update: updateDep, remove: removeDep, cancel: cancelDep } = useDepartures();
   const { data: citiesList } = useCities();
+  const toast = useToast();
   const [view, setView] = useState('list');
   const [selectedDep, setSelectedDep] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -34,6 +35,9 @@ export default function DeparturesPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [expandedDay, setExpandedDay] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const trekColorMap = useMemo(() => {
     const uniqueTreks = [...new Set(deps.map(d => d.trekName))];
@@ -42,7 +46,7 @@ export default function DeparturesPage() {
     return map;
   }, [deps]);
 
-  const handleAdd = () => { setEditingDep(null); setFormData(emptyDeparture); setShowForm(true); };
+  const handleAdd = () => { setEditingDep(null); setFormData(emptyDeparture); setErrors({}); setShowForm(true); };
 
   const handleEdit = (dep, e) => {
     if (e) e.stopPropagation();
@@ -60,13 +64,21 @@ export default function DeparturesPage() {
       nights: dep.nights != null ? String(dep.nights) : '',
       days: dep.days != null ? String(dep.days) : '',
     });
+    setErrors({});
     setShowForm(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    const { valid, errors: errs } = validateForm({
+      trekName: v.required(formData.trekName || formData.trekId, 'Trek'),
+      startDate: v.dateRequired(formData.startDate, 'Start date'),
+      endDate: v.dateRequired(formData.endDate, 'End date'),
+    });
+    if (!valid) { setErrors(errs); toast.error('Please fix the form errors'); return; }
+
     // Set trekName and cityName from selections
     const trek = treksList.find(t => String(t.id || t._id) === String(formData.trekId));
-    const city = citiesList.find(c => String(c.id || c._id) === String(formData.cityId));
+    const city = citiesList?.find(c => String(c.id || c._id) === String(formData.cityId));
     const nightsNum = parseInt(formData.nights, 10) || 0;
     const daysNum = parseInt(formData.days, 10) || 0;
     const saveData = {
@@ -76,16 +88,45 @@ export default function DeparturesPage() {
       nights: nightsNum,
       days: daysNum,
       duration: `${nightsNum} Night${nightsNum !== 1 ? 's' : ''} / ${daysNum} Day${daysNum !== 1 ? 's' : ''}`,
+      capacity: parseInt(formData.capacity, 10),
+      price: parseFloat(formData.price),
     };
-    if (editingDep) {
-      updateDep(editingDep.id || editingDep._id, saveData);
-    } else {
-      addDep(saveData);
+    try {
+      if (editingDep) {
+        await updateDep(editingDep.id || editingDep._id, saveData);
+        toast.success('Batch updated successfully');
+      } else {
+        await addDep(saveData);
+        toast.success('Batch created successfully');
+      }
+      setShowForm(false);
+      setErrors({});
+    } catch (err) {
+      toast.error(err.message || 'Failed to save departure');
     }
-    setShowForm(false);
   };
 
-  const handleDelete = (id) => { removeDep(id); setShowDeleteConfirm(null); };
+  const handleDelete = async (id) => {
+    try {
+      await removeDep(id);
+      setShowDeleteConfirm(null);
+      toast.success('Batch deleted');
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete');
+    }
+  };
+
+  const handleCancelBatch = async () => {
+    if (!cancelTarget || !cancelReason.trim()) { toast.error('Please provide a cancellation reason'); return; }
+    try {
+      await cancelDep(cancelTarget.id || cancelTarget._id, cancelReason);
+      toast.success('Batch canceled successfully');
+      setCancelTarget(null);
+      setCancelReason('');
+    } catch (err) {
+      toast.error(err.message || 'Failed to cancel batch');
+    }
+  };
 
   // Calendar helpers
   const monthStart = startOfMonth(calendarDate);
@@ -115,6 +156,9 @@ export default function DeparturesPage() {
     if (ratio >= 0.85) return 'Closing Soon';
     return dep.status;
   };
+
+  const fieldClass = (name) => `input-field ${errors[name] ? 'input-error' : ''}`;
+  const errMsg = (name) => errors[name] ? <p className="text-xs text-red-500 mt-1">{errors[name]}</p> : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -187,6 +231,9 @@ export default function DeparturesPage() {
                       {dep.uniqueId && <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{dep.uniqueId}</span>}
                       <h3 className="text-base font-semibold text-slate-900 truncate">{dep.trekName}</h3>
                       <StatusBadge status={statusLabel} />
+                      {dep.status === 'Canceled' && dep.cancellationReason && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-red-50 text-red-600 border border-red-200" title={dep.cancellationReason}>Reason: {dep.cancellationReason}</span>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                       <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{duration}</span>
@@ -234,6 +281,11 @@ export default function DeparturesPage() {
                     <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(dep.id || dep._id); }} className="p-2 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                       <Trash2 className="w-4 h-4 text-red-400" />
                     </button>
+                    {dep.status !== 'Canceled' && (
+                      <button onClick={(e) => { e.stopPropagation(); setCancelTarget(dep); }} className="p-2 hover:bg-amber-50 rounded-lg transition-colors" title="Cancel Batch">
+                        <X className="w-4 h-4 text-amber-500" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -491,21 +543,26 @@ export default function DeparturesPage() {
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingDep ? 'Edit Departure' : 'New Departure'} size="lg">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Trek</label>
-            <select value={formData.trekId} onChange={(e) => setFormData({ ...formData, trekId: e.target.value })} className="select-field">
+            <label className="block text-sm font-medium text-slate-700 mb-1">Trek *</label>
+            <select value={formData.trekId} onChange={(e) => {
+              const selected = treksList.find(t => (t.id || t._id) === e.target.value);
+              setFormData({ ...formData, trekId: e.target.value, trekName: selected?.name || '' });
+              if (errors.trekName) setErrors({ ...errors, trekName: null });
+            }} className={fieldClass('trekName')}>
               <option value="">Select Trek</option>
               {treksList.map(t => <option key={t.id || t._id} value={t.id || t._id}>{t.name}</option>)}
             </select>
+            {errMsg('trekName')}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">City (departure from)</label>
             <select value={formData.cityId} onChange={(e) => setFormData({ ...formData, cityId: e.target.value })} className="select-field">
               <option value="">Select City</option>
-              {citiesList.map(c => <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>)}
+              {(citiesList || []).map(c => <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>)}
             </select>
           </div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label><input type="date" value={formData.startDate?.slice(0, 10) || ''} onChange={(e) => setFormData({ ...formData, startDate: e.target.value })} className="input-field" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">End Date</label><input type="date" value={formData.endDate?.slice(0, 10) || ''} onChange={(e) => setFormData({ ...formData, endDate: e.target.value })} className="input-field" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Date *</label><input type="date" value={formData.startDate?.slice(0, 10) || ''} onChange={(e) => { setFormData({ ...formData, startDate: e.target.value }); if (errors.startDate) setErrors({ ...errors, startDate: null }); }} className={fieldClass('startDate')} />{errMsg('startDate')}</div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">End Date *</label><input type="date" value={formData.endDate?.slice(0, 10) || ''} onChange={(e) => { setFormData({ ...formData, endDate: e.target.value }); if (errors.endDate) setErrors({ ...errors, endDate: null }); }} className={fieldClass('endDate')} />{errMsg('endDate')}</div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Nights</label><input type="number" min="0" value={formData.nights} onChange={(e) => setFormData({ ...formData, nights: e.target.value })} className="input-field" placeholder="e.g. 2" /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Days</label><input type="number" min="0" value={formData.days} onChange={(e) => setFormData({ ...formData, days: e.target.value })} className="input-field" placeholder="e.g. 3" /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Capacity</label><input type="number" value={formData.capacity} onChange={(e) => setFormData({ ...formData, capacity: e.target.value })} className="input-field" placeholder="e.g. 20" /></div>
@@ -541,6 +598,26 @@ export default function DeparturesPage() {
         <div className="flex justify-end gap-3">
           <button onClick={() => setShowDeleteConfirm(null)} className="btn-secondary">Cancel</button>
           <button onClick={() => handleDelete(showDeleteConfirm)} className="btn-danger">Delete</button>
+        </div>
+      </Modal>
+
+      {/* ──────────────────── CANCEL BATCH MODAL ──────────────────── */}
+      <Modal isOpen={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }} title={`Cancel Batch: ${cancelTarget?.trekName || ''}`} size="sm">
+        <p className="text-sm text-slate-600 mb-3">Why are you canceling this batch? This will notify all relevant parties.</p>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-700 mb-1">Reason *</label>
+          <textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            className="input-field min-h-[80px]"
+            placeholder="e.g. Heavy rain forecast, Guide unavailable, Low registrations"
+          />
+        </div>
+        <div className="flex justify-end gap-3">
+          <button onClick={() => { setCancelTarget(null); setCancelReason(''); }} className="btn-secondary">Keep Active</button>
+          <button onClick={handleCancelBatch} disabled={!cancelReason.trim()} className="btn-danger flex items-center gap-2">
+            <X className="w-4 h-4" /> Cancel Batch
+          </button>
         </div>
       </Modal>
     </div>

@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { isGraphQLEnabled } from '../graphql/client';
 import { GET_CHATS, GET_MESSAGES } from '../graphql/queries';
 import { SEND_MESSAGE } from '../graphql/mutations';
 import { io } from 'socket.io-client';
-import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw } from 'lucide-react';
+import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight } from 'lucide-react';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_GRAPHQL_URL?.replace('/graphql', '') || 'http://localhost:8080';
 
@@ -13,6 +12,75 @@ const quickReplies = [
   { label: 'Payment Link', icon: CreditCard },
   { label: 'Trek Itinerary', icon: FileText },
 ];
+
+// Parse WhatsApp-style bold (*text*) and render as <strong>
+function parseWhatsAppText(text) {
+  if (!text) return null;
+  const parts = text.split(/(\*[^*]+\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <strong key={i}>{part.slice(1, -1)}</strong>;
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+// Render interactive buttons from raw payload
+function InteractiveButtons({ raw, isOutbound }) {
+  if (!raw?.interactive) return null;
+  const { type, action } = raw.interactive;
+
+  if (type === 'button' && action?.buttons) {
+    return (
+      <div className="flex flex-wrap gap-1.5 mt-2">
+        {action.buttons.map((btn) => (
+          <span
+            key={btn.reply.id}
+            className={`inline-block px-3 py-1.5 rounded-lg text-xs font-medium border
+              ${isOutbound
+                ? 'border-white/30 text-white/90'
+                : 'border-slate-200 text-primary-600 bg-white'
+              }`}
+          >
+            {btn.reply.title}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  if (type === 'list' && action?.sections) {
+    return (
+      <div className="mt-2 space-y-1">
+        <div className={`flex items-center gap-1.5 text-xs font-semibold mb-1 ${isOutbound ? 'text-white/70' : 'text-slate-400'}`}>
+          <List className="w-3 h-3" />
+          {action.button || 'View Options'}
+        </div>
+        {action.sections.map((section, si) => (
+          <div key={si}>
+            {section.rows?.map((row) => (
+              <div
+                key={row.id}
+                className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs mb-0.5
+                  ${isOutbound ? 'bg-white/10' : 'bg-slate-50 border border-slate-100'}`}
+              >
+                <div>
+                  <div className={`font-medium ${isOutbound ? 'text-white' : 'text-slate-700'}`}>{row.title}</div>
+                  {row.description && (
+                    <div className={`text-[10px] mt-0.5 ${isOutbound ? 'text-white/60' : 'text-slate-400'}`}>{row.description}</div>
+                  )}
+                </div>
+                <ChevronRight className={`w-3 h-3 shrink-0 ${isOutbound ? 'text-white/40' : 'text-slate-300'}`} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return null;
+}
 
 export default function SupportChatPage() {
   const [activePhone, setActivePhone] = useState(null);
@@ -24,16 +92,12 @@ export default function SupportChatPage() {
   const socketRef = useRef(null);
 
   // ─── GraphQL: Contacts (initial load only) ─────────
-  const { data: chatsData, loading: chatsLoading, refetch: refetchChats } = useQuery(GET_CHATS, {
-    skip: !isGraphQLEnabled,
-    // No polling — socket handles updates
-  });
+  const { data: chatsData, loading: chatsLoading, refetch: refetchChats } = useQuery(GET_CHATS);
 
   // ─── GraphQL: Messages for active phone (initial load) ─
   const { data: messagesData, loading: messagesLoading, refetch: refetchMessages } = useQuery(GET_MESSAGES, {
     variables: { phone: activePhone },
-    skip: !isGraphQLEnabled || !activePhone,
-    // No polling — socket handles updates
+    skip: !activePhone,
   });
 
   // ─── GraphQL: Send message ─────────────────────────
@@ -41,8 +105,6 @@ export default function SupportChatPage() {
 
   // ─── Socket.IO for real-time updates ───────────────
   useEffect(() => {
-    if (!isGraphQLEnabled) return;
-
     const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
@@ -77,7 +139,6 @@ export default function SupportChatPage() {
   }, [activePhone]);
 
   const contacts = useMemo(() => {
-    if (!isGraphQLEnabled) return [];
     return chatsData?.getChats || [];
   }, [chatsData]);
 
@@ -153,18 +214,6 @@ export default function SupportChatPage() {
     const digits = phone.replace(/\D/g, '');
     return digits.slice(-2);
   };
-
-  if (!isGraphQLEnabled) {
-    return (
-      <div className="animate-fade-in flex items-center justify-center h-[calc(100vh-120px)]">
-        <div className="text-center">
-          <MessageCircle className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-slate-500">Chat requires GraphQL</h3>
-          <p className="text-sm text-slate-400 mt-1">Set <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">VITE_GRAPHQL_ENABLED=true</code> in your .env</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="animate-fade-in -m-6 h-[calc(100vh-64px)]">
@@ -266,122 +315,61 @@ export default function SupportChatPage() {
                     <div className="text-center py-12"><p className="text-sm text-slate-400">No messages yet. Send a message to start the conversation.</p></div>
                   ) : (
                     messages.map((msg, idx) => {
-                      const isAgent = msg.direction === 'outbound';
+                      const isOutbound = msg.direction === 'outbound';
                       const msgDate = formatDate(msg.createdAt);
                       const prevDate = idx > 0 ? formatDate(messages[idx - 1].createdAt) : null;
                       const showDate = msgDate && msgDate !== prevDate;
 
-                      // Helper function to render different WhatsApp message types from raw payload
-                      const renderMessageContent = () => {
-                        const raw = msg.raw;
-
-                        // 1. Outbound Interactive message (Bot -> User)
-                        if (raw?.type === 'interactive' && raw?.interactive) {
-                          const int = raw.interactive;
-
-                          // LIST TYPE
-                          if (int.type === 'list') {
-                            return (
-                              <div className="flex flex-col gap-1.5">
-                                {int.header?.text && <div className="font-bold text-sm tracking-tight">{int.header.text}</div>}
-                                <div className="text-sm leading-relaxed" style={{ whiteSpace: 'pre-line' }}>{int.body?.text || msg.message}</div>
-                                {int.footer?.text && <div className="text-[11px] opacity-75 mt-0.5">{int.footer.text}</div>}
-
-                                <div className="mt-2 pt-2 border-t border-current/10 flex flex-col gap-2">
-                                  <div className={`py-1.5 px-3 rounded-lg text-sm font-medium text-center shadow-sm cursor-default transition-colors ${isAgent ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-800'}`}>
-                                    {int.action?.button || 'View List'}
-                                  </div>
-
-                                  <div className="flex flex-col gap-1.5 mt-1">
-                                    {int.action?.sections?.map((section, sIdx) => (
-                                      <div key={sIdx} className="flex flex-col gap-1">
-                                        {section.title && <div className="text-[10px] font-bold uppercase tracking-wider opacity-60 ml-1">{section.title}</div>}
-                                        {section.rows?.map((row, rIdx) => (
-                                          <div key={rIdx} className={`py-2 px-3 rounded text-left border shadow-sm transition-colors ${isAgent ? 'bg-white/10 border-white/20 hover:bg-white/20' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
-                                            <div className="text-sm font-semibold">{row.title}</div>
-                                            {row.description && <div className="text-[11px] opacity-80 mt-0.5">{row.description}</div>}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          // BUTTON TYPE
-                          if (int.type === 'button') {
-                            return (
-                              <div className="flex flex-col gap-1.5">
-                                {int.header?.text && <div className="font-bold text-sm tracking-tight">{int.header.text}</div>}
-                                <div className="text-sm leading-relaxed" style={{ whiteSpace: 'pre-line' }}>{int.body?.text || msg.message}</div>
-                                {int.footer?.text && <div className="text-[11px] opacity-75 mt-0.5">{int.footer.text}</div>}
-
-                                <div className="mt-2 pt-2 border-t border-current/10 flex flex-col gap-1.5">
-                                  {int.action?.buttons?.map((btn, bIdx) => (
-                                    <div key={bIdx} className={`py-1.5 px-3 rounded-lg text-sm font-medium text-center shadow-sm cursor-default transition-colors ${isAgent ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-800'}`}>
-                                      {btn.reply?.title}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          }
-                        }
-
-                        // 2. Inbound Interactive Reply (User -> Bot)
-                        if (raw?.type === 'interactive' && raw?.interactive) {
-                          const int = raw.interactive;
-                          if (int.type === 'list_reply') {
-                            return (
-                              <div className="flex flex-col gap-1">
-                                <span className="text-[10px] uppercase font-bold tracking-wider opacity-60">Selected List Item</span>
-                                <div className="font-medium text-sm">{int.list_reply?.title}</div>
-                                {int.list_reply?.description && <div className="text-xs opacity-80">{int.list_reply.description}</div>}
-                              </div>
-                            );
-                          }
-                          if (int.type === 'button_reply') {
-                            return (
-                              <div className="flex flex-col gap-1">
-                                <span className="text-[10px] uppercase font-bold tracking-wider opacity-60">Clicked Button</span>
-                                <div className="font-medium text-sm">{int.button_reply?.title}</div>
-                              </div>
-                            );
-                          }
-                        }
-
-                        // 3. Document
-                        if (raw?.type === 'document' && raw?.document) {
-                          return (
-                            <div className="flex flex-col gap-2">
-                              {raw.document.caption && <div className="text-sm">{raw.document.caption}</div>}
-                              <div className={`flex items-center gap-2 p-2 rounded border ${isAgent ? 'bg-white/10 border-white/20' : 'bg-slate-100 border-slate-200'}`}>
-                                <FileText className="w-5 h-5 shrink-0" />
-                                <span className="text-sm font-medium truncate">{raw.document.filename || 'Document'}</span>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        // 4. Default fallback text
-                        return <div className="text-sm leading-relaxed" style={{ whiteSpace: 'pre-line' }}>{msg.message}</div>;
-                      };
+                      // Detect interactive type from raw payload
+                      const interactiveType = msg.raw?.interactive?.type;
+                      const isButtonReply = interactiveType === 'button_reply';
+                      const isListReply = interactiveType === 'list_reply';
 
                       return (
-                        <div key={msg._id}>
+                        <div key={msg._id || idx}>
                           {showDate && (
                             <div className="flex items-center justify-center my-4">
                               <span className="px-3 py-1 bg-white rounded-full text-[11px] font-medium text-slate-500 shadow-sm border border-slate-100">{msgDate}</span>
                             </div>
                           )}
-                          <div className={`flex mb-2 ${isAgent ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`min-w-[40%] max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${isAgent ? 'bg-primary-600 text-white rounded-br-md' : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-md'}`}>
-                              {renderMessageContent()}
-                              <div className={`flex items-center justify-end gap-1 mt-1.5 pt-1 border-t ${isAgent ? 'border-white/10 text-primary-200' : 'border-slate-100 text-slate-400'}`}>
+                          <div className={`flex mb-2 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+                            <div
+                              className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm
+                                ${isOutbound
+                                  ? 'bg-primary-600 text-white rounded-br-md'
+                                  : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-md'
+                                }
+                              `}
+                            >
+                              {/* Message text with WhatsApp bold parsing */}
+                              <div style={{ whiteSpace: 'pre-line' }}>
+                                {parseWhatsAppText(msg.message)}
+                              </div>
+
+                              {/* If inbound is a button/list reply, show what they selected */}
+                              {isButtonReply && msg.raw.interactive.button_reply && (
+                                <div className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium
+                                  ${isOutbound ? 'bg-white/15 text-white/80' : 'bg-primary-50 text-primary-600'}`}>
+                                  ↩ {msg.raw.interactive.button_reply.title}
+                                </div>
+                              )}
+                              {isListReply && msg.raw.interactive.list_reply && (
+                                <div className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium
+                                  ${isOutbound ? 'bg-white/15 text-white/80' : 'bg-primary-50 text-primary-600'}`}>
+                                  ☰ {msg.raw.interactive.list_reply.title}
+                                  {msg.raw.interactive.list_reply.description && (
+                                    <span className="opacity-60 ml-1">· {msg.raw.interactive.list_reply.description}</span>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* For outbound interactive messages: show buttons or list */}
+                              {isOutbound && <InteractiveButtons raw={msg.raw} isOutbound={isOutbound} />}
+
+                              {/* Timestamp + checkmarks */}
+                              <div className={`flex items-center justify-end gap-1 mt-1.5 ${isOutbound ? 'text-primary-200' : 'text-slate-400'}`}>
                                 <span className="text-[10px]">{formatTime(msg.createdAt)}</span>
-                                {isAgent && <CheckCheck className="w-3.5 h-3.5" />}
+                                {isOutbound && <CheckCheck className="w-3.5 h-3.5" />}
                               </div>
                             </div>
                           </div>
@@ -416,7 +404,7 @@ export default function SupportChatPage() {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                    placeholder="Type your reply..."
+                    placeholder="Type a message..."
                     className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
                     disabled={sending}
                   />
