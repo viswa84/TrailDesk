@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { GET_TREKS } from '../graphql/queries';
 import { CREATE_TREK, UPDATE_TREK, DELETE_TREK, PUBLISH_TREK, UNPUBLISH_TREK } from '../graphql/mutations';
@@ -57,23 +57,12 @@ const emptyForm = {
   name: '',
   description: '',
   difficulty: 'Easy',
-  duration: '',
-  price: '',
-  startFrom: '',
-  itinerary: '',
-  thingsToCarry: '',
-  contact: '',
   image: '',
   location: '',
   altitude: '',
   bestSeason: '',
 };
 
-const emptyPublish = {
-  seatsAvailable: '',
-  seatsTotal: '',
-  goLiveDate: '',
-};
 
 export default function TreksPage() {
   // ─── GraphQL ───
@@ -92,7 +81,7 @@ export default function TreksPage() {
   const [difficultyFilter, setDifficultyFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
 
-  // Modals
+  const [errors, setErrors] = useState({});
   const [showForm, setShowForm] = useState(false);
   const [editingTrek, setEditingTrek] = useState(null);
   const [formData, setFormData] = useState(emptyForm);
@@ -103,10 +92,6 @@ export default function TreksPage() {
 
   const [selectedTrek, setSelectedTrek] = useState(null);
 
-  const [publishTrek, setPublishTrek] = useState(null);
-  const [publishData, setPublishData] = useState(emptyPublish);
-  const [publishing, setPublishing] = useState(false);
-  const [errors, setErrors] = useState({});
 
   // ─── Filters ───
   const difficulties = useMemo(() => {
@@ -121,7 +106,7 @@ export default function TreksPage() {
         t.name?.toLowerCase().includes(q) ||
         t.description?.toLowerCase().includes(q) ||
         t.location?.toLowerCase().includes(q) ||
-        t.startFrom?.some(s => s.toLowerCase().includes(q));
+        t.startFrom?.toLowerCase().includes(q);
       const matchesDifficulty = difficultyFilter === 'All' || t.difficulty === difficultyFilter;
       const matchesStatus = statusFilter === 'All' || (statusFilter === 'Live' ? t.isActive : !t.isActive);
       return matchesSearch && matchesDifficulty && matchesStatus;
@@ -143,12 +128,6 @@ export default function TreksPage() {
       name: trek.name || '',
       description: trek.description || '',
       difficulty: trek.difficulty || 'Easy',
-      duration: trek.duration || '',
-      price: trek.price ? String(trek.price) : '',
-      startFrom: Array.isArray(trek.startFrom) ? trek.startFrom.join(', ') : (trek.startFrom || ''),
-      itinerary: trek.itinerary || '',
-      thingsToCarry: trek.thingsToCarry || '',
-      contact: trek.contact || '',
       image: trek.image || '',
       location: trek.location || '',
       altitude: trek.altitude || '',
@@ -161,17 +140,11 @@ export default function TreksPage() {
   const handleSave = async () => {
     const { valid, errors: errs } = validateForm({
       name: v.required(formData.name, 'Trek name'),
-      price: formData.price ? v.number(formData.price, 'Price') : null,
-      contact: formData.contact ? v.phone(formData.contact) : null,
     });
     if (!valid) { setErrors(errs); toast.error('Please fix the form errors'); return; }
     setSaving(true);
     try {
-      const input = {
-        ...formData,
-        price: Number(formData.price) || 0,
-        startFrom: formData.startFrom.split(',').map(s => s.trim().toUpperCase()).filter(Boolean),
-      };
+      const input = { ...formData };
 
       if (editingTrek) {
         await updateTrekMut({ variables: { id: editingTrek._id, input } });
@@ -207,33 +180,14 @@ export default function TreksPage() {
   };
 
   // ─── Publish ───
-  const handleOpenPublish = (trek, e) => {
+  const handleOpenPublish = async (trek, e) => {
     e?.stopPropagation();
-    setPublishTrek(trek);
-    setPublishData(emptyPublish);
-  };
-
-  const handlePublish = async () => {
-    if (!publishTrek) return;
-    setPublishing(true);
     try {
-      await publishTrekMut({
-        variables: {
-          id: publishTrek._id,
-          input: {
-            seatsAvailable: Number(publishData.seatsAvailable),
-            seatsTotal: Number(publishData.seatsTotal) || Number(publishData.seatsAvailable),
-            goLiveDate: publishData.goLiveDate,
-          },
-        },
-      });
-      setPublishTrek(null);
-      toast.success('Trek published! It is now live.');
+      await publishTrekMut({ variables: { id: trek._id } });
+      toast.success(`${trek.name} is now live!`);
     } catch (err) {
       console.error('Error publishing trek:', err);
       toast.error(err.message || 'Failed to publish trek');
-    } finally {
-      setPublishing(false);
     }
   };
 
@@ -398,7 +352,7 @@ export default function TreksPage() {
                 <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent" />
                 <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
                   <span className="text-white text-xs font-medium flex items-center gap-1">
-                    <MapPin className="w-3 h-3" /> {trek.startFrom?.join(', ') || trek.location || '—'}
+                    <MapPin className="w-3 h-3" /> {trek.startFrom || trek.location || '—'}
                   </span>
                   {trek.seatsTotal > 0 && (
                     <span className="text-white/80 text-[10px] font-medium flex items-center gap-1">
@@ -480,15 +434,13 @@ export default function TreksPage() {
                 </div>
               )}
             </div>
-            {selectedTrek.startFrom?.length > 0 && (
+            {selectedTrek.startFrom && (
               <div>
                 <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Starting From</h4>
                 <div className="flex flex-wrap gap-2">
-                  {selectedTrek.startFrom.map(city => (
-                    <span key={city} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 text-primary-700 rounded-lg text-xs font-medium">
-                      <MapPin className="w-3 h-3" /> {city}
-                    </span>
-                  ))}
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 text-primary-700 rounded-lg text-xs font-medium">
+                    <MapPin className="w-3 h-3" /> {selectedTrek.startFrom}
+                  </span>
                 </div>
               </div>
             )}
@@ -529,16 +481,10 @@ export default function TreksPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {f('Trek Name', 'name', 'text', 'e.g. Kedarkantha Winter Trek', { full: true })}
           {f('Difficulty', 'difficulty', 'select', '', { options: ['Easy', 'Easy-Moderate', 'Moderate', 'Hard', 'Difficult'] })}
-          {f('Duration', 'duration', 'text', 'e.g. 5D/4N')}
-          {f('Price (₹)', 'price', 'number', 'e.g. 8500')}
           {f('Altitude', 'altitude', 'text', 'e.g. 12,500 ft')}
           {f('Location', 'location', 'text', 'e.g. Uttarakhand')}
           {f('Best Season', 'bestSeason', 'text', 'e.g. Winter')}
-          {f('Starting From', 'startFrom', 'text', 'e.g. DELHI, MUMBAI (comma-separated)')}
-          {f('Contact *', 'contact', 'text', '10-digit mobile number')}
           {f('Image URL', 'image', 'text', 'https://... (optional)')}
-          {f('Itinerary', 'itinerary', 'textarea', 'Day 1: ...; Day 2: ...', { full: true })}
-          {f('Things to Carry', 'thingsToCarry', 'textarea', 'Trekking shoes, water bottle, ...', { full: true })}
           {f('Description', 'description', 'textarea', 'Describe the trek...', { full: true })}
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
@@ -550,35 +496,6 @@ export default function TreksPage() {
         </div>
       </Modal>
 
-      {/* ──────── Publish Modal ──────── */}
-      <Modal isOpen={!!publishTrek} onClose={() => setPublishTrek(null)} title={`Publish: ${publishTrek?.name || ''}`} size="sm">
-        <p className="text-sm text-slate-600 mb-4">Make this trek live by setting seats and go-live date.</p>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Total Seats</label>
-            <input type="number" value={publishData.seatsTotal} onChange={e => setPublishData({ ...publishData, seatsTotal: e.target.value })} className="input-field" placeholder="e.g. 40" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Available Seats</label>
-            <input type="number" value={publishData.seatsAvailable} onChange={e => setPublishData({ ...publishData, seatsAvailable: e.target.value })} className="input-field" placeholder="e.g. 40" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Go-Live Date</label>
-            <input type="date" value={publishData.goLiveDate} onChange={e => setPublishData({ ...publishData, goLiveDate: e.target.value })} className="input-field" />
-          </div>
-        </div>
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-          <button onClick={() => setPublishTrek(null)} className="btn-secondary">Cancel</button>
-          <button
-            onClick={handlePublish}
-            disabled={publishing || !publishData.seatsAvailable || !publishData.goLiveDate}
-            className="btn-primary flex items-center gap-2"
-          >
-            {publishing && <RefreshCw className="w-4 h-4 animate-spin" />}
-            <Rocket className="w-4 h-4" /> Publish
-          </button>
-        </div>
-      </Modal>
 
       {/* ──────── Delete Confirm ──────── */}
       <Modal isOpen={!!showDeleteConfirm} onClose={() => setShowDeleteConfirm(null)} title="Delete Trek" size="sm">

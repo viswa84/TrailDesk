@@ -32,6 +32,7 @@ export const apolloClient = new ApolloClient({
           getRefunds: { merge: false },
           getNotifications: { merge: false },
           getCities: { merge: false },
+          getParticipantsByDeparture: { merge: false },
         },
       },
     },

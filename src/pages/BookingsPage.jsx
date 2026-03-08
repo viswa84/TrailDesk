@@ -181,7 +181,7 @@ export default function BookingsPage() {
                   </td>
                   <td className="table-cell font-semibold text-slate-900">₹{(booking.amount || 0).toLocaleString('en-IN')}</td>
                   <td className="table-cell">{getStatusBadge(booking.status)}</td>
-                  <td className="table-cell text-sm text-slate-500">{booking.createdAt ? format(new Date(booking.createdAt), 'MMM dd, yyyy') : '—'}</td>
+                  <td className="table-cell text-sm text-slate-500">{booking.createdAt ? format(new Date(booking.createdAt), 'dd/MM/yyyy') : '—'}</td>
                   <td className="table-cell text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); }} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" title="View Details">
@@ -236,7 +236,7 @@ export default function BookingsPage() {
               </div>
               <div>
                 <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Booked On</p>
-                <p className="font-medium text-slate-900">{selectedBooking.createdAt ? format(new Date(selectedBooking.createdAt), 'PPP') : '—'}</p>
+                <p className="font-medium text-slate-900">{selectedBooking.createdAt ? format(new Date(selectedBooking.createdAt), 'dd/MM/yyyy') : '—'}</p>
               </div>
               <div>
                 <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Price / person</p>

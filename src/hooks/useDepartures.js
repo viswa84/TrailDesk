@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { GET_DEPARTURES, GET_GUIDES, GET_TREKS } from '../graphql/queries';
+import { GET_DEPARTURES, GET_TREKS } from '../graphql/queries';
 import { CREATE_DEPARTURE, UPDATE_DEPARTURE, DELETE_DEPARTURE, CANCEL_DEPARTURE } from '../graphql/mutations';
 import { io as socketIO } from 'socket.io-client';
 
@@ -15,7 +15,6 @@ export function useDepartures(filters = {}) {
   if (filters.status) variables.status = filters.status;
 
   const { data, loading, error, refetch } = useQuery(GET_DEPARTURES, { variables });
-  const { data: guidesData } = useQuery(GET_GUIDES);
 
   // Real-time updates via Socket.IO
   useEffect(() => {
@@ -44,16 +43,10 @@ export function useDepartures(filters = {}) {
   });
 
   // Fetch treks for selector dropdown
-  const { data: treksData } = useQuery(GET_TREKS);
-
-  const guides = (guidesData?.getGuides || []).map((g) => ({
-    ...g,
-    id: g._id,
-  }));
+  const { data: treksData } = useQuery(GET_TREKS, { variables: { isActive: true } });
 
   return {
     data: data?.getDepartures || [],
-    guides,
     treks: (treksData?.getTreks || []).map(t => ({ ...t, id: t._id })),
     loading,
     error,

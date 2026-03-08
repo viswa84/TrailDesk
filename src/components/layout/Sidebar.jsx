@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Mountain, CalendarRange, BookOpen, Users,
+  LayoutDashboard, Mountain, CalendarRange, BookOpen, Users, Navigation,
   Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft, Building2, Shield
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -11,7 +11,9 @@ const navItems = [
   { path: '/treks', label: 'Treks', icon: Mountain },
   { path: '/departures', label: 'Departures', icon: CalendarRange },
   { path: '/bookings', label: 'Bookings', icon: BookOpen },
+  { path: '/participants', label: 'Participants', icon: Users },
   { path: '/customers', label: 'Customers', icon: Users },
+  { path: '/guides', label: 'Guides', icon: Navigation },
   { path: '/finance', label: 'Finance', icon: Wallet },
   { path: '/marketing', label: 'Marketing', icon: Megaphone },
   { path: '/support-chat', label: 'Support Chat', icon: MessageCircle },

@@ -1,14 +1,18 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDepartures } from '../hooks/useDepartures';
 import { useCities } from '../hooks/useCities';
+import { useBoardingPoints } from '../hooks/useBoardingPoints';
+import { useGuides } from '../hooks/useGuides';
 import { useToast } from '../context/ToastContext';
 import { v, validateForm } from '../utils/validators';
 import Modal from '../components/ui/Modal';
+import DatePickerInput from '../components/ui/DatePickerInput';
 import StatusBadge from '../components/ui/StatusBadge';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isSameDay, differenceInDays, addMonths, subMonths } from 'date-fns';
 import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, X, Eye, AlertTriangle, IndianRupee, Building2, Phone, FileText } from 'lucide-react';
 
-const emptyDeparture = { trekId: '', trekName: '', cityId: '', startDate: '', endDate: '', nights: '', days: '', capacity: '', guideId: '', price: '', meetingPoint: '', itinerary: '', thingsToCarry: '', contact: '', status: 'Open' };
+const emptyDeparture = { trekId: '', trekName: '', cityId: '', startDate: '', endDate: '', nights: '', days: '', capacity: '', guideId: '', price: '', meetingPoint: '', itinerary: '', thingsToCarry: '', contact: '', status: 'Open', boardingPointIds: [] };
 
 const trekColors = [
   { bg: 'bg-emerald-100', text: 'text-emerald-800', dot: 'bg-emerald-500', border: 'border-emerald-200' },
@@ -24,14 +28,17 @@ const trekColors = [
 ];
 
 export default function DeparturesPage() {
-  const { data: deps, guides, treks: treksList, loading, error, add: addDep, update: updateDep, remove: removeDep, cancel: cancelDep } = useDepartures();
+  const { data: deps, treks: treksList, loading, error, add: addDep, update: updateDep, remove: removeDep, cancel: cancelDep } = useDepartures();
   const { data: citiesList } = useCities();
+  const { guides } = useGuides();
   const toast = useToast();
+  const navigate = useNavigate();
   const [view, setView] = useState('list');
   const [selectedDep, setSelectedDep] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingDep, setEditingDep] = useState(null);
   const [formData, setFormData] = useState(emptyDeparture);
+  const { data: bpOptions } = useBoardingPoints(formData.cityId);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [expandedDay, setExpandedDay] = useState(null);
@@ -63,17 +70,22 @@ export default function DeparturesPage() {
       contact: dep.contact || '',
       nights: dep.nights != null ? String(dep.nights) : '',
       days: dep.days != null ? String(dep.days) : '',
+      boardingPointIds: dep.boardingPointIds || [],
     });
     setErrors({});
     setShowForm(true);
   };
 
   const handleSave = async () => {
-    const { valid, errors: errs } = validateForm({
+    let { valid, errors: errs } = validateForm({
       trekName: v.required(formData.trekName || formData.trekId, 'Trek'),
       startDate: v.dateRequired(formData.startDate, 'Start date'),
       endDate: v.dateRequired(formData.endDate, 'End date'),
     });
+    if (valid && formData.startDate && formData.endDate && new Date(formData.startDate) > new Date(formData.endDate)) {
+      errs.endDate = 'End date must be after or equal to start date';
+      valid = false;
+    }
     if (!valid) { setErrors(errs); toast.error('Please fix the form errors'); return; }
 
     // Set trekName and cityName from selections
@@ -90,6 +102,7 @@ export default function DeparturesPage() {
       duration: `${nightsNum} Night${nightsNum !== 1 ? 's' : ''} / ${daysNum} Day${daysNum !== 1 ? 's' : ''}`,
       capacity: parseInt(formData.capacity, 10),
       price: parseFloat(formData.price),
+      boardingPointIds: formData.boardingPointIds || [],
     };
     try {
       if (editingDep) {
@@ -208,7 +221,7 @@ export default function DeparturesPage() {
                 key={dep.id || dep._id}
                 className="card overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer group"
                 style={{ animationDelay: `${idx * 50}ms` }}
-                onClick={() => setSelectedDep(dep)}
+                onClick={() => navigate(`/departures/${dep.id || dep._id}`)}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 sm:p-5">
                   {/* Date Badge */}
@@ -272,7 +285,7 @@ export default function DeparturesPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => setSelectedDep(dep)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="View Details">
+                    <button onClick={() => navigate(`/departures/${dep.id || dep._id}`)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="View Details">
                       <Eye className="w-4 h-4 text-slate-400" />
                     </button>
                     <button onClick={(e) => handleEdit(dep, e)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Edit">
@@ -396,7 +409,7 @@ export default function DeparturesPage() {
                           return (
                             <div
                               key={d.id || d._id}
-                              onClick={() => { setSelectedDep(d); setExpandedDay(null); }}
+                              onClick={() => { navigate(`/departures/${d.id || d._id}`); setExpandedDay(null); }}
                               className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:shadow-sm transition-all border ${colors.bg} ${colors.border}`}
                             >
                               <span className={`w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
@@ -482,7 +495,7 @@ export default function DeparturesPage() {
                 <div className="bg-slate-50 rounded-xl p-3">
                   <p className="text-xs text-slate-400 mb-0.5">Duration</p>
                   <p className="font-semibold text-slate-800 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-slate-400" />{duration}</p>
-                  {startDate && endDate && <p className="text-[11px] text-slate-400 mt-0.5">{format(startDate, 'MMM dd')} → {format(endDate, 'MMM dd, yyyy')}</p>}
+                  {startDate && endDate && <p className="text-[11px] text-slate-400 mt-0.5">{format(startDate, 'dd/MM/yyyy')} → {format(endDate, 'dd/MM/yyyy')}</p>}
                 </div>
                 <div className="bg-slate-50 rounded-xl p-3">
                   <p className="text-xs text-slate-400 mb-0.5">Price</p>
@@ -556,21 +569,104 @@ export default function DeparturesPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">City (departure from)</label>
-            <select value={formData.cityId} onChange={(e) => setFormData({ ...formData, cityId: e.target.value })} className="select-field">
+            <select value={formData.cityId} onChange={(e) => setFormData({ ...formData, cityId: e.target.value, boardingPointIds: [] })} className="select-field">
               <option value="">Select City</option>
               {(citiesList || []).map(c => <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>)}
             </select>
           </div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Date *</label><input type="date" value={formData.startDate?.slice(0, 10) || ''} onChange={(e) => { setFormData({ ...formData, startDate: e.target.value }); if (errors.startDate) setErrors({ ...errors, startDate: null }); }} className={fieldClass('startDate')} />{errMsg('startDate')}</div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">End Date *</label><input type="date" value={formData.endDate?.slice(0, 10) || ''} onChange={(e) => { setFormData({ ...formData, endDate: e.target.value }); if (errors.endDate) setErrors({ ...errors, endDate: null }); }} className={fieldClass('endDate')} />{errMsg('endDate')}</div>
+          {formData.cityId && bpOptions.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Boarding Points</label>
+              <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto p-2 space-y-1 bg-white">
+                {bpOptions.map(bp => {
+                  const bpId = bp._id || bp.id;
+                  const checked = (formData.boardingPointIds || []).includes(bpId);
+                  return (
+                    <label key={bpId} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-50 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const ids = formData.boardingPointIds || [];
+                          setFormData({ ...formData, boardingPointIds: checked ? ids.filter(i => i !== bpId) : [...ids, bpId] });
+                        }}
+                        className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="text-slate-700">{bp.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">{(formData.boardingPointIds || []).length} selected</p>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Start Date *</label>
+            <DatePickerInput
+              selected={formData.startDate ? new Date(formData.startDate) : null}
+              onChange={(date) => {
+                const dateStr = date ? date.toISOString().split('T')[0] : '';
+                let newFormData = { ...formData, startDate: dateStr };
+                if (dateStr && newFormData.endDate) {
+                  const st = new Date(dateStr);
+                  const en = new Date(newFormData.endDate);
+                  if (st > en) {
+                    newFormData.endDate = dateStr;
+                    newFormData.nights = '0';
+                    newFormData.days = '1';
+                  } else {
+                    const n = differenceInDays(en, st);
+                    newFormData.nights = String(n);
+                    newFormData.days = String(n + 1);
+                  }
+                }
+                setFormData(newFormData);
+                if (errors.startDate) setErrors({ ...errors, startDate: null });
+              }}
+              className={fieldClass('startDate')}
+            />
+            {errMsg('startDate')}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">End Date *</label>
+            <DatePickerInput
+              selected={formData.endDate ? new Date(formData.endDate) : null}
+              minDate={formData.startDate ? new Date(formData.startDate) : null}
+              onChange={(date) => {
+                const dateStr = date ? date.toISOString().split('T')[0] : '';
+                let newFormData = { ...formData, endDate: dateStr };
+                if (dateStr && newFormData.startDate) {
+                  const st = new Date(newFormData.startDate);
+                  const en = new Date(dateStr);
+                  if (en >= st) {
+                    const n = differenceInDays(en, st);
+                    newFormData.nights = String(n);
+                    newFormData.days = String(n + 1);
+                  }
+                }
+                setFormData(newFormData);
+                if (errors.endDate) setErrors({ ...errors, endDate: null });
+              }}
+              className={fieldClass('endDate')}
+            />
+            {errMsg('endDate')}
+          </div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Nights</label><input type="number" min="0" value={formData.nights} onChange={(e) => setFormData({ ...formData, nights: e.target.value })} className="input-field" placeholder="e.g. 2" /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Days</label><input type="number" min="0" value={formData.days} onChange={(e) => setFormData({ ...formData, days: e.target.value })} className="input-field" placeholder="e.g. 3" /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Capacity</label><input type="number" value={formData.capacity} onChange={(e) => setFormData({ ...formData, capacity: e.target.value })} className="input-field" placeholder="e.g. 20" /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Price (₹)</label><input type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="input-field" placeholder="e.g. 8500" /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Guide</label>
-            <select value={formData.guideId} onChange={(e) => setFormData({ ...formData, guideId: e.target.value })} className="select-field">
+            <select value={formData.guideId} onChange={(e) => {
+              const selectedGuide = guides.find(g => (g.id || g._id) === e.target.value);
+              setFormData({
+                ...formData,
+                guideId: e.target.value,
+                guideName: selectedGuide ? selectedGuide.name : '',
+                contact: (selectedGuide && selectedGuide.phone) ? selectedGuide.phone : formData.contact
+              });
+            }} className="select-field">
               <option value="">Select Guide</option>
-              {guides.map(g => <option key={g.id || g._id} value={g.id || g._id}>{g.name}</option>)}
+              {guides.map(g => <option key={g.id || g._id} value={g.id || g._id}>{g.name} - {g.phone}</option>)}
             </select>
           </div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
@@ -582,7 +678,7 @@ export default function DeparturesPage() {
             </select>
           </div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Meeting Point</label><input value={formData.meetingPoint} onChange={(e) => setFormData({ ...formData, meetingPoint: e.target.value })} className="input-field" placeholder="e.g. Pune Railway Station" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Contact Phone</label><input value={formData.contact} onChange={(e) => setFormData({ ...formData, contact: e.target.value })} className="input-field" placeholder="e.g. 9876543210" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Contact Phone</label><input value={formData.contact} onChange={(e) => setFormData({ ...formData, contact: e.target.value.replace(/\D/g, '').slice(0, 10) })} maxLength={10} className="input-field" placeholder="e.g. 9876543210" /></div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Itinerary</label><textarea value={formData.itinerary} onChange={(e) => setFormData({ ...formData, itinerary: e.target.value })} className="input-field min-h-[100px] resize-none" placeholder="Day 1: ...\nDay 2: ..." /></div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Things to Carry</label><textarea value={formData.thingsToCarry} onChange={(e) => setFormData({ ...formData, thingsToCarry: e.target.value })} className="input-field min-h-[60px] resize-none" placeholder="Torch, water, raincoat..." /></div>
         </div>
