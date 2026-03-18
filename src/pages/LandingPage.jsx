@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Mountain, ArrowRight, Check, Star, BarChart3, Users, CalendarRange,
   CreditCard, MessageSquare, Shield, Zap, Globe, ChevronDown, Menu, X,
-  BookOpen, TrendingUp, Bell, Settings, Megaphone
+  BookOpen, TrendingUp, Bell, Settings, Megaphone, Phone, Send,
+  Smile, Paperclip, Camera, Mic, ChevronLeft, MoreVertical, Video,
+  CheckCheck, Bot, Sparkles, Reply, Clock
 } from 'lucide-react';
 
 const features = [
@@ -49,25 +51,307 @@ const plans = [
 ];
 
 const testimonials = [
-  { name: 'Rajesh Sharma', role: 'CEO, Himalaya Treks', quote: 'TrailDesk transformed how we manage 200+ departures per year. The dashboard alone saved us 10 hours a week.', rating: 5 },
+  { name: 'Rajesh Sharma', role: 'CEO, Himalaya Treks', quote: 'TrekOps transformed how we manage 200+ departures per year. The dashboard alone saved us 10 hours a week.', rating: 5 },
   { name: 'Priya Negi', role: 'Founder, Sahyadri Adventures', quote: 'The WhatsApp integration is a game-changer. We respond to inquiries 5x faster and conversions are through the roof.', rating: 5 },
   { name: 'Vikram Singh', role: 'Operations Head, Peak Expeditions', quote: 'From bookings to refunds, everything is automated. We\'ve scaled from 3 treks to 25 without adding ops staff.', rating: 5 },
-];
-
-const stats = [
-  { value: '500+', label: 'Trekking Companies' },
-  { value: '2.5L+', label: 'Bookings Processed' },
-  { value: '₹50Cr+', label: 'Revenue Managed' },
-  { value: '99.9%', label: 'Uptime' },
 ];
 
 const faqs = [
   { q: 'How long is the free trial?', a: 'Professional plan comes with a 30-day free trial. No credit card required. Starter plan is free forever.' },
   { q: 'Can I import my existing data?', a: 'Yes! We support CSV imports for treks, customers, and bookings. Our team will help you migrate for free.' },
   { q: 'Is my data secure?', a: 'Absolutely. We use industry-standard encryption, and each company\'s data is completely isolated. We\'re SOC 2 compliant.' },
-  { q: 'Do you support WhatsApp Business API?', a: 'Yes, TrailDesk integrates with the official WhatsApp Business API for automated responses and chat management.' },
+  { q: 'Do you support WhatsApp Business API?', a: 'Yes, TrekOps integrates with the official WhatsApp Business API for automated responses and chat management.' },
   { q: 'Can I customize the branding?', a: 'Pro and Enterprise plans include custom branding — your logo, colors, and domain.' },
 ];
+
+/* ── WhatsApp Chat Messages ── */
+const chatMessages = [
+  { from: 'bot', text: 'Hi! 👋 Welcome to Sahyadri Adventures.\nHow can I help you today?', time: '10:30 AM', typingDelay: 1200 },
+  { from: 'user', text: 'Hey! What treks do you have this weekend?', time: '10:31 AM', typingDelay: 900 },
+  { from: 'bot', text: 'We have 3 amazing options! 🏔️\n\n1️⃣ Kalsubai Sunrise Trek\n2️⃣ Rajmachi Fort Night Trek\n3️⃣ Lohagad Monsoon Trek\n\nWhich one interests you?', time: '10:31 AM', typingDelay: 1800 },
+  { from: 'user', text: 'Kalsubai sounds great! Details please 🙏', time: '10:32 AM', typingDelay: 800 },
+  { from: 'bot', text: 'Here you go! ⛰️\n\n📅 March 22–23, 2026\n⏰ Depart: Sat 10PM\n👥 8 seats left (20 total)\n💰 ₹2,800 per person\n📍 Pickup: Kasara Station\n\nIncludes transport, meals, camping gear & guide! 🎒', time: '10:32 AM', typingDelay: 2000 },
+  { from: 'user', text: 'Book 3 seats! 💪', time: '10:33 AM', typingDelay: 700 },
+  { from: 'bot', text: '✅ Done! 3 seats confirmed.\n\n🎫 Booking ID: #TO-4291\n💳 Payment link sent to your number\n💲 Total: ₹8,400\n\nYou\'ll receive a packing list 24hrs before. See you at the summit! 🥾', time: '10:33 AM', typingDelay: 1800 },
+  { from: 'user', text: 'Amazing! Can\'t wait 🎉', time: '10:34 AM', typingDelay: 600 },
+  { from: 'bot', text: 'Happy trekking! 🌄\nReply anytime if you need help.', time: '10:34 AM', typingDelay: 1000 },
+];
+
+/* ── Typing Indicator ── */
+function TypingIndicator() {
+  return (
+    <div className="wa-msg-enter" style={{
+      display: 'flex', justifyContent: 'flex-start', marginBottom: '4px',
+    }}>
+      <div style={{
+        background: 'white', borderRadius: '10px 10px 10px 2px',
+        padding: '8px 12px', boxShadow: '0 1px 1px rgba(0,0,0,0.08)',
+        display: 'flex', alignItems: 'center', gap: '3px',
+      }}>
+        <span className="wa-typing-dot" style={{ animationDelay: '0ms' }} />
+        <span className="wa-typing-dot" style={{ animationDelay: '150ms' }} />
+        <span className="wa-typing-dot" style={{ animationDelay: '300ms' }} />
+      </div>
+    </div>
+  );
+}
+
+/* ── iPhone 16 Pro Frame + Animated WhatsApp Chat ── */
+function IPhoneMockup() {
+  const [visibleMessages, setVisibleMessages] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const chatRef = useRef(null);
+  const timeoutsRef = useRef([]);
+
+  const clearAllTimeouts = useCallback(() => {
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
+  }, []);
+
+  const addTimeout = useCallback((fn, delay) => {
+    const id = setTimeout(fn, delay);
+    timeoutsRef.current.push(id);
+    return id;
+  }, []);
+
+  useEffect(() => {
+    let currentDelay = 800; // initial delay before first message
+
+    const playConversation = () => {
+      clearAllTimeouts();
+      setVisibleMessages([]);
+      setIsTyping(false);
+      currentDelay = 800;
+
+      chatMessages.forEach((msg, idx) => {
+        // Show typing indicator
+        addTimeout(() => setIsTyping(true), currentDelay);
+
+        currentDelay += msg.typingDelay;
+
+        // Hide typing, show message
+        const capturedIdx = idx;
+        addTimeout(() => {
+          setIsTyping(false);
+          setVisibleMessages(prev => [...prev, capturedIdx]);
+        }, currentDelay);
+
+        // Pause between messages
+        currentDelay += 500;
+      });
+
+      // After all messages played, wait then restart
+      addTimeout(() => {
+        playConversation();
+      }, currentDelay + 3000);
+    };
+
+    playConversation();
+
+    return () => clearAllTimeouts();
+  }, [addTimeout, clearAllTimeouts]);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTo({
+        top: chatRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [visibleMessages, isTyping]);
+
+  return (
+    <div className="iphone-float" style={{ perspective: '1200px' }}>
+      {/* iPhone 16 Pro outer frame */}
+      <div style={{
+        position: 'relative',
+        width: '290px',
+        height: '600px',
+        background: 'linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 50%, #0d0d0d 100%)',
+        borderRadius: '48px',
+        padding: '10px',
+        boxShadow: `
+          0 0 0 1px rgba(255,255,255,0.08),
+          0 25px 60px -12px rgba(0,0,0,0.5),
+          0 12px 28px -8px rgba(0,0,0,0.35),
+          inset 0 1px 0 rgba(255,255,255,0.06)
+        `,
+      }}>
+        {/* Titanium-style edge highlight */}
+        <div style={{
+          position: 'absolute', inset: '0', borderRadius: '48px',
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 40%, transparent 60%, rgba(255,255,255,0.05) 100%)',
+          pointerEvents: 'none', zIndex: 5,
+        }} />
+
+        {/* Side buttons — left */}
+        <div style={{ position: 'absolute', left: '-2.5px', top: '100px', width: '3px', height: '28px', background: '#2a2a2a', borderRadius: '2px 0 0 2px', boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.1)' }} />
+        <div style={{ position: 'absolute', left: '-2.5px', top: '155px', width: '3px', height: '50px', background: '#2a2a2a', borderRadius: '2px 0 0 2px', boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.1)' }} />
+        <div style={{ position: 'absolute', left: '-2.5px', top: '215px', width: '3px', height: '50px', background: '#2a2a2a', borderRadius: '2px 0 0 2px', boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.1)' }} />
+        {/* Right — power button */}
+        <div style={{ position: 'absolute', right: '-2.5px', top: '175px', width: '3px', height: '60px', background: '#2a2a2a', borderRadius: '0 2px 2px 0', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.1)' }} />
+
+        {/* Screen */}
+        <div style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          borderRadius: '40px',
+          overflow: 'hidden',
+          background: '#ECE5DD',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          {/* Dynamic Island */}
+          <div style={{
+            position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)',
+            width: '90px', height: '28px', background: '#000', borderRadius: '20px', zIndex: 30,
+          }}>
+            <div style={{ position: 'absolute', right: '22px', top: '50%', transform: 'translateY(-50%)', width: '8px', height: '8px', borderRadius: '50%', background: '#1a1a2e', boxShadow: 'inset 0 0 2px rgba(50,50,100,0.8)' }} />
+          </div>
+
+          {/* Status bar */}
+          <div style={{
+            position: 'relative', zIndex: 20, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '14px 22px 0', height: '48px',
+            background: '#075E54',
+          }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: 'white', letterSpacing: '0.02em' }}>9:41</span>
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '1px', alignItems: 'flex-end' }}>
+                {[6,8,10,12].map((h,i) => <div key={i} style={{ width: '3px', height: `${h}px`, background: 'white', borderRadius: '1px' }} />)}
+              </div>
+              <span style={{ fontSize: '11px', color: 'white', fontWeight: 600, marginLeft: '2px' }}>5G</span>
+              <div style={{ marginLeft: '4px', width: '22px', height: '10px', border: '1px solid white', borderRadius: '2px', position: 'relative', display: 'flex', alignItems: 'center', padding: '1px' }}>
+                <div style={{ width: '70%', height: '100%', background: 'white', borderRadius: '1px' }} />
+                <div style={{ position: 'absolute', right: '-4px', top: '50%', transform: 'translateY(-50%)', width: '2px', height: '5px', background: 'white', borderRadius: '0 1px 1px 0' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* WhatsApp header */}
+          <div style={{
+            position: 'relative', zIndex: 20, flexShrink: 0,
+            background: '#075E54',
+            padding: '6px 10px 10px',
+            display: 'flex', alignItems: 'center', gap: '8px',
+          }}>
+            <ChevronLeft style={{ width: '18px', height: '18px', color: 'white', flexShrink: 0 }} />
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
+              background: 'linear-gradient(135deg, #25D366, #128C7E)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Mountain style={{ width: '15px', height: '15px', color: 'white' }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', lineHeight: 1.2 }}>Sahyadri Adventures</div>
+              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.75)', lineHeight: 1.3, transition: 'all 0.2s' }}>
+                {isTyping ? 'typing...' : 'online'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
+              <Video style={{ width: '17px', height: '17px', color: 'white' }} />
+              <Phone style={{ width: '15px', height: '15px', color: 'white' }} />
+              <MoreVertical style={{ width: '17px', height: '17px', color: 'white' }} />
+            </div>
+          </div>
+
+          {/* Chat area */}
+          <div
+            ref={chatRef}
+            style={{
+              flex: 1, overflowY: 'auto', padding: '10px 10px 6px',
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='p' width='60' height='60' patternUnits='userSpaceOnUse'%3E%3Cpath d='M30 5c1 0 2 1 2 2s-1 2-2 2-2-1-2-2 1-2 2-2zM15 20c.5 0 1 .5 1 1s-.5 1-1 1-1-.5-1-1 .5-1 1-1zM45 35c.5 0 1 .5 1 1s-.5 1-1 1-1-.5-1-1 .5-1 1-1zM10 50c.5 0 1 .5 1 1s-.5 1-1 1-1-.5-1-1 .5-1 1-1z' fill='%23d5cfc6' fill-opacity='.3'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='60' height='60' fill='url(%23p)'/%3E%3C/svg%3E")`,
+            }}
+          >
+            {/* Date chip */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
+              <span style={{
+                fontSize: '10px', color: '#667781', background: '#e2ddd5',
+                padding: '3px 10px', borderRadius: '6px', fontWeight: 500,
+                boxShadow: '0 1px 1px rgba(0,0,0,0.06)',
+              }}>TODAY</span>
+            </div>
+
+            {/* Rendered messages */}
+            {visibleMessages.map((msgIdx) => {
+              const msg = chatMessages[msgIdx];
+              const isUser = msg.from === 'user';
+              return (
+                <div
+                  key={msgIdx}
+                  className={isUser ? 'wa-msg-slide-right' : 'wa-msg-slide-left'}
+                  style={{
+                    display: 'flex',
+                    justifyContent: isUser ? 'flex-end' : 'flex-start',
+                    marginBottom: '4px',
+                  }}
+                >
+                  <div style={{
+                    maxWidth: '82%',
+                    background: isUser ? '#D9FDD3' : 'white',
+                    borderRadius: isUser ? '10px 10px 2px 10px' : '10px 10px 10px 2px',
+                    padding: '5px 8px 3px',
+                    position: 'relative',
+                    boxShadow: '0 1px 1px rgba(0,0,0,0.08)',
+                  }}>
+                    <div style={{
+                      fontSize: '11.5px', color: '#111B21', lineHeight: 1.4,
+                      whiteSpace: 'pre-line', wordBreak: 'break-word',
+                    }}>
+                      {msg.text}
+                    </div>
+                    <div style={{
+                      display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
+                      gap: '3px', marginTop: '1px',
+                    }}>
+                      <span style={{ fontSize: '9px', color: '#667781' }}>{msg.time}</span>
+                      {isUser && (
+                        <CheckCheck style={{ width: '13px', height: '13px', color: '#53BDEB' }} />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Typing indicator */}
+            {isTyping && <TypingIndicator />}
+          </div>
+
+          {/* WhatsApp input bar */}
+          <div style={{
+            flexShrink: 0, zIndex: 20,
+            padding: '5px 6px 22px',
+            background: '#ECE5DD',
+            display: 'flex', alignItems: 'center', gap: '5px',
+          }}>
+            <div style={{
+              flex: 1, display: 'flex', alignItems: 'center',
+              background: 'white', borderRadius: '20px',
+              padding: '6px 10px', gap: '6px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+            }}>
+              <Smile style={{ width: '18px', height: '18px', color: '#8696a0', flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: '12px', color: '#8696a0' }}>Message</span>
+              <Paperclip style={{ width: '16px', height: '16px', color: '#8696a0', flexShrink: 0 }} />
+              <Camera style={{ width: '17px', height: '17px', color: '#8696a0', flexShrink: 0 }} />
+            </div>
+            <div style={{
+              width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0,
+              background: '#00A884', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Mic style={{ width: '16px', height: '16px', color: 'white' }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -84,10 +368,11 @@ export default function LandingPage() {
               <div className="w-9 h-9 bg-gradient-to-br from-primary-600 to-emerald-500 rounded-xl flex items-center justify-center shadow-sm">
                 <Mountain className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold text-slate-900 tracking-tight">TrailDesk</span>
+              <span className="text-xl font-bold text-slate-900 tracking-tight">TrekOps</span>
             </div>
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Features</a>
+              <a href="#whatsapp" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">WhatsApp</a>
               <a href="#pricing" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Pricing</a>
               <a href="#testimonials" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Testimonials</a>
               <a href="#faq" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">FAQ</a>
@@ -108,6 +393,7 @@ export default function LandingPage() {
         {mobileMenu && (
           <div className="md:hidden border-t border-slate-100 bg-white px-4 py-4 space-y-3 animate-fade-in">
             <a href="#features" className="block text-sm text-slate-600 py-2">Features</a>
+            <a href="#whatsapp" className="block text-sm text-slate-600 py-2">WhatsApp</a>
             <a href="#pricing" className="block text-sm text-slate-600 py-2">Pricing</a>
             <a href="#testimonials" className="block text-sm text-slate-600 py-2">Testimonials</a>
             <button onClick={() => navigate('/login')} className="w-full mt-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-primary-600 to-emerald-500 rounded-xl">Start Free Trial</button>
@@ -115,51 +401,69 @@ export default function LandingPage() {
         )}
       </nav>
 
-      {/* ── Hero ── */}
+      {/* ── Hero — Two columns with iPhone mockup ── */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-emerald-50" />
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-emerald-100/30 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-24 sm:pt-28 sm:pb-32">
-          <div className="max-w-3xl mx-auto text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary-50 border border-primary-100 rounded-full text-sm font-medium text-primary-700 mb-8">
-              <Zap className="w-3.5 h-3.5" /> Trusted by 500+ trekking companies across India
-            </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-[1.1] tracking-tight">
-              The Complete ERP for{' '}
-              <span className="bg-gradient-to-r from-primary-600 to-emerald-500 bg-clip-text text-transparent">
-                Trekking Operators
-              </span>
-            </h1>
-            <p className="mt-6 text-lg sm:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto">
-              Manage bookings, departures, customers, finances, and marketing — all from one beautifully designed platform. Built by trekkers, for trekkers.
-            </p>
-            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={() => navigate('/login')}
-                className="px-8 py-3.5 text-base font-semibold text-white bg-gradient-to-r from-primary-600 to-emerald-500 rounded-xl hover:shadow-xl hover:shadow-primary-500/25 transition-all duration-300 flex items-center justify-center gap-2 group"
-              >
-                Start Free — 30 Days
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
-              <a
-                href="#features"
-                className="px-8 py-3.5 text-base font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-              >
-                See Features
-              </a>
-            </div>
-          </div>
-
-          {/* Stats bar */}
-          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
-            {stats.map((s, i) => (
-              <div key={i} className="text-center p-4">
-                <div className="text-2xl sm:text-3xl font-extrabold text-slate-900">{s.value}</div>
-                <div className="text-sm text-slate-500 mt-1">{s.label}</div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20 sm:pt-24 sm:pb-28">
+          <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
+            {/* Left — Text */}
+            <div className="flex-1 text-center lg:text-left max-w-xl">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-green-50 border border-green-200 rounded-full text-sm font-medium text-green-700 mb-8">
+                <MessageSquare className="w-3.5 h-3.5" /> WhatsApp-First Platform for Trekking Operators
               </div>
-            ))}
+              <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold text-slate-900 leading-[1.1] tracking-tight">
+                Book Treks via{' '}
+                <span className="bg-gradient-to-r from-green-600 to-emerald-500 bg-clip-text text-transparent">
+                  WhatsApp
+                </span>
+                {' '}— Automagically
+              </h1>
+              <p className="mt-6 text-lg sm:text-xl text-slate-600 leading-relaxed">
+                Your customers chat on WhatsApp. Now your bookings, confirmations, and reminders happen right there too. Built by trekkers, for trekkers.
+              </p>
+              <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                <button
+                  onClick={() => navigate('/login')}
+                  className="px-8 py-3.5 text-base font-semibold text-white bg-gradient-to-r from-green-600 to-emerald-500 rounded-xl hover:shadow-xl hover:shadow-green-500/25 transition-all duration-300 flex items-center justify-center gap-2 group"
+                >
+                  Start Free — 30 Days
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+                <a
+                  href="#features"
+                  className="px-8 py-3.5 text-base font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                >
+                  See Features
+                </a>
+              </div>
+
+              {/* Social proof mini */}
+              <div className="mt-10 flex items-center gap-4 justify-center lg:justify-start">
+                <div className="flex -space-x-2">
+                  {['RS', 'PN', 'VS', 'AK'].map((initials, i) => (
+                    <div key={i} className="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white" style={{
+                      background: ['#059669','#0ea5e9','#8b5cf6','#f59e0b'][i],
+                    }}>{initials}</div>
+                  ))}
+                </div>
+                <div className="text-sm text-slate-500">
+                  Trusted by <span className="font-semibold text-slate-700">leading operators</span> across India
+                </div>
+              </div>
+            </div>
+
+            {/* Right — iPhone 16 Mockup */}
+            <div className="flex-shrink-0 relative">
+              {/* Glow effects behind the phone */}
+              <div className="absolute -inset-10 bg-gradient-to-br from-green-200/40 via-emerald-100/20 to-teal-200/30 rounded-full blur-3xl" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-green-400/10 rounded-full blur-2xl" />
+              <div className="relative">
+                <IPhoneMockup />
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -175,7 +479,7 @@ export default function LandingPage() {
               One platform. Every feature.
             </h2>
             <p className="mt-4 text-lg text-slate-500">
-              Stop juggling spreadsheets, WhatsApp groups, and accounting software. TrailDesk handles it all.
+              Stop juggling spreadsheets, WhatsApp groups, and accounting software. TrekOps handles it all.
             </p>
           </div>
 
@@ -196,6 +500,72 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── WhatsApp Integration Highlight ── */}
+      <section id="whatsapp" className="py-20 sm:py-28 bg-gradient-to-b from-green-50/60 via-emerald-50/30 to-white relative overflow-hidden">
+        {/* Background decorations */}
+        <div className="absolute top-20 left-10 w-72 h-72 bg-green-100/40 rounded-full blur-3xl" />
+        <div className="absolute bottom-10 right-10 w-60 h-60 bg-emerald-100/30 rounded-full blur-3xl" />
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col lg:flex-row items-center gap-16">
+            {/* Left — Phone mockup */}
+            <div className="flex-shrink-0 order-2 lg:order-1">
+              <div className="relative">
+                <div className="absolute -inset-8 bg-gradient-to-br from-green-200/30 to-emerald-200/20 rounded-full blur-2xl" />
+                <div className="relative">
+                  <IPhoneMockup />
+                </div>
+              </div>
+            </div>
+
+            {/* Right — Text content */}
+            <div className="flex-1 order-1 lg:order-2 max-w-xl text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-green-100 border border-green-200 rounded-full text-sm font-semibold text-green-700 mb-6">
+                <svg viewBox="0 0 24 24" className="w-4 h-4 fill-green-600">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.125.553 4.12 1.522 5.857L0 24l6.335-1.652A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.82c-1.97 0-3.867-.53-5.52-1.53l-.396-.236-3.763.982.999-3.648-.26-.412A9.803 9.803 0 012.18 12C2.18 6.58 6.58 2.18 12 2.18S21.82 6.58 21.82 12 17.42 21.82 12 21.82z" />
+                </svg>
+                WhatsApp Integration
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight leading-tight">
+                Automate Bookings on{' '}
+                <span className="bg-gradient-to-r from-green-600 to-emerald-500 bg-clip-text text-transparent">WhatsApp</span>
+              </h2>
+              <p className="mt-5 text-lg text-slate-600 leading-relaxed">
+                Your customers already live on WhatsApp. Meet them there — with instant replies, booking confirmations, and payment reminders, all automated.
+              </p>
+
+              <div className="mt-8 space-y-4">
+                {[
+                  { icon: Zap, title: 'Instant Auto-Replies', desc: 'Respond to inquiries in seconds, 24/7, with smart chatbot flows.' },
+                  { icon: CheckCheck, title: 'Booking Confirmations', desc: 'Automatic booking IDs, payment links, and itinerary details.' },
+                  { icon: Bell, title: 'Payment & Trek Reminders', desc: 'Gentle nudges for payments, packing lists, and meetup times.' },
+                  { icon: MessageSquare, title: 'Unified Inbox', desc: 'Every customer conversation — one dashboard. No message missed.' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-4 text-left">
+                    <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <item.icon className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">{item.title}</h4>
+                      <p className="text-sm text-slate-500 mt-0.5">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => navigate('/login')}
+                className="mt-10 px-8 py-3.5 text-base font-semibold text-white bg-gradient-to-r from-green-600 to-emerald-500 rounded-xl hover:shadow-xl hover:shadow-green-500/25 transition-all duration-300 inline-flex items-center gap-2 group"
+              >
+                Try WhatsApp Integration
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── How it Works ── */}
       <section className="py-20 bg-gradient-to-b from-slate-50 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -207,7 +577,7 @@ export default function LandingPage() {
             {[
               { step: '01', title: 'Register Your Company', desc: 'Create your account, name your company, and you\'re in. No credit card needed.' },
               { step: '02', title: 'Add Your Treks', desc: 'Import or create trek packages with itineraries, pricing, and photos.' },
-              { step: '03', title: 'Start Receiving Bookings', desc: 'Share your booking link. Manage everything from your TrailDesk dashboard.' },
+              { step: '03', title: 'Start Receiving Bookings', desc: 'Share your booking link. Manage everything from your TrekOps dashboard.' },
             ].map((s, i) => (
               <div key={i} className="text-center">
                 <div className="w-14 h-14 mx-auto bg-gradient-to-br from-primary-600 to-emerald-500 rounded-2xl flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-primary-500/20 mb-5">
@@ -337,19 +707,19 @@ export default function LandingPage() {
       {/* ── CTA ── */}
       <section className="py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-gradient-to-br from-primary-700 via-primary-600 to-emerald-500 rounded-3xl p-10 sm:p-16 text-center relative overflow-hidden">
+          <div className="bg-gradient-to-br from-green-700 via-green-600 to-emerald-500 rounded-3xl p-10 sm:p-16 text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full blur-3xl" />
             <div className="relative">
               <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-                Ready to streamline your trekking business?
+                Ready to take bookings on WhatsApp?
               </h2>
               <p className="mt-4 text-lg text-emerald-100/80 max-w-xl mx-auto">
-                Join 500+ companies already using TrailDesk. Start your free trial today — no credit card required.
+                Start your free trial today — no credit card required. Your customers are already on WhatsApp. Meet them there.
               </p>
               <button
                 onClick={() => navigate('/login')}
-                className="mt-8 px-10 py-4 bg-white text-primary-700 font-bold text-base rounded-xl hover:bg-primary-50 transition-colors shadow-lg shadow-primary-800/20 inline-flex items-center gap-2 group"
+                className="mt-8 px-10 py-4 bg-white text-green-700 font-bold text-base rounded-xl hover:bg-green-50 transition-colors shadow-lg shadow-green-800/20 inline-flex items-center gap-2 group"
               >
                 Get Started Free
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -368,9 +738,9 @@ export default function LandingPage() {
                 <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-emerald-400 rounded-lg flex items-center justify-center">
                   <Mountain className="w-4 h-4 text-white" />
                 </div>
-                <span className="text-lg font-bold">TrailDesk</span>
+                <span className="text-lg font-bold">TrekOps</span>
               </div>
-              <p className="text-sm text-slate-400 leading-relaxed">The complete ERP for trekking operators. Built in India 🇮🇳</p>
+              <p className="text-sm text-slate-400 leading-relaxed">The complete ERP for trekking operators. Built in India 🇮🇳<br/><span className="text-slate-500">trekops.in</span></p>
             </div>
             <div>
               <h4 className="text-sm font-semibold text-slate-300 mb-4">Product</h4>
@@ -400,13 +770,61 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="mt-12 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-slate-500">© 2026 TrailDesk. All rights reserved.</p>
+            <p className="text-sm text-slate-500">© 2026 TrekOps (trekops.in). All rights reserved.</p>
             <div className="flex items-center gap-2 text-sm text-slate-500">
               <Globe className="w-3.5 h-3.5" /> Made with ❤️ in India
             </div>
           </div>
         </div>
       </footer>
+
+      {/* Float animation CSS */}
+      <style>{`
+        .iphone-float {
+          animation: iphoneFloat 4s ease-in-out infinite;
+        }
+        @keyframes iphoneFloat {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-12px); }
+        }
+
+        /* WhatsApp message animations */
+        .wa-msg-slide-left {
+          animation: waMsgSlideLeft 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+        .wa-msg-slide-right {
+          animation: waMsgSlideRight 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+        .wa-msg-enter {
+          animation: waMsgFadeIn 0.25s ease-out forwards;
+        }
+        @keyframes waMsgSlideLeft {
+          from { opacity: 0; transform: translateX(-16px) scale(0.95); }
+          to   { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes waMsgSlideRight {
+          from { opacity: 0; transform: translateX(16px) scale(0.95); }
+          to   { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes waMsgFadeIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Typing dots */
+        .wa-typing-dot {
+          display: inline-block;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #8696a0;
+          animation: waTypingBounce 1.2s ease-in-out infinite;
+        }
+        @keyframes waTypingBounce {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+          30%           { transform: translateY(-5px); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }

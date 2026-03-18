@@ -7,7 +7,7 @@ const httpLink = createHttpLink({
 
 // Attach JWT token to every request
 const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem('traildesk_token');
+  const token = localStorage.getItem('trekops_token');
   return {
     headers: {
       ...headers,

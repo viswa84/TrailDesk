@@ -361,7 +361,7 @@ export default function SuperAdminPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold">Super Admin Panel</h1>
-                <p className="text-white/60 text-sm">TrailDesk Platform Control</p>
+                <p className="text-white/60 text-sm">TrekOps Platform Control</p>
               </div>
             </div>
             <button
@@ -706,7 +706,7 @@ export default function SuperAdminPage() {
 
             {/* ── ARCHITECTURE OVERVIEW ── */}
             <DocSection title="System Architecture Overview" icon={Layers} iconColor="bg-gradient-to-r from-violet-50 to-indigo-50">
-              <p className="text-sm text-slate-600 mb-4">TrailDesk is a <strong>multi-tenant SaaS</strong> built on a shared-database model. A single MongoDB cluster stores all tenant data — each document is tagged with a <code className="bg-slate-100 px-1 rounded text-violet-700">tenantId</code> that acts as the invisible row-level security filter on every query.</p>
+              <p className="text-sm text-slate-600 mb-4">TrekOps is a <strong>multi-tenant SaaS</strong> built on a shared-database model. A single MongoDB cluster stores all tenant data — each document is tagged with a <code className="bg-slate-100 px-1 rounded text-violet-700">tenantId</code> that acts as the invisible row-level security filter on every query.</p>
 
               {/* ASCII Architecture Diagram */}
               <div className="bg-slate-900 rounded-xl p-5 font-mono text-xs leading-6 overflow-x-auto text-slate-300 mb-4">
@@ -878,7 +878,7 @@ const docs = await Model.find({
                   ]} />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Frontend — TrailDesk/src/</p>
+                  <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Frontend — TrekOps/src/</p>
                   <FolderTree items={[
                     'main.jsx               # Apollo + Router setup',
                     'App.jsx                # Routes + auth guards',
@@ -1092,7 +1092,7 @@ const docs = await Model.find({
                   { phase: 'Phase 4', label: 'Licence Expiry Enforcement', status: 'planned', desc: 'Auto-suspend tenants whose licenseExpiry has passed. Cron job or check on login.' },
                   { phase: 'Phase 4', label: 'Audit Log Model', status: 'planned', desc: 'Replace in-memory activity log with a real AuditLog MongoDB model storing every mutation.' },
                   { phase: 'Phase 4', label: 'Email Notifications', status: 'planned', desc: 'Send booking confirmations, payment receipts and invoice PDFs via Nodemailer / SendGrid.' },
-                  { phase: 'Phase 5', label: 'White-labelling', status: 'future', desc: 'Per-tenant logo, colour palette, and custom subdomain (tenant.traildesk.app).' },
+                  { phase: 'Phase 5', label: 'White-labelling', status: 'future', desc: 'Per-tenant logo, colour palette, and custom subdomain (tenant.trekops.app).' },
                   { phase: 'Phase 5', label: 'Staff Role + Permissions', status: 'future', desc: 'Granular permissions per staff member — read-only, bookings-only, etc.' },
                   { phase: 'Phase 5', label: 'Billing Integration', status: 'future', desc: 'Razorpay Subscriptions for automatic plan renewals + invoice generation.' },
                   { phase: 'Phase 6', label: 'Mobile App', status: 'future', desc: 'React Native / Expo app sharing the same GraphQL backend.' },
