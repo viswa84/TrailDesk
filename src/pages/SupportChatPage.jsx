@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@apollo/client/react';
 import { GET_CHATS, GET_MESSAGES } from '../graphql/queries';
 import { SEND_MESSAGE } from '../graphql/mutations';
 import { io } from 'socket.io-client';
-import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight } from 'lucide-react';
+import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X } from 'lucide-react';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_GRAPHQL_URL?.replace('/graphql', '') || 'http://localhost:8080';
 
@@ -90,6 +90,12 @@ export default function SupportChatPage() {
   const [liveMessages, setLiveMessages] = useState([]);
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
+
+  // ─── New Message Modal ─────────────────────────────
+  const [showNewMsg, setShowNewMsg] = useState(false);
+  const [newPhone, setNewPhone] = useState('91');
+  const [newText, setNewText] = useState('');
+  const [newMsgError, setNewMsgError] = useState('');
 
   // ─── GraphQL: Contacts (initial load only) ─────────
   const { data: chatsData, loading: chatsLoading, refetch: refetchChats } = useQuery(GET_CHATS);
@@ -188,6 +194,25 @@ export default function SupportChatPage() {
     setShowMobileChat(true);
   };
 
+  const handleSendNew = useCallback(async () => {
+    const phone = newPhone.replace(/\D/g, '');
+    const text = newText.trim();
+    if (!phone || phone.length < 7) { setNewMsgError('Enter a valid phone number with country code'); return; }
+    if (!text) { setNewMsgError('Message cannot be empty'); return; }
+    setNewMsgError('');
+    try {
+      await sendMessageMutation({ variables: { phone, text } });
+      await refetchChats();
+      setShowNewMsg(false);
+      setNewPhone('91');
+      setNewText('');
+      setActivePhone(phone);
+      setShowMobileChat(true);
+    } catch (err) {
+      setNewMsgError(err.message || 'Failed to send message');
+    }
+  }, [newPhone, newText, sendMessageMutation, refetchChats]);
+
   const formatTime = (dateStr) => {
     if (!dateStr) return '';
     try {
@@ -231,9 +256,13 @@ export default function SupportChatPage() {
                 <button onClick={() => refetchChats()} className="w-9 h-9 hover:bg-slate-100 rounded-xl flex items-center justify-center transition-colors cursor-pointer" title="Refresh">
                   <RefreshCw className={`w-4 h-4 text-slate-500 ${chatsLoading ? 'animate-spin' : ''}`} />
                 </button>
-                <div className="w-9 h-9 bg-primary-50 rounded-xl flex items-center justify-center">
-                  <MessageCircle className="w-4.5 h-4.5 text-primary-600" />
-                </div>
+                <button
+                  onClick={() => { setShowNewMsg(true); setNewMsgError(''); }}
+                  className="w-9 h-9 bg-primary-600 hover:bg-primary-700 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
+                  title="New Message"
+                >
+                  <PenSquare className="w-4 h-4 text-white" />
+                </button>
               </div>
             </div>
             <div className="relative">
@@ -429,6 +458,91 @@ export default function SupportChatPage() {
           )}
         </div>
       </div>
+
+      {/* ──────── New Message Modal ──────── */}
+      {showNewMsg && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowNewMsg(false); }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-primary-50 rounded-lg flex items-center justify-center">
+                  <PenSquare className="w-4 h-4 text-primary-600" />
+                </div>
+                <h2 className="text-base font-bold text-slate-900">New Message</h2>
+              </div>
+              <button
+                onClick={() => setShowNewMsg(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  WhatsApp Number
+                </label>
+                <input
+                  type="tel"
+                  value={newPhone}
+                  onChange={(e) => { setNewPhone(e.target.value); setNewMsgError(''); }}
+                  onKeyDown={(e) => e.key === 'Enter' && document.getElementById('new-msg-text')?.focus()}
+                  placeholder="e.g. 919182748724"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                  autoFocus
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Include country code, no + or spaces (e.g. 91 for India)</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Message
+                </label>
+                <textarea
+                  id="new-msg-text"
+                  value={newText}
+                  onChange={(e) => { setNewText(e.target.value); setNewMsgError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSendNew(); }}
+                  placeholder="Type your message…"
+                  rows={4}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all resize-none"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Press Ctrl+Enter to send</p>
+              </div>
+
+              {newMsgError && (
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-red-50 border border-red-100 rounded-xl">
+                  <span className="text-red-500 text-xs font-medium">{newMsgError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <button
+                onClick={() => { setShowNewMsg(false); setNewPhone('91'); setNewText(''); setNewMsgError(''); }}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendNew}
+                disabled={sending || !newPhone.trim() || !newText.trim()}
+                className="flex items-center gap-2 px-5 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Send Message
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

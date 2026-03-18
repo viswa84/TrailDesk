@@ -1,5 +1,121 @@
 import { gql } from '@apollo/client';
 
+// ─── WhatsApp Visual Flow Builder Mutations ──────────
+export const SAVE_FLOW_DEFINITION = gql`
+  mutation SaveFlowDefinition($nodes: [FlowNodeInput!]!, $edges: [FlowEdgeInput!]!) {
+    saveFlowDefinition(nodes: $nodes, edges: $edges) {
+      _id
+      updatedAt
+      nodes {
+        id type
+        position { x y }
+        data {
+          label message
+          buttons { handle label }
+          listButtonLabel sectionTitle
+          rows { handle title description }
+          dynamicSource dynamicButtonLabel dynamicSectionTitle
+          noDataMessage displayMode inputVariable fallbackMessage
+        }
+      }
+      edges { id source sourceHandle target }
+    }
+  }
+`;
+
+export const DELETE_FLOW_DEFINITION = gql`
+  mutation DeleteFlowDefinition {
+    deleteFlowDefinition
+  }
+`;
+
+// ─── WhatsApp Flow Config Mutations ─────────────────
+export const SAVE_FLOW_CONFIG = gql`
+  mutation SaveFlowConfig($input: FlowConfigInput!) {
+    saveFlowConfig(input: $input) {
+      _id
+      greetingKeywords
+      cityStepMessage
+      cityStepButtonLabel
+      cityStepSectionTitle
+      browseTypeMessage
+      browseTreksLabel
+      browseDatesLabel
+      trekListMessage
+      trekListButtonLabel
+      trekListSectionTitle
+      dateListMessage
+      dateListButtonLabel
+      dateListSectionTitle
+      departureDateListMessage
+      departureDateListButtonLabel
+      departureDateListSectionTitle
+      trekOnDateListMessage
+      trekOnDateListButtonLabel
+      trekOnDateListSectionTitle
+      groupSizeMessage
+      discountTiers {
+        id
+        label
+        min
+        max
+        discount
+      }
+      exactCountPrompt
+      supportMessage
+      noCitiesMessage
+      noTreksMessage
+      noDatesMessage
+      noTreksOnDateMessage
+      fallbackMessage
+      updatedAt
+    }
+  }
+`;
+
+export const RESET_FLOW_CONFIG = gql`
+  mutation ResetFlowConfig {
+    resetFlowConfig {
+      _id
+      greetingKeywords
+      cityStepMessage
+      cityStepButtonLabel
+      cityStepSectionTitle
+      browseTypeMessage
+      browseTreksLabel
+      browseDatesLabel
+      trekListMessage
+      trekListButtonLabel
+      trekListSectionTitle
+      dateListMessage
+      dateListButtonLabel
+      dateListSectionTitle
+      departureDateListMessage
+      departureDateListButtonLabel
+      departureDateListSectionTitle
+      trekOnDateListMessage
+      trekOnDateListButtonLabel
+      trekOnDateListSectionTitle
+      groupSizeMessage
+      discountTiers {
+        id
+        label
+        min
+        max
+        discount
+      }
+      exactCountPrompt
+      supportMessage
+      noCitiesMessage
+      noTreksMessage
+      noDatesMessage
+      noTreksOnDateMessage
+      fallbackMessage
+      updatedAt
+    }
+  }
+`;
+
 // ─── Auth Mutations ──────────────────────────────────
 export const LOGIN = gql`
   mutation Login($phone: String!, $password: String!) {
@@ -224,6 +340,8 @@ export const CREATE_DEPARTURE = gql`
       thingsToCarry
       contact
       meetingPoint
+      whatsappGroupInviteLink
+      whatsappGroupName
       guideId
       guideName
       status
@@ -250,6 +368,8 @@ export const UPDATE_DEPARTURE = gql`
       thingsToCarry
       contact
       meetingPoint
+      whatsappGroupInviteLink
+      whatsappGroupName
       guideId
       guideName
       status
@@ -536,8 +656,8 @@ export const RESET_USER_PASSWORD = gql`
 
 // ─── Participant Mutations ──────────────────────────────────
 export const CREATE_PARTICIPANT = gql`
-  mutation CreateParticipant($departureId: ID!, $bookingId: ID!, $name: String!, $phone: String!, $amount: Float, $paidAmount: Float, $peopleCount: Int, $boardingPointId: ID, $boardingPointName: String) {
-    createParticipant(departureId: $departureId, bookingId: $bookingId, name: $name, phone: $phone, amount: $amount, paidAmount: $paidAmount, peopleCount: $peopleCount, boardingPointId: $boardingPointId, boardingPointName: $boardingPointName) {
+  mutation CreateParticipant($departureId: ID!, $bookingId: ID!, $name: String!, $phone: String!, $amount: Float, $paidAmount: Float, $peopleCount: Int, $boardingPointId: ID, $boardingPointName: String, $bloodGroup: String, $weight: Float) {
+    createParticipant(departureId: $departureId, bookingId: $bookingId, name: $name, phone: $phone, amount: $amount, paidAmount: $paidAmount, peopleCount: $peopleCount, boardingPointId: $boardingPointId, boardingPointName: $boardingPointName, bloodGroup: $bloodGroup, weight: $weight) {
       _id
       bookingId
       departureId
@@ -545,6 +665,8 @@ export const CREATE_PARTICIPANT = gql`
       phone
       boardingPointId
       boardingPointName
+      bloodGroup
+      weight
       createdAt
     }
   }

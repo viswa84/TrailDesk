@@ -17,7 +17,9 @@ import FinancePage from './pages/FinancePage';
 import MarketingPage from './pages/MarketingPage';
 import SettingsPage from './pages/SettingsPage';
 import SupportChatPage from './pages/SupportChatPage';
-import SuperAdminPage from './pages/SuperAdminPage';
+import WhatsAppFlowPage from './pages/WhatsAppFlowPage';
+import FlowBuilderPage from './pages/FlowBuilderPage';
+import SuperAdminPage  from './pages/SuperAdminPage';
 
 function AuthRedirect({ children }) {
   const { isAuthenticated } = useAuth();
@@ -62,6 +64,8 @@ function App() {
               <Route path="/finance" element={<FinancePage />} />
               <Route path="/marketing" element={<MarketingPage />} />
               <Route path="/support-chat" element={<SupportChatPage />} />
+              <Route path="/whatsapp-flow" element={<WhatsAppFlowPage />} />
+              <Route path="/flow-builder" element={<FlowBuilderPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
 
