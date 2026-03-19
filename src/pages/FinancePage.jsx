@@ -83,11 +83,10 @@ export default function FinancePage() {
           <button
             key={tab.id}
             onClick={() => { setActiveTab(tab.id); setSearch(''); }}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all -mb-px ${
-              activeTab === tab.id
-                ? 'border-primary-600 text-primary-700'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-            }`}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all -mb-px ${activeTab === tab.id
+              ? 'border-primary-600 text-primary-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
@@ -123,8 +122,8 @@ export default function FinancePage() {
                   <tr key={inv.id} className="table-row">
                     <td className="table-cell font-mono text-xs text-slate-500">{inv.id}</td>
                     <td className="table-cell font-medium text-slate-900">{inv.customerName}</td>
-                    <td className="table-cell">{format(new Date(inv.date), 'MMM dd, yyyy')}</td>
-                    <td className="table-cell">{format(new Date(inv.dueDate), 'MMM dd, yyyy')}</td>
+                    <td className="table-cell">{format(new Date(inv.date), 'dd/MM/yyyy')}</td>
+                    <td className="table-cell">{format(new Date(inv.dueDate), 'dd/MM/yyyy')}</td>
                     <td className="table-cell font-medium">₹{inv.amount.toLocaleString()}</td>
                     <td className="table-cell"><StatusBadge status={inv.status} /></td>
                     <td className="table-cell text-right">
@@ -170,7 +169,7 @@ export default function FinancePage() {
                     <td className="table-cell font-mono text-xs text-slate-500">{pay.id}</td>
                     <td className="table-cell font-mono text-xs text-slate-500">{pay.invoiceId}</td>
                     <td className="table-cell font-medium text-slate-900">{pay.customerName}</td>
-                    <td className="table-cell">{format(new Date(pay.date), 'MMM dd, yyyy')}</td>
+                    <td className="table-cell">{format(new Date(pay.date), 'dd/MM/yyyy')}</td>
                     <td className="table-cell font-medium text-emerald-600">+ ₹{pay.amount.toLocaleString()}</td>
                     <td className="table-cell"><span className="badge-blue">{pay.method}</span></td>
                     <td className="table-cell font-mono text-xs text-slate-400">{pay.reference}</td>
@@ -204,7 +203,7 @@ export default function FinancePage() {
                     <td className="table-cell font-mono text-xs text-slate-500">{ref.id}</td>
                     <td className="table-cell font-mono text-xs text-slate-500">{ref.bookingId}</td>
                     <td className="table-cell font-medium text-slate-900">{ref.customerName}</td>
-                    <td className="table-cell">{format(new Date(ref.date), 'MMM dd, yyyy')}</td>
+                    <td className="table-cell">{format(new Date(ref.date), 'dd/MM/yyyy')}</td>
                     <td className="table-cell font-medium text-red-600">- ₹{ref.amount.toLocaleString()}</td>
                     <td className="table-cell text-slate-600 text-xs">{ref.reason}</td>
                     <td className="table-cell"><StatusBadge status={ref.status} /></td>
@@ -221,23 +220,30 @@ export default function FinancePage() {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Customer Name *</label>
-            <input value={formData.customerName || ''} onChange={(e) => { setFormData({...formData, customerName: e.target.value}); if (errors.customerName) setErrors({...errors, customerName: null}); }} className={fieldClass('customerName')} />
+            <input value={formData.customerName || ''} onChange={(e) => { setFormData({ ...formData, customerName: e.target.value }); if (errors.customerName) setErrors({ ...errors, customerName: null }); }} className={fieldClass('customerName')} />
             {errMsg('customerName')}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹) *</label>
-              <input type="number" value={formData.amount || ''} onChange={(e) => { setFormData({...formData, amount: e.target.value}); if (errors.amount) setErrors({...errors, amount: null}); }} className={fieldClass('amount')} />
+              <input type="number" value={formData.amount || ''} onChange={(e) => { setFormData({ ...formData, amount: e.target.value }); if (errors.amount) setErrors({ ...errors, amount: null }); }} className={fieldClass('amount')} />
               {errMsg('amount')}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Due Date *</label>
-              <input type="date" value={formData.dueDate || ''} onChange={(e) => { setFormData({...formData, dueDate: e.target.value}); if (errors.dueDate) setErrors({...errors, dueDate: null}); }} className={fieldClass('dueDate')} />
+              <DatePickerInput
+                selected={formData.dueDate ? new Date(formData.dueDate) : null}
+                onChange={(date) => {
+                  setFormData({ ...formData, dueDate: date ? date.toISOString().split('T')[0] : '' });
+                  if (errors.dueDate) setErrors({ ...errors, dueDate: null });
+                }}
+                className={fieldClass('dueDate')}
+              />
               {errMsg('dueDate')}
             </div>
           </div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-            <select value={formData.status || 'Sent'} onChange={(e) => setFormData({...formData, status: e.target.value})} className="select-field">
+            <select value={formData.status || 'Sent'} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="select-field">
               <option value="Sent">Sent</option><option value="Paid">Paid</option><option value="Partial">Partial</option>
             </select>
           </div>

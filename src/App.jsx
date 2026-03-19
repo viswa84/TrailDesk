@@ -6,9 +6,13 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import TreksPage from './pages/TreksPage';
+import CitiesPage from './pages/CitiesPage';
 import DeparturesPage from './pages/DeparturesPage';
+import BatchDetailPage from './pages/BatchDetailPage';
 import BookingsPage from './pages/BookingsPage';
+import ParticipantsPage from './pages/ParticipantsPage';
 import CustomersPage from './pages/CustomersPage';
+import GuidesPage from './pages/GuidesPage';
 import FinancePage from './pages/FinancePage';
 import MarketingPage from './pages/MarketingPage';
 import SettingsPage from './pages/SettingsPage';
@@ -47,10 +51,14 @@ function App() {
             {/* Protected routes */}
             <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/cities" element={<CitiesPage />} />
               <Route path="/treks" element={<TreksPage />} />
               <Route path="/departures" element={<DeparturesPage />} />
+              <Route path="/departures/:id" element={<BatchDetailPage />} />
               <Route path="/bookings" element={<BookingsPage />} />
+              <Route path="/participants" element={<ParticipantsPage />} />
               <Route path="/customers" element={<CustomersPage />} />
+              <Route path="/guides" element={<GuidesPage />} />
               <Route path="/finance" element={<FinancePage />} />
               <Route path="/marketing" element={<MarketingPage />} />
               <Route path="/support-chat" element={<SupportChatPage />} />

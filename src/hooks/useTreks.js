@@ -1,8 +1,6 @@
-import { useState, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { GET_TREKS } from '../graphql/queries';
 import { CREATE_TREK, UPDATE_TREK, DELETE_TREK } from '../graphql/mutations';
-import { treks as staticTreks } from '../data/data';
 
 /**
  * Hook for managing treks using GraphQL.

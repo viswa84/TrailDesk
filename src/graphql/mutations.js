@@ -1,5 +1,126 @@
 import { gql } from '@apollo/client';
 
+// ─── Auth Mutations ──────────────────────────────────
+export const LOGIN = gql`
+  mutation Login($phone: String!, $password: String!) {
+    login(phone: $phone, password: $password) {
+      token
+      user {
+        _id
+        name
+        email
+        phone
+        role
+        avatar
+        tenantId
+        tenantName
+        notificationPrefs {
+          newBooking
+          paymentReceived
+          batchFull
+          cancelation
+          lowSeats
+          marketing
+        }
+      }
+    }
+  }
+`;
+
+// Keep the old name as alias for backward compatibility
+export const LOGIN_MUTATION = LOGIN;
+
+export const REGISTER = gql`
+  mutation Register($input: RegisterInput!) {
+    register(input: $input) {
+      token
+      user {
+        _id
+        name
+        email
+        phone
+        role
+        avatar
+        tenantId
+        tenantName
+      }
+    }
+  }
+`;
+
+export const REGISTER_MUTATION = REGISTER;
+
+export const UPDATE_PROFILE = gql`
+  mutation UpdateProfile($input: UpdateProfileInput!) {
+    updateProfile(input: $input) {
+      _id
+      name
+      email
+      phone
+      avatar
+    }
+  }
+`;
+
+export const UPDATE_ORGANIZATION = gql`
+  mutation UpdateOrganization($input: UpdateOrganizationInput!) {
+    updateOrganization(input: $input) {
+      _id
+      name
+      gst
+      address
+      website
+    }
+  }
+`;
+
+export const UPDATE_NOTIFICATION_PREFS = gql`
+  mutation UpdateNotificationPrefs($input: UpdateNotificationPrefsInput!) {
+    updateNotificationPrefs(input: $input) {
+      _id
+      notificationPrefs {
+        newBooking
+        paymentReceived
+        batchFull
+        cancelation
+        lowSeats
+        marketing
+      }
+    }
+  }
+`;
+
+// ─── City Mutations ──────────────────────────────────
+export const CREATE_CITY = gql`
+  mutation CreateCity($input: CreateCityInput!) {
+    createCity(input: $input) {
+      _id
+      name
+      state
+      isActive
+    }
+  }
+`;
+
+export const UPDATE_CITY = gql`
+  mutation UpdateCity($id: ID!, $input: UpdateCityInput!) {
+    updateCity(id: $id, input: $input) {
+      _id
+      name
+      state
+      isActive
+    }
+  }
+`;
+
+export const DELETE_CITY = gql`
+  mutation DeleteCity($id: ID!) {
+    deleteCity(id: $id) {
+      message
+    }
+  }
+`;
+
 // ─── Trek Mutations ──────────────────────────────────
 export const CREATE_TREK = gql`
   mutation CreateTrek($input: CreateTrekInput!) {
@@ -8,12 +129,6 @@ export const CREATE_TREK = gql`
       name
       description
       difficulty
-      duration
-      price
-      startFrom
-      itinerary
-      thingsToCarry
-      contact
       image
       location
       altitude
@@ -31,20 +146,11 @@ export const UPDATE_TREK = gql`
       name
       description
       difficulty
-      duration
-      price
-      startFrom
-      itinerary
-      thingsToCarry
-      contact
       image
       location
       altitude
       bestSeason
       isActive
-      goLiveDate
-      seatsTotal
-      seatsAvailable
     }
   }
 `;
@@ -62,15 +168,11 @@ export const DELETE_TREK = gql`
 `;
 
 export const PUBLISH_TREK = gql`
-  mutation PublishTrek($id: ID!, $input: PublishTrekInput!) {
-    publishTrek(id: $id, input: $input) {
+  mutation PublishTrek($id: ID!) {
+    publishTrek(id: $id) {
       _id
-      trekMaster
-      goLiveDate
-      seatsTotal
-      seatsAvailable
       name
-      price
+      isActive
     }
   }
 `;
@@ -103,7 +205,71 @@ export const UPDATE_LIVE_TREK_SEATS = gql`
   }
 `;
 
-// ─── Departure Cancellation ──────────────────────────
+// ─── Departure Mutations ─────────────────────────────
+export const CREATE_DEPARTURE = gql`
+  mutation CreateDeparture($input: CreateDepartureInput!) {
+    createDeparture(input: $input) {
+      _id
+      trekId
+      trekName
+      cityId
+      cityName
+      startDate
+      endDate
+      duration
+      price
+      capacity
+      booked
+      itinerary
+      thingsToCarry
+      contact
+      meetingPoint
+      guideId
+      guideName
+      status
+      boardingPointIds
+    }
+  }
+`;
+
+export const UPDATE_DEPARTURE = gql`
+  mutation UpdateDeparture($id: ID!, $input: UpdateDepartureInput!) {
+    updateDeparture(id: $id, input: $input) {
+      _id
+      trekId
+      trekName
+      cityId
+      cityName
+      startDate
+      endDate
+      duration
+      price
+      capacity
+      booked
+      itinerary
+      thingsToCarry
+      contact
+      meetingPoint
+      guideId
+      guideName
+      status
+      boardingPointIds
+    }
+  }
+`;
+
+export const DELETE_DEPARTURE = gql`
+  mutation DeleteDeparture($id: ID!) {
+    deleteDeparture(id: $id) {
+      message
+      departure {
+        _id
+        trekName
+      }
+    }
+  }
+`;
+
 export const CANCEL_DEPARTURE = gql`
   mutation CancelDeparture($id: ID!, $reason: String!) {
     cancelDeparture(id: $id, reason: $reason) {
@@ -163,57 +329,6 @@ export const DELETE_CUSTOMER = gql`
       customer {
         _id
         name
-      }
-    }
-  }
-`;
-
-// ─── Departure Mutations ─────────────────────────────
-export const CREATE_DEPARTURE = gql`
-  mutation CreateDeparture($input: CreateDepartureInput!) {
-    createDeparture(input: $input) {
-      _id
-      trekId
-      trekName
-      startDate
-      endDate
-      capacity
-      booked
-      guideId
-      guideName
-      status
-      price
-      meetingPoint
-    }
-  }
-`;
-
-export const UPDATE_DEPARTURE = gql`
-  mutation UpdateDeparture($id: ID!, $input: UpdateDepartureInput!) {
-    updateDeparture(id: $id, input: $input) {
-      _id
-      trekId
-      trekName
-      startDate
-      endDate
-      capacity
-      booked
-      guideId
-      guideName
-      status
-      price
-      meetingPoint
-    }
-  }
-`;
-
-export const DELETE_DEPARTURE = gql`
-  mutation DeleteDeparture($id: ID!) {
-    deleteDeparture(id: $id) {
-      message
-      departure {
-        _id
-        trekName
       }
     }
   }
@@ -292,8 +407,6 @@ export const UPDATE_CAMPAIGN = gql`
       cpl
       roas
       status
-      startDate
-      endDate
     }
   }
 `;
@@ -323,91 +436,6 @@ export const MARK_NOTIFICATION_READ = gql`
 export const MARK_ALL_NOTIFICATIONS_READ = gql`
   mutation MarkAllNotificationsRead {
     markAllNotificationsRead
-  }
-`;
-
-// ─── Auth Mutations ──────────────────────────────────
-export const LOGIN = gql`
-  mutation Login($phone: String!, $password: String!) {
-    login(phone: $phone, password: $password) {
-      token
-      user {
-        _id
-        name
-        email
-        phone
-        role
-        avatar
-        tenantId
-        tenantName
-        notificationPrefs {
-          newBooking
-          paymentReceived
-          batchFull
-          cancelation
-          lowSeats
-          marketing
-        }
-      }
-    }
-  }
-`;
-
-export const REGISTER = gql`
-  mutation Register($input: RegisterInput!) {
-    register(input: $input) {
-      token
-      user {
-        _id
-        name
-        email
-        phone
-        role
-        avatar
-        tenantId
-        tenantName
-      }
-    }
-  }
-`;
-
-export const UPDATE_PROFILE = gql`
-  mutation UpdateProfile($input: UpdateProfileInput!) {
-    updateProfile(input: $input) {
-      _id
-      name
-      email
-      phone
-      avatar
-    }
-  }
-`;
-
-export const UPDATE_ORGANIZATION = gql`
-  mutation UpdateOrganization($input: UpdateOrganizationInput!) {
-    updateOrganization(input: $input) {
-      _id
-      name
-      gst
-      address
-      website
-    }
-  }
-`;
-
-export const UPDATE_NOTIFICATION_PREFS = gql`
-  mutation UpdateNotificationPrefs($input: UpdateNotificationPrefsInput!) {
-    updateNotificationPrefs(input: $input) {
-      _id
-      notificationPrefs {
-        newBooking
-        paymentReceived
-        batchFull
-        cancelation
-        lowSeats
-        marketing
-      }
-    }
   }
 `;
 
@@ -506,3 +534,201 @@ export const RESET_USER_PASSWORD = gql`
   }
 `;
 
+// ─── Participant Mutations ──────────────────────────────────
+export const CREATE_PARTICIPANT = gql`
+  mutation CreateParticipant($departureId: ID!, $bookingId: ID!, $name: String!, $phone: String!, $amount: Float, $paidAmount: Float, $peopleCount: Int, $boardingPointId: ID, $boardingPointName: String) {
+    createParticipant(departureId: $departureId, bookingId: $bookingId, name: $name, phone: $phone, amount: $amount, paidAmount: $paidAmount, peopleCount: $peopleCount, boardingPointId: $boardingPointId, boardingPointName: $boardingPointName) {
+      _id
+      bookingId
+      departureId
+      name
+      phone
+      boardingPointId
+      boardingPointName
+      createdAt
+    }
+  }
+`;
+
+export const COLLECT_PENDING_PAYMENT = gql`
+  mutation CollectPendingPayment($bookingId: ID!, $amount: Float!) {
+    collectPendingPayment(bookingId: $bookingId, amount: $amount) {
+      bookingId
+      txnid
+      amount
+      paidAmount
+      pendingAmount
+      refundDue
+      status
+    }
+  }
+`;
+
+export const MARK_REFUNDED = gql`
+  mutation MarkRefunded($bookingId: ID!) {
+    markRefunded(bookingId: $bookingId) {
+      bookingId
+      txnid
+      amount
+      paidAmount
+      pendingAmount
+      refundDue
+      status
+    }
+  }
+`;
+
+export const DELETE_PARTICIPANT = gql`
+  mutation DeleteParticipant($id: ID!) {
+    deleteParticipant(id: $id) {
+      _id
+    }
+  }
+`;
+
+// ─── Boarding Point Mutations ──────────────────────────────────
+export const CREATE_BOARDING_POINT = gql`
+  mutation CreateBoardingPoint($input: CreateBoardingPointInput!) {
+    createBoardingPoint(input: $input) {
+      _id
+      cityId
+      name
+      googleMapLink
+      latitude
+      longitude
+      isActive
+    }
+  }
+`;
+
+export const UPDATE_BOARDING_POINT = gql`
+  mutation UpdateBoardingPoint($id: ID!, $input: UpdateBoardingPointInput!) {
+    updateBoardingPoint(id: $id, input: $input) {
+      _id
+      cityId
+      name
+      googleMapLink
+      latitude
+      longitude
+      isActive
+    }
+  }
+`;
+
+export const DELETE_BOARDING_POINT = gql`
+  mutation DeleteBoardingPoint($id: ID!) {
+    deleteBoardingPoint(id: $id) {
+      message
+    }
+  }
+`;
+
+// ─── Guide Mutations ───────────────────────────────────────
+export const CREATE_GUIDE = gql`
+  mutation CreateGuide($input: GuideInput!) {
+    createGuide(input: $input) {
+      _id
+      name
+      phone
+      experience
+      certifications
+      rating
+      treksLed
+      avatar
+    }
+  }
+`;
+
+export const UPDATE_GUIDE = gql`
+  mutation UpdateGuide($id: ID!, $input: GuideInput!) {
+    updateGuide(id: $id, input: $input) {
+      _id
+      name
+      phone
+      experience
+      certifications
+      rating
+      treksLed
+      avatar
+    }
+  }
+`;
+
+export const DELETE_GUIDE = gql`
+  mutation DeleteGuide($id: ID!) {
+    deleteGuide(id: $id)
+  }
+`;
+
+// ─── Company Profile Mutations ───────────────────────────────
+export const SAVE_COMPANY_PROFILE = gql`
+  mutation SaveCompanyProfile($input: CompanyProfileInput!) {
+    saveCompanyProfile(input: $input) {
+      _id
+      companyName
+      tagline
+      logoUrl
+      signatureUrl
+      establishedYear
+      registrationNumber
+      gstNumber
+      panNumber
+      email
+      phone
+      altPhone
+      website
+      addressLine1
+      addressLine2
+      city
+      state
+      country
+      pincode
+      bankName
+      accountNumber
+      ifscCode
+      branchName
+      accountHolderName
+      pdfFooterText
+      termsAndConditions
+      cancellationPolicy
+      aboutUs
+      updatedAt
+    }
+  }
+`;
+
+export const UPDATE_COMPANY_PROFILE = gql`
+  mutation UpdateCompanyProfile($input: UpdateCompanyProfileInput!) {
+    updateCompanyProfile(input: $input) {
+      _id
+      companyName
+      tagline
+      logoUrl
+      signatureUrl
+      establishedYear
+      registrationNumber
+      gstNumber
+      panNumber
+      email
+      phone
+      altPhone
+      website
+      addressLine1
+      addressLine2
+      city
+      state
+      country
+      pincode
+      bankName
+      accountNumber
+      ifscCode
+      branchName
+      accountHolderName
+      pdfFooterText
+      termsAndConditions
+      cancellationPolicy
+      aboutUs
+      updatedAt
+    }
+  }
+`;

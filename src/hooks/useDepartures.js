@@ -1,11 +1,13 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { GET_DEPARTURES, GET_GUIDES, GET_TREKS } from '../graphql/queries';
+import { GET_DEPARTURES, GET_TREKS } from '../graphql/queries';
 import { CREATE_DEPARTURE, UPDATE_DEPARTURE, DELETE_DEPARTURE, CANCEL_DEPARTURE } from '../graphql/mutations';
+import { io as socketIO } from 'socket.io-client';
 
 /**
  * Hook for managing departures/batches via GraphQL.
  * @param {Object} filters - Optional filters { trekId, status }
- * @returns {{ data, guides, loading, error, add, update, remove, refetch }}
+ * @returns {{ data, guides, treks, loading, error, add, update, remove, cancel, refetch }}
  */
 export function useDepartures(filters = {}) {
   const variables = {};
@@ -13,7 +15,19 @@ export function useDepartures(filters = {}) {
   if (filters.status) variables.status = filters.status;
 
   const { data, loading, error, refetch } = useQuery(GET_DEPARTURES, { variables });
-  const { data: guidesData } = useQuery(GET_GUIDES);
+
+  // Real-time updates via Socket.IO
+  useEffect(() => {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+    const socket = socketIO(socketUrl, { transports: ['websocket', 'polling'] });
+
+    socket.on('departureUpdated', () => {
+      console.log('Departure updated via socket, refetching...');
+      refetch();
+    });
+
+    return () => socket.disconnect();
+  }, [refetch]);
 
   const [createDep] = useMutation(CREATE_DEPARTURE, {
     refetchQueries: [{ query: GET_DEPARTURES }],
@@ -29,16 +43,10 @@ export function useDepartures(filters = {}) {
   });
 
   // Fetch treks for selector dropdown
-  const { data: treksData } = useQuery(GET_TREKS);
-
-  const guides = (guidesData?.getGuides || []).map((g) => ({
-    ...g,
-    id: g._id,
-  }));
+  const { data: treksData } = useQuery(GET_TREKS, { variables: { isActive: true } });
 
   return {
     data: data?.getDepartures || [],
-    guides,
     treks: (treksData?.getTreks || []).map(t => ({ ...t, id: t._id })),
     loading,
     error,

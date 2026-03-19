@@ -25,6 +25,7 @@ export default function BookingsPage() {
         (b.txnid || '').toLowerCase().includes(q) ||
         (b.trekName || '').toLowerCase().includes(q) ||
         (b.phone || '').toLowerCase().includes(q) ||
+        (b.cityName || '').toLowerCase().includes(q) ||
         (b._id || '').toLowerCase().includes(q);
       const matchesStatus = statusFilter === 'All' || (b.status || '').toLowerCase() === statusFilter.toLowerCase();
       return matchesSearch && matchesStatus;
@@ -120,7 +121,7 @@ export default function BookingsPage() {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by ID, trek, phone..." className="input-field pl-10" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by ID, trek, phone, or city..." className="input-field pl-10" />
           </div>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="select-field sm:w-40">
             <option value="All">All Status</option>
@@ -139,6 +140,7 @@ export default function BookingsPage() {
               <tr>
                 <th className="table-header">Txn ID</th>
                 <th className="table-header">Trek</th>
+                <th className="table-header">City</th>
                 <th className="table-header">Phone</th>
                 <th className="table-header">People</th>
                 <th className="table-header">Amount</th>
@@ -166,6 +168,7 @@ export default function BookingsPage() {
                       <span className="font-medium text-slate-900 truncate max-w-[200px]">{booking.trekName}</span>
                     </div>
                   </td>
+                  <td className="table-cell text-slate-600">{booking.cityName || '—'}</td>
                   <td className="table-cell">
                     <span className="flex items-center gap-1 text-sm text-slate-600">
                       <Phone className="w-3 h-3" /> {booking.phone}
@@ -178,7 +181,7 @@ export default function BookingsPage() {
                   </td>
                   <td className="table-cell font-semibold text-slate-900">₹{(booking.amount || 0).toLocaleString('en-IN')}</td>
                   <td className="table-cell">{getStatusBadge(booking.status)}</td>
-                  <td className="table-cell text-sm text-slate-500">{booking.createdAt ? format(new Date(booking.createdAt), 'MMM dd, yyyy') : '—'}</td>
+                  <td className="table-cell text-sm text-slate-500">{booking.createdAt ? format(new Date(booking.createdAt), 'dd/MM/yyyy') : '—'}</td>
                   <td className="table-cell text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); }} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" title="View Details">
@@ -192,7 +195,7 @@ export default function BookingsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan="8" className="text-center py-12 text-slate-400">No bookings found</td></tr>
+                <tr><td colSpan="9" className="text-center py-12 text-slate-400">No bookings found</td></tr>
               )}
             </tbody>
           </table>
@@ -216,6 +219,10 @@ export default function BookingsPage() {
                 <p className="font-medium text-slate-900">{selectedBooking.trekName}</p>
               </div>
               <div>
+                <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">City</p>
+                <p className="font-medium text-slate-900">{selectedBooking.cityName || '—'}</p>
+              </div>
+              <div>
                 <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Phone</p>
                 <p className="font-medium text-slate-900 flex items-center gap-1"><Phone className="w-3 h-3" /> {selectedBooking.phone}</p>
               </div>
@@ -229,7 +236,7 @@ export default function BookingsPage() {
               </div>
               <div>
                 <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Booked On</p>
-                <p className="font-medium text-slate-900">{selectedBooking.createdAt ? format(new Date(selectedBooking.createdAt), 'PPP') : '—'}</p>
+                <p className="font-medium text-slate-900">{selectedBooking.createdAt ? format(new Date(selectedBooking.createdAt), 'dd/MM/yyyy') : '—'}</p>
               </div>
               <div>
                 <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Price / person</p>

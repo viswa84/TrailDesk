@@ -22,7 +22,7 @@ import { format, parseISO } from 'date-fns';
 
 function safeDate(d) {
   if (!d) return '—';
-  try { return format(parseISO(d), 'dd MMM yyyy'); } catch { return '—'; }
+  try { return format(parseISO(d), 'dd/MM/yyyy'); } catch { return '—'; }
 }
 
 const PLAN_COLORS = {
@@ -125,7 +125,10 @@ function CreateTenantModal({ onClose, onCreated }) {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Licence Expiry</label>
-            <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none" value={form.licenseExpiry} onChange={change('licenseExpiry')} />
+            <DatePickerInput
+              selected={form.licenseExpiry ? new Date(form.licenseExpiry) : null}
+              onChange={(date) => setForm({ ...form, licenseExpiry: date ? date.toISOString().split('T')[0] : '' })}
+            />
           </div>
         </div>
         <hr className="border-slate-100" />
@@ -137,7 +140,7 @@ function CreateTenantModal({ onClose, onCreated }) {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Admin Phone *</label>
-            <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none" value={form.adminPhone} onChange={change('adminPhone')} required />
+            <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none" value={form.adminPhone} onChange={(e) => setForm({ ...form, adminPhone: e.target.value.replace(/\D/g, '').slice(0, 10) })} maxLength={10} required />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Admin Email</label>
@@ -258,9 +261,9 @@ function FolderTree({ items }) {
       {items.map((line, i) => (
         <div key={i} className={
           line.startsWith('#') ? 'text-slate-500 mt-2' :
-          line.includes('.js') || line.includes('.jsx') || line.includes('.json') ? 'text-amber-300' :
-          (line.endsWith('/') || line.match(/\/$/)) ? 'text-blue-300' :
-          'text-slate-300'
+            line.includes('.js') || line.includes('.jsx') || line.includes('.json') ? 'text-amber-300' :
+              (line.endsWith('/') || line.match(/\/$/)) ? 'text-blue-300' :
+                'text-slate-300'
         }>
           {line}
         </div>
@@ -378,11 +381,10 @@ export default function SuperAdminPage() {
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === t.id
-                    ? 'bg-white text-purple-700 shadow-sm'
-                    : 'text-white/70 hover:text-white hover:bg-white/10'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === t.id
+                  ? 'bg-white text-purple-700 shadow-sm'
+                  : 'text-white/70 hover:text-white hover:bg-white/10'
+                  }`}
               >
                 <t.icon className="w-4 h-4" />
                 {t.label}
@@ -570,8 +572,8 @@ export default function SuperAdminPage() {
                         <td className="px-3 py-4 text-sm text-slate-500">
                           {t.licenseExpiry
                             ? <span className={new Date(t.licenseExpiry) < new Date() ? 'text-red-500 font-medium' : ''}>
-                                {safeDate(t.licenseExpiry)}
-                              </span>
+                              {safeDate(t.licenseExpiry)}
+                            </span>
                             : '—'}
                         </td>
                         <td className="px-3 py-4 text-xs text-slate-400">{safeDate(t.createdAt)}</td>
@@ -671,11 +673,10 @@ export default function SuperAdminPage() {
             <div className="divide-y divide-slate-50">
               {activityLog.map((a) => (
                 <div key={a.id} className="flex items-start gap-4 px-5 py-4">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    a.action.includes('CREATED') ? 'bg-emerald-100 text-emerald-600' :
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${a.action.includes('CREATED') ? 'bg-emerald-100 text-emerald-600' :
                     a.action.includes('SUSPENDED') ? 'bg-red-100 text-red-600' :
-                    'bg-slate-100 text-slate-500'
-                  }`}>
+                      'bg-slate-100 text-slate-500'
+                    }`}>
                     {a.action.includes('TENANT') ? <Building2 className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
                   </div>
                   <div className="flex-1">
@@ -1099,15 +1100,13 @@ const docs = await Model.find({
                   { phase: 'Phase 6', label: 'Analytics Dashboard', status: 'future', desc: 'Revenue trends, customer retention, booking funnels — per tenant and platform-wide.' },
                 ].map(item => (
                   <div key={item.label} className="flex items-start gap-4 p-3 rounded-xl hover:bg-slate-50 transition-colors">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold flex-shrink-0 mt-0.5 ${
-                      item.status === 'planned' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
-                    }`}>{item.phase}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold flex-shrink-0 mt-0.5 ${item.status === 'planned' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
+                      }`}>{item.phase}</span>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-slate-800">{item.label}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                          item.status === 'planned' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
-                        }`}>{item.status}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${item.status === 'planned' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
+                          }`}>{item.status}</span>
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">{item.desc}</p>
                     </div>
@@ -1129,11 +1128,10 @@ const docs = await Model.find({
                     ['status enum', 'Standard lifecycle states', 'recommended'],
                   ].map(([field, desc, level]) => (
                     <div key={field} className="flex items-start gap-2 text-xs">
-                      <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                        level === 'critical' ? 'bg-red-100 text-red-700' :
+                      <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${level === 'critical' ? 'bg-red-100 text-red-700' :
                         level === 'auto' ? 'bg-slate-100 text-slate-500' :
-                        'bg-amber-100 text-amber-700'
-                      }`}>{level}</span>
+                          'bg-amber-100 text-amber-700'
+                        }`}>{level}</span>
                       <span><code className="font-mono text-slate-800">{field}</code> — <span className="text-slate-500">{desc}</span></span>
                     </div>
                   ))}
@@ -1147,9 +1145,8 @@ const docs = await Model.find({
                     ['errorPolicy: all', 'Apollo queries — graceful degradation', 'recommended'],
                   ].map(([field, desc, level]) => (
                     <div key={field} className="flex items-start gap-2 text-xs">
-                      <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                        level === 'critical' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                      }`}>{level}</span>
+                      <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${level === 'critical' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                        }`}>{level}</span>
                       <span><code className="font-mono text-slate-800">{field}</code> — <span className="text-slate-500">{desc}</span></span>
                     </div>
                   ))}
