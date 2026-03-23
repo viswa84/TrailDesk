@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import StatCard from '../components/ui/StatCard';
 import StatusBadge from '../components/ui/StatusBadge';
-import { dashboardKPIs, revenueByMonth, bookingsByRegion, recentActivity, alerts } from '../data/data';
+import { useDashboard } from '../hooks/useDashboard';
 
 const formatCurrency = (val) => {
   if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
@@ -26,6 +26,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function DashboardPage() {
+  const { kpis: dashboardKPIs, revenueByMonth, bookingsByRegion, recentActivity, alerts, loading, error } = useDashboard();
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Page Header */}

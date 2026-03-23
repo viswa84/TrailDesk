@@ -1,10 +1,17 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { ApolloProvider } from '@apollo/client/react'
+import { apolloClient } from './graphql/client'
+import { ToastProvider } from './context/ToastContext'
 import './index.css'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <ApolloProvider client={apolloClient}>
+      <ToastProvider>
+        <App />
+      </ToastProvider>
+    </ApolloProvider>
   </StrictMode>,
 )

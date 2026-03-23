@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { customers as initialCustomers } from '../data/data';
+import { useCustomers } from '../hooks/useCustomers';
+import { useToast } from '../context/ToastContext';
+import { v, validateForm, onlyDigits } from '../utils/validators';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { Search, Plus, Edit, Trash2, Users, Mail, Phone, X } from 'lucide-react';
@@ -7,7 +9,8 @@ import { Search, Plus, Edit, Trash2, Users, Mail, Phone, X } from 'lucide-react'
 const emptyCustomer = { name: '', email: '', phone: '', city: '', tags: [] };
 
 export default function CustomersPage() {
-  const [customersList, setCustomersList] = useState(initialCustomers);
+  const { data: customersList, loading, error, add: addCustomer, update: updateCustomer, remove: removeCustomer } = useCustomers();
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('All');
   const [showForm, setShowForm] = useState(false);
@@ -15,33 +18,44 @@ export default function CustomersPage() {
   const [formData, setFormData] = useState(emptyCustomer);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [newTag, setNewTag] = useState('');
+  const [errors, setErrors] = useState({});
 
-  const allTags = ['All', ...new Set(initialCustomers.flatMap(c => c.tags))];
+  const allTags = ['All', ...new Set(customersList.flatMap(c => c.tags))];
 
   const filtered = customersList.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search);
-    const matchesTag = tagFilter === 'All' || c.tags.includes(tagFilter);
+    const matchesSearch = (c.name || '').toLowerCase().includes(search.toLowerCase()) || (c.email || '').toLowerCase().includes(search.toLowerCase()) || (c.phone || '').includes(search);
+    const matchesTag = tagFilter === 'All' || (c.tags || []).includes(tagFilter);
     return matchesSearch && matchesTag;
   });
 
-  const handleAdd = () => { setEditingCustomer(null); setFormData(emptyCustomer); setShowForm(true); };
+  const handleAdd = () => { setEditingCustomer(null); setFormData(emptyCustomer); setErrors({}); setShowForm(true); };
 
   const handleEdit = (customer) => {
     setEditingCustomer(customer);
     setFormData({ ...customer });
+    setErrors({});
     setShowForm(true);
   };
 
   const handleSave = () => {
+    const { valid, errors: errs } = validateForm({
+      name: v.required(formData.name, 'Name'),
+      email: v.email(formData.email),
+      phone: v.phone(formData.phone),
+    });
+    if (!valid) { setErrors(errs); toast.error('Please fix the form errors'); return; }
     if (editingCustomer) {
-      setCustomersList(prev => prev.map(c => c.id === editingCustomer.id ? { ...c, ...formData } : c));
+      updateCustomer(editingCustomer.id, { ...formData });
+      toast.success('Customer updated');
     } else {
-      setCustomersList(prev => [...prev, { ...formData, id: Date.now(), totalTreks: 0, ltv: 0, joinDate: new Date().toISOString().slice(0, 10) }]);
+      addCustomer({ ...formData });
+      toast.success('Customer added');
     }
     setShowForm(false);
+    setErrors({});
   };
 
-  const handleDelete = (id) => { setCustomersList(prev => prev.filter(c => c.id !== id)); setShowDeleteConfirm(null); };
+  const handleDelete = (id) => { removeCustomer(id); setShowDeleteConfirm(null); toast.success('Customer deleted'); };
 
   const addTag = () => {
     if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
@@ -51,6 +65,9 @@ export default function CustomersPage() {
   };
 
   const removeTag = (tag) => { setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) }); };
+
+  const fieldClass = (name) => `input-field ${errors[name] ? 'input-error' : ''}`;
+  const errMsg = (name) => errors[name] ? <p className="text-xs text-red-500 mt-1">{errors[name]}</p> : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -76,7 +93,7 @@ export default function CustomersPage() {
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px]">
+          <table className="w-full min-w-200">
             <thead className="bg-slate-50/80">
               <tr>
                 <th className="table-header">Customer</th>
@@ -133,10 +150,22 @@ export default function CustomersPage() {
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingCustomer ? 'Edit Customer' : 'Add Customer'} size="md">
         <div className="space-y-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label><input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="input-field" /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Email</label><input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="input-field" /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Phone</label><input value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="input-field" /></div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
+            <input value={formData.name} onChange={(e) => { setFormData({...formData, name: e.target.value}); if (errors.name) setErrors({...errors, name: null}); }} className={fieldClass('name')} />
+            {errMsg('name')}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
+              <input type="email" value={formData.email} onChange={(e) => { setFormData({...formData, email: e.target.value}); if (errors.email) setErrors({...errors, email: null}); }} className={fieldClass('email')} />
+              {errMsg('email')}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Phone *</label>
+              <input value={formData.phone} onChange={(e) => { setFormData({...formData, phone: onlyDigits(e.target.value, 10)}); if (errors.phone) setErrors({...errors, phone: null}); }} className={fieldClass('phone')} maxLength={10} placeholder="10-digit number" />
+              {errMsg('phone')}
+            </div>
           </div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">City</label><input value={formData.city} onChange={(e) => setFormData({...formData, city: e.target.value})} className="input-field" /></div>
           <div>

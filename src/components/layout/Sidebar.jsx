@@ -1,23 +1,31 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Mountain, CalendarRange, BookOpen, Users,
-  Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft
+  LayoutDashboard, Mountain, CalendarRange, BookOpen, Users, Navigation,
+  Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft, Building2, Shield, Bot, Workflow
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/cities', label: 'Cities', icon: Building2 },
   { path: '/treks', label: 'Treks', icon: Mountain },
   { path: '/departures', label: 'Departures', icon: CalendarRange },
   { path: '/bookings', label: 'Bookings', icon: BookOpen },
+  { path: '/participants', label: 'Participants', icon: Users },
   { path: '/customers', label: 'Customers', icon: Users },
+  { path: '/guides', label: 'Guides', icon: Navigation },
   { path: '/finance', label: 'Finance', icon: Wallet },
   { path: '/marketing', label: 'Marketing', icon: Megaphone },
   { path: '/support-chat', label: 'Support Chat', icon: MessageCircle },
+  { path: '/whatsapp-flow', label: 'WhatsApp Flow', icon: Bot },
+  { path: '/flow-builder',  label: 'Flow Builder',  icon: Workflow },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const location = useLocation();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'superadmin';
 
   return (
     <>
@@ -41,7 +49,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
             <div className="w-9 h-9 bg-gradient-to-br from-primary-600 to-emerald-500 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
               <Mountain className="w-5 h-5 text-white" />
             </div>
-            {!collapsed && <span className="text-lg font-bold text-slate-900 tracking-tight">TrailDesk</span>}
+            {!collapsed && <span className="text-lg font-bold text-slate-900 tracking-tight">TrekOps</span>}
           </div>
           <button onClick={onClose} className="lg:hidden p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-slate-500" />
@@ -76,6 +84,32 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
               );
             })}
           </div>
+
+          {/* Super Admin link — visible only to superadmin role */}
+          {isSuperAdmin && (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              {!collapsed && (
+                <p className="px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">
+                  Platform
+                </p>
+              )}
+              <NavLink
+                to="/superadmin"
+                onClick={onClose}
+                title={collapsed ? 'Super Admin' : undefined}
+                className={`flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-200 group
+                  ${collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
+                  ${location.pathname.startsWith('/superadmin')
+                    ? 'bg-violet-50 text-violet-700'
+                    : 'text-slate-600 hover:bg-violet-50 hover:text-violet-700'
+                  }
+                `}
+              >
+                <Shield className={`w-[18px] h-[18px] shrink-0 ${location.pathname.startsWith('/superadmin') ? 'text-violet-600' : 'text-slate-400 group-hover:text-violet-500'}`} />
+                {!collapsed && <span>Super Admin</span>}
+              </NavLink>
+            </div>
+          )}
         </nav>
 
         {/* Collapse Toggle (desktop only) */}

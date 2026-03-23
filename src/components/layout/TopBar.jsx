@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { notifications } from '../../data/data';
+import { useQuery, useMutation } from '@apollo/client/react';
+import { GET_NOTIFICATIONS } from '../../graphql/queries';
+import { MARK_NOTIFICATION_READ, MARK_ALL_NOTIFICATIONS_READ } from '../../graphql/mutations';
 import {
   Search, Bell, Plus, Menu, ChevronDown, LogOut, User,
   BookOpen, Mountain, CalendarRange
@@ -19,7 +21,28 @@ export default function TopBar({ onMenuToggle }) {
   const quickRef = useRef(null);
   const profileRef = useRef(null);
 
+  // ── GraphQL: fetch notifications ──
+  const { data: notifData } = useQuery(GET_NOTIFICATIONS, { pollInterval: 30000 });
+  const notifications = notifData?.getNotifications || [];
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  const [markRead] = useMutation(MARK_NOTIFICATION_READ, {
+    refetchQueries: [{ query: GET_NOTIFICATIONS }],
+  });
+  const [markAllRead] = useMutation(MARK_ALL_NOTIFICATIONS_READ, {
+    refetchQueries: [{ query: GET_NOTIFICATIONS }],
+  });
+
+  // compute relative time from ISO string
+  const timeAgo = (isoStr) => {
+    if (!isoStr) return '';
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -106,27 +129,40 @@ export default function TopBar({ onMenuToggle }) {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl border border-slate-200 shadow-lg animate-scale-in">
-                <div className="px-4 py-3 border-b border-slate-100">
+              <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-80 bg-white rounded-xl border border-slate-200 shadow-lg animate-scale-in">
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                   <h3 className="font-semibold text-sm text-slate-900">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={() => markAllRead()}
+                      className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                    >
+                      Mark all read
+                    </button>
+                  )}
                 </div>
                 <div className="max-h-72 overflow-y-auto">
-                  {notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      className={`px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer ${!n.read ? 'bg-primary-50/30' : ''}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className={`text-sm ${!n.read ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
-                            {n.title}
-                          </p>
-                          <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-sm text-slate-400">No notifications</div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n._id}
+                        onClick={() => { if (!n.read) markRead({ variables: { id: n._id } }); }}
+                        className={`px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer ${!n.read ? 'bg-primary-50/30' : ''}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className={`text-sm ${!n.read ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+                              {n.title}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
+                          </div>
+                          <span className="text-xs text-slate-400 whitespace-nowrap">{timeAgo(n.createdAt)}</span>
                         </div>
-                        <span className="text-xs text-slate-400 whitespace-nowrap">{n.time}</span>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
                 <div className="px-4 py-2.5 border-t border-slate-100">
                   <button className="text-sm text-primary-600 hover:text-primary-700 font-medium">

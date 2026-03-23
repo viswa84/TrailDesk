@@ -1,20 +1,28 @@
 import { useState } from 'react';
-import { invoices as initialInvoices, payments as initialPayments, refunds as initialRefunds } from '../data/data';
+import { useQuery } from '@apollo/client/react';
+import { useFinance } from '../hooks/useFinance';
+import { useToast } from '../context/ToastContext';
+import { v, validateForm } from '../utils/validators';
+import { GET_COMPANY_PROFILE } from '../graphql/queries';
+import { generateInvoicePDF } from '../utils/invoicePdf';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
+import DatePickerInput from '../components/ui/DatePickerInput';
 import { format } from 'date-fns';
 import { Search, Plus, Edit, Trash2, Download, FileText, CreditCard, RotateCcw } from 'lucide-react';
 
+
 export default function FinancePage() {
+  const { invoices: invoicesList, payments: paymentsList, refunds: refundsList, loading, error, addInvoice: addInv, updateInvoice: updateInv, removeInvoice: removeInv } = useFinance();
+  const { data: orgData } = useQuery(GET_COMPANY_PROFILE);
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState('invoices');
-  const [invoicesList, setInvoicesList] = useState(initialInvoices);
-  const [paymentsList] = useState(initialPayments);
-  const [refundsList] = useState(initialRefunds);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [formData, setFormData] = useState({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [errors, setErrors] = useState({});
 
   const tabs = [
     { id: 'invoices', label: 'Invoices', icon: FileText, count: invoicesList.length },
@@ -25,26 +33,39 @@ export default function FinancePage() {
   const handleAddInvoice = () => {
     setEditingItem(null);
     setFormData({ customerName: '', amount: '', status: 'Sent', dueDate: '' });
+    setErrors({});
     setShowForm(true);
   };
 
   const handleEditInvoice = (inv) => {
     setEditingItem(inv);
     setFormData({ ...inv, amount: String(inv.amount) });
+    setErrors({});
     setShowForm(true);
   };
 
   const handleSaveInvoice = () => {
+    const { valid, errors: errs } = validateForm({
+      customerName: v.required(formData.customerName, 'Customer name'),
+      amount: v.positiveNumber(formData.amount, 'Amount'),
+      dueDate: v.dateRequired(formData.dueDate, 'Due date'),
+    });
+    if (!valid) { setErrors(errs); toast.error('Please fix the form errors'); return; }
     if (editingItem) {
-      setInvoicesList(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...formData, amount: Number(formData.amount) } : i));
+      updateInv(editingItem.id, { ...formData, amount: Number(formData.amount) });
+      toast.success('Invoice updated');
     } else {
-      const newId = `INV-${3000 + invoicesList.length + 1}`;
-      setInvoicesList(prev => [...prev, { ...formData, id: newId, amount: Number(formData.amount), date: new Date().toISOString().slice(0, 10), bookingId: '' }]);
+      addInv({ ...formData, amount: Number(formData.amount) });
+      toast.success('Invoice created');
     }
     setShowForm(false);
+    setErrors({});
   };
 
-  const handleDeleteInvoice = (id) => { setInvoicesList(prev => prev.filter(i => i.id !== id)); setShowDeleteConfirm(null); };
+  const handleDeleteInvoice = (id) => { removeInv(id); setShowDeleteConfirm(null); toast.success('Invoice deleted'); };
+
+  const fieldClass = (name) => `input-field ${errors[name] ? 'input-error' : ''}`;
+  const errMsg = (name) => errors[name] ? <p className="text-xs text-red-500 mt-1">{errors[name]}</p> : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -59,16 +80,15 @@ export default function FinancePage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-0">
+      <div className="flex border-b border-slate-200 gap-0 overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => { setActiveTab(tab.id); setSearch(''); }}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all -mb-px ${
-              activeTab === tab.id
-                ? 'border-primary-600 text-primary-700'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-            }`}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all -mb-px ${activeTab === tab.id
+              ? 'border-primary-600 text-primary-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
@@ -87,7 +107,7 @@ export default function FinancePage() {
       {activeTab === 'invoices' && (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full min-w-175">
               <thead className="bg-slate-50/80">
                 <tr>
                   <th className="table-header">Invoice #</th>
@@ -100,17 +120,36 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {invoicesList.filter(i => i.customerName.toLowerCase().includes(search.toLowerCase()) || i.id.toLowerCase().includes(search.toLowerCase())).map(inv => (
+                {invoicesList.filter(i => (i.customerName || '').toLowerCase().includes(search.toLowerCase()) || (i.id || i._id || '').toLowerCase().includes(search.toLowerCase())).map(inv => (
                   <tr key={inv.id} className="table-row">
                     <td className="table-cell font-mono text-xs text-slate-500">{inv.id}</td>
                     <td className="table-cell font-medium text-slate-900">{inv.customerName}</td>
-                    <td className="table-cell">{format(new Date(inv.date), 'MMM dd, yyyy')}</td>
-                    <td className="table-cell">{format(new Date(inv.dueDate), 'MMM dd, yyyy')}</td>
+                    <td className="table-cell">{format(new Date(inv.date), 'dd/MM/yyyy')}</td>
+                    <td className="table-cell">{format(new Date(inv.dueDate), 'dd/MM/yyyy')}</td>
                     <td className="table-cell font-medium">₹{inv.amount.toLocaleString()}</td>
                     <td className="table-cell"><StatusBadge status={inv.status} /></td>
                     <td className="table-cell text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" title="Download PDF"><Download className="w-4 h-4 text-slate-400" /></button>
+                        <button onClick={() => {
+                          const org = orgData?.getCompanyProfile || {};
+                          generateInvoicePDF({
+                            booking: { _id: inv.id || inv._id, txnid: inv.id || inv._id || 'INV', trekName: inv.customerName || 'Invoice', phone: '', peopleCount: 1, amount: inv.amount || 0, status: inv.status === 'Paid' ? 'paid' : 'pending', createdAt: inv.date },
+                            company: {
+                              name: org.companyName || '',
+                              address: org.addressLine1 || '',
+                              gst: org.gstNumber || '',
+                              pan: org.panNumber || '',
+                              regNo: org.registrationNumber || '',
+                              website: org.website || '',
+                              logo: org.logoUrl || '',
+                              phone: org.phone || '',
+                              email: org.email || '',
+                              pdfFooterText: org.pdfFooterText || '',
+                              termsAndConditions: org.termsAndConditions || '',
+                              cancellationPolicy: org.cancellationPolicy || '',
+                            },
+                          });
+                        }} className="p-1.5 hover:bg-primary-50 rounded-lg transition-colors" title="Download PDF"><Download className="w-4 h-4 text-primary-500" /></button>
                         <button onClick={() => handleEditInvoice(inv)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><Edit className="w-4 h-4 text-slate-400" /></button>
                         <button onClick={() => setShowDeleteConfirm(inv.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4 text-red-400" /></button>
                       </div>
@@ -127,7 +166,7 @@ export default function FinancePage() {
       {activeTab === 'payments' && (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full min-w-175">
               <thead className="bg-slate-50/80">
                 <tr>
                   <th className="table-header">Payment ID</th>
@@ -140,12 +179,12 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {paymentsList.filter(p => p.customerName.toLowerCase().includes(search.toLowerCase())).map(pay => (
+                {paymentsList.filter(p => (p.customerName || '').toLowerCase().includes(search.toLowerCase())).map(pay => (
                   <tr key={pay.id} className="table-row">
                     <td className="table-cell font-mono text-xs text-slate-500">{pay.id}</td>
                     <td className="table-cell font-mono text-xs text-slate-500">{pay.invoiceId}</td>
                     <td className="table-cell font-medium text-slate-900">{pay.customerName}</td>
-                    <td className="table-cell">{format(new Date(pay.date), 'MMM dd, yyyy')}</td>
+                    <td className="table-cell">{format(new Date(pay.date), 'dd/MM/yyyy')}</td>
                     <td className="table-cell font-medium text-emerald-600">+ ₹{pay.amount.toLocaleString()}</td>
                     <td className="table-cell"><span className="badge-blue">{pay.method}</span></td>
                     <td className="table-cell font-mono text-xs text-slate-400">{pay.reference}</td>
@@ -161,7 +200,7 @@ export default function FinancePage() {
       {activeTab === 'refunds' && (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full min-w-175">
               <thead className="bg-slate-50/80">
                 <tr>
                   <th className="table-header">Refund ID</th>
@@ -174,12 +213,12 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {refundsList.filter(r => r.customerName.toLowerCase().includes(search.toLowerCase())).map(ref => (
+                {refundsList.filter(r => (r.customerName || '').toLowerCase().includes(search.toLowerCase())).map(ref => (
                   <tr key={ref.id} className="table-row">
                     <td className="table-cell font-mono text-xs text-slate-500">{ref.id}</td>
                     <td className="table-cell font-mono text-xs text-slate-500">{ref.bookingId}</td>
                     <td className="table-cell font-medium text-slate-900">{ref.customerName}</td>
-                    <td className="table-cell">{format(new Date(ref.date), 'MMM dd, yyyy')}</td>
+                    <td className="table-cell">{format(new Date(ref.date), 'dd/MM/yyyy')}</td>
                     <td className="table-cell font-medium text-red-600">- ₹{ref.amount.toLocaleString()}</td>
                     <td className="table-cell text-slate-600 text-xs">{ref.reason}</td>
                     <td className="table-cell"><StatusBadge status={ref.status} /></td>
@@ -194,13 +233,32 @@ export default function FinancePage() {
       {/* Invoice Form Modal */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingItem ? 'Edit Invoice' : 'New Invoice'} size="md">
         <div className="space-y-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Customer Name</label><input value={formData.customerName || ''} onChange={(e) => setFormData({...formData, customerName: e.target.value})} className="input-field" /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹)</label><input type="number" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="input-field" /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label><input type="date" value={formData.dueDate || ''} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="input-field" /></div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Customer Name *</label>
+            <input value={formData.customerName || ''} onChange={(e) => { setFormData({ ...formData, customerName: e.target.value }); if (errors.customerName) setErrors({ ...errors, customerName: null }); }} className={fieldClass('customerName')} />
+            {errMsg('customerName')}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹) *</label>
+              <input type="number" value={formData.amount || ''} onChange={(e) => { setFormData({ ...formData, amount: e.target.value }); if (errors.amount) setErrors({ ...errors, amount: null }); }} className={fieldClass('amount')} />
+              {errMsg('amount')}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Due Date *</label>
+              <DatePickerInput
+                selected={formData.dueDate ? new Date(formData.dueDate) : null}
+                onChange={(date) => {
+                  setFormData({ ...formData, dueDate: date ? date.toISOString().split('T')[0] : '' });
+                  if (errors.dueDate) setErrors({ ...errors, dueDate: null });
+                }}
+                className={fieldClass('dueDate')}
+              />
+              {errMsg('dueDate')}
+            </div>
           </div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-            <select value={formData.status || 'Sent'} onChange={(e) => setFormData({...formData, status: e.target.value})} className="select-field">
+            <select value={formData.status || 'Sent'} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="select-field">
               <option value="Sent">Sent</option><option value="Paid">Paid</option><option value="Partial">Partial</option>
             </select>
           </div>
