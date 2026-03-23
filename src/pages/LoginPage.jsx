@@ -18,6 +18,7 @@ export default function LoginPage() {
     companyName: '',
     companySlug: '',
   });
+  
   const [errors, setErrors] = useState({});
 
   const [loginMut, { loading: loginLoading }] = useMutation(LOGIN);
@@ -172,7 +173,7 @@ export default function LoginPage() {
                 <h2 className="text-2xl font-bold text-slate-900">Create your account</h2>
                 <p className="text-sm text-slate-500 mt-1">Start managing your treks in minutes</p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Full Name *</label>
                   <input value={form.name} onChange={handleChange('name')} className={fieldClass('name')} placeholder="Your name" />
@@ -194,7 +195,7 @@ export default function LoginPage() {
                 <input type="password" value={form.password} onChange={handleChange('password')} className={fieldClass('password')} placeholder="Min 6 characters" />
                 {errMsg('password')}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Company Name *</label>
                   <input value={form.companyName} onChange={handleChange('companyName')} className={fieldClass('companyName')} placeholder="Your company" />

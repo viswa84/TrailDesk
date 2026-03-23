@@ -99,7 +99,7 @@ export default function ParticipantsPage() {
             ) : (
                 <div className="card overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full min-w-160 text-sm">
                             <thead>
                                 <tr className="text-left text-xs text-slate-400 uppercase tracking-wider bg-slate-50/70 border-b border-slate-100">
                                     <th className="px-5 py-3 w-10">#</th>

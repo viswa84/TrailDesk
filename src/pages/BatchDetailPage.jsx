@@ -252,8 +252,8 @@ export default function BatchDetailPage() {
 
             {/* Participants Section */}
             <div>
-                <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                    <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 flex-wrap">
                         <Users className="w-5 h-5 text-primary-600" />
                         Participants
                         <span className="text-sm font-normal text-slate-400">({totalParticipants} people across {totalBookings} booking{totalBookings !== 1 ? 's' : ''})</span>
