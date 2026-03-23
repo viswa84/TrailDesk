@@ -12,7 +12,12 @@ import StatusBadge from '../components/ui/StatusBadge';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isSameDay, differenceInDays, addMonths, subMonths } from 'date-fns';
 import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, X, Eye, AlertTriangle, IndianRupee, Building2, Phone, FileText } from 'lucide-react';
 
-const emptyDeparture = { trekId: '', trekName: '', cityId: '', startDate: '', endDate: '', nights: '', days: '', capacity: '', guideId: '', price: '', meetingPoint: '', itinerary: '', thingsToCarry: '', contact: '', status: 'Open', boardingPointIds: [] };
+const emptyDeparture = {
+  trekId: '', trekName: '', cityId: '', startDate: '', endDate: '',
+  nights: '', days: '', capacity: '', guideId: '', price: '',
+  meetingPoint: '', itinerary: '', thingsToCarry: '', contact: '',
+  whatsappGroupInviteLink: '', whatsappGroupName: '', status: 'Open', boardingPointIds: [],
+};
 
 const trekColors = [
   { bg: 'bg-emerald-100', text: 'text-emerald-800', dot: 'bg-emerald-500', border: 'border-emerald-200' },
@@ -68,6 +73,8 @@ export default function DeparturesPage() {
       itinerary: dep.itinerary || '',
       thingsToCarry: dep.thingsToCarry || '',
       contact: dep.contact || '',
+      whatsappGroupInviteLink: dep.whatsappGroupInviteLink || '',
+      whatsappGroupName: dep.whatsappGroupName || '',
       nights: dep.nights != null ? String(dep.nights) : '',
       days: dep.days != null ? String(dep.days) : '',
       boardingPointIds: dep.boardingPointIds || [],
@@ -94,16 +101,31 @@ export default function DeparturesPage() {
     const nightsNum = parseInt(formData.nights, 10) || 0;
     const daysNum = parseInt(formData.days, 10) || 0;
     const saveData = {
-      ...formData,
       trekName: trek?.name || formData.trekName || '',
+      cityId: formData.cityId || undefined,
       cityName: city?.name || formData.cityName || '',
+      startDate: formData.startDate,
+      endDate: formData.endDate,
       nights: nightsNum,
       days: daysNum,
       duration: `${nightsNum} Night${nightsNum !== 1 ? 's' : ''} / ${daysNum} Day${daysNum !== 1 ? 's' : ''}`,
       capacity: parseInt(formData.capacity, 10),
       price: parseFloat(formData.price),
+      itinerary: formData.itinerary || undefined,
+      thingsToCarry: formData.thingsToCarry || undefined,
+      contact: formData.contact || undefined,
+      meetingPoint: formData.meetingPoint || undefined,
+      guideId: formData.guideId || undefined,
+      guideName: formData.guideName || undefined,
+      status: formData.status,
+      whatsappGroupInviteLink: formData.whatsappGroupInviteLink?.trim() || undefined,
+      whatsappGroupName: formData.whatsappGroupName?.trim() || undefined,
       boardingPointIds: formData.boardingPointIds || [],
     };
+
+    if (!editingDep) {
+      saveData.trekId = formData.trekId;
+    }
     try {
       if (editingDep) {
         await updateDep(editingDep.id || editingDep._id, saveData);
@@ -540,6 +562,25 @@ export default function DeparturesPage() {
                 </div>
               )}
 
+              {selectedDep.whatsappGroupInviteLink && (
+                <div>
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">WhatsApp Group</h4>
+                  <div className="bg-slate-50 rounded-xl p-3 text-sm text-slate-700 space-y-1.5">
+                    {selectedDep.whatsappGroupName && (
+                      <p className="font-semibold text-slate-800">{selectedDep.whatsappGroupName}</p>
+                    )}
+                    <a
+                      href={selectedDep.whatsappGroupInviteLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary-600 break-all hover:text-primary-700 underline"
+                    >
+                      {selectedDep.whatsappGroupInviteLink}
+                    </a>
+                  </div>
+                </div>
+              )}
+
               {/* Contact */}
               {selectedDep.contact && (
                 <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -679,6 +720,8 @@ export default function DeparturesPage() {
           </div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Meeting Point</label><input value={formData.meetingPoint} onChange={(e) => setFormData({ ...formData, meetingPoint: e.target.value })} className="input-field" placeholder="e.g. Pune Railway Station" /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Contact Phone</label><input value={formData.contact} onChange={(e) => setFormData({ ...formData, contact: e.target.value.replace(/\D/g, '').slice(0, 10) })} maxLength={10} className="input-field" placeholder="e.g. 9876543210" /></div>
+          <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Group Invite Link</label><input value={formData.whatsappGroupInviteLink || ''} onChange={(e) => setFormData({ ...formData, whatsappGroupInviteLink: e.target.value })} className="input-field" placeholder="https://chat.whatsapp.com/xxxxxxxxxxxx" /></div>
+          <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Group Name (optional)</label><input value={formData.whatsappGroupName || ''} onChange={(e) => setFormData({ ...formData, whatsappGroupName: e.target.value })} className="input-field" placeholder="e.g. Harishchandragad Batch 12 Apr" /></div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Itinerary</label><textarea value={formData.itinerary} onChange={(e) => setFormData({ ...formData, itinerary: e.target.value })} className="input-field min-h-[100px] resize-none" placeholder="Day 1: ...\nDay 2: ..." /></div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Things to Carry</label><textarea value={formData.thingsToCarry} onChange={(e) => setFormData({ ...formData, thingsToCarry: e.target.value })} className="input-field min-h-[60px] resize-none" placeholder="Torch, water, raincoat..." /></div>
         </div>

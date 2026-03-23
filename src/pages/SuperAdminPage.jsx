@@ -3,18 +3,21 @@ import { useQuery, useMutation } from '@apollo/client/react';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import {
-  SUPER_ADMIN_DASHBOARD, GET_ALL_TENANTS, GET_ALL_USERS_ADMIN, GET_PLATFORM_ACTIVITY_LOG
+  SUPER_ADMIN_DASHBOARD, GET_ALL_TENANTS, GET_ALL_USERS_ADMIN, GET_PLATFORM_ACTIVITY_LOG,
+  GET_CONTACT_INQUIRIES
 } from '../graphql/queries';
 import {
   CREATE_TENANT, SUSPEND_TENANT, ACTIVATE_TENANT, DELETE_TENANT,
-  UPDATE_TENANT_PLAN, CREATE_ADMIN_USER, DELETE_USER_ADMIN, RESET_USER_PASSWORD
+  UPDATE_TENANT_PLAN, CREATE_ADMIN_USER, DELETE_USER_ADMIN, RESET_USER_PASSWORD,
+  UPDATE_CONTACT_STATUS, DELETE_CONTACT_INQUIRY
 } from '../graphql/mutations';
 import {
   Shield, Building2, Users, DollarSign, TrendingUp, Activity,
   Plus, Search, ChevronDown, MoreVertical, AlertTriangle, CheckCircle,
   XCircle, Clock, Crown, Zap, Star, RefreshCw, Trash2, Lock, UserPlus,
   Package, Globe, Mail, Phone, Calendar, Edit3, Eye, LogOut, X, BookOpen,
-  GitBranch, Database, Layers, Key, FileCode, ArrowRight, Server, Monitor
+  GitBranch, Database, Layers, Key, FileCode, ArrowRight, Server, Monitor,
+  MessageSquare
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -319,6 +322,8 @@ export default function SuperAdminPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPlan, setFilterPlan] = useState('');
   const [showCreateTenant, setShowCreateTenant] = useState(false);
+  const [filterContactStatus, setFilterContactStatus] = useState('');
+  const [searchContacts, setSearchContacts] = useState('');
 
   // Redirect non-superadmins
   if (user?.role !== 'superadmin') return <Navigate to="/dashboard" replace />;
@@ -344,10 +349,21 @@ export default function SuperAdminPage() {
   const allUsers = usersData?.getAllUsers || [];
   const activityLog = activityData?.getPlatformActivityLog || [];
 
+  const { data: contactsData, loading: contactsLoading, refetch: refetchContacts } = useQuery(GET_CONTACT_INQUIRIES, {
+    variables: { status: filterContactStatus || undefined, search: searchContacts || undefined },
+    skip: activeTab !== 'contacts',
+    errorPolicy: 'all',
+  });
+  const [updateContactStatus] = useMutation(UPDATE_CONTACT_STATUS, { onCompleted: refetchContacts, onError: e => alert(e.message) });
+  const [deleteContactInquiry] = useMutation(DELETE_CONTACT_INQUIRY, { onCompleted: refetchContacts, onError: e => alert(e.message) });
+
+  const contacts = contactsData?.getContactInquiries || [];
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Activity },
     { id: 'tenants', label: 'Companies', icon: Building2 },
     { id: 'users', label: 'Users', icon: Users },
+    { id: 'contacts', label: 'Contacts', icon: MessageSquare },
     { id: 'activity', label: 'Activity Log', icon: Clock },
     { id: 'docs', label: 'Documentation', icon: BookOpen },
   ];
@@ -696,6 +712,106 @@ export default function SuperAdminPage() {
               ))}
               {activityLog.length === 0 && (
                 <div className="text-center text-sm text-slate-400 py-12">No activity yet</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── CONTACTS TAB ──────────────────────────────────────── */}
+        {activeTab === 'contacts' && (
+          <div className="space-y-4">
+            {/* Filters */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-wrap gap-3 items-center">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Search contacts…"
+                  value={searchContacts}
+                  onChange={(e) => setSearchContacts(e.target.value)}
+                />
+              </div>
+              <select
+                className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none"
+                value={filterContactStatus}
+                onChange={(e) => setFilterContactStatus(e.target.value)}
+              >
+                <option value="">All Status</option>
+                <option value="new">New</option>
+                <option value="read">Read</option>
+                <option value="replied">Replied</option>
+              </select>
+              <button onClick={() => refetchContacts()} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+                <RefreshCw className="w-4 h-4" /> Refresh
+              </button>
+            </div>
+
+            {/* Table */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              {contactsLoading ? (
+                <div className="flex items-center justify-center h-40">
+                  <RefreshCw className="w-5 h-5 text-slate-400 animate-spin" />
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100">
+                      <th className="text-left text-xs font-semibold text-slate-500 px-5 py-3">Name</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Email</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Phone</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Message</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Status</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Date</th>
+                      <th className="px-3 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {contacts.map((c) => (
+                      <tr key={c._id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                              {c.name?.[0]?.toUpperCase()}
+                            </div>
+                            <span className="text-sm font-semibold text-slate-900">{c.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 text-sm text-slate-600">{c.email || '—'}</td>
+                        <td className="px-3 py-4 text-sm text-slate-600">{c.phone || '—'}</td>
+                        <td className="px-3 py-4">
+                          <p className="text-sm text-slate-600 line-clamp-2 max-w-[200px]">{c.message}</p>
+                        </td>
+                        <td className="px-3 py-4">
+                          <select
+                            value={c.status}
+                            onChange={(e) => updateContactStatus({ variables: { id: c._id, status: e.target.value } })}
+                            className={`text-xs font-semibold px-2 py-1 rounded-full border-none cursor-pointer ${c.status === 'new' ? 'bg-blue-100 text-blue-700' : c.status === 'read' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}
+                          >
+                            <option value="new">New</option>
+                            <option value="read">Read</option>
+                            <option value="replied">Replied</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-4 text-xs text-slate-400">{safeDate(c.createdAt)}</td>
+                        <td className="px-3 py-4">
+                          <button
+                            onClick={() => { if (window.confirm('Delete this inquiry?')) deleteContactInquiry({ variables: { id: c._id } }); }}
+                            className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {contacts.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="text-center text-sm text-slate-400 py-12">
+                          No contact inquiries found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               )}
             </div>
           </div>

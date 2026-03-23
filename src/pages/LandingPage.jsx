@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useMutation } from '@apollo/client/react';
+import { CREATE_CONTACT_INQUIRY } from '../graphql/mutations';
 import {
   Mountain, ArrowRight, Check, Star, BarChart3, Users, CalendarRange,
   CreditCard, MessageSquare, Shield, Zap, Globe, ChevronDown, Menu, X,
   BookOpen, TrendingUp, Bell, Settings, Megaphone, Phone, Send,
   Smile, Paperclip, Camera, Mic, ChevronLeft, MoreVertical, Video,
-  CheckCheck, Bot, Sparkles, Reply, Clock
+  CheckCheck, Bot, Sparkles, Reply, Clock, Workflow, GitBranch, Mail, MapPin,
+  List
 } from 'lucide-react';
 
 const features = [
@@ -66,7 +69,7 @@ const faqs = [
 
 /* ── WhatsApp Chat Messages ── */
 const chatMessages = [
-  { from: 'bot', text: 'Hi! 👋 Welcome to Sahyadri Adventures.\nHow can I help you today?', time: '10:30 AM', typingDelay: 1200 },
+  { from: 'bot', text: 'Hi! 👋 Welcome to TrekOps.\nHow can I help you today?', time: '10:30 AM', typingDelay: 1200 },
   { from: 'user', text: 'Hey! What treks do you have this weekend?', time: '10:31 AM', typingDelay: 900 },
   { from: 'bot', text: 'We have 3 amazing options! 🏔️\n\n1️⃣ Kalsubai Sunrise Trek\n2️⃣ Rajmachi Fort Night Trek\n3️⃣ Lohagad Monsoon Trek\n\nWhich one interests you?', time: '10:31 AM', typingDelay: 1800 },
   { from: 'user', text: 'Kalsubai sounds great! Details please 🙏', time: '10:32 AM', typingDelay: 800 },
@@ -247,7 +250,7 @@ function IPhoneMockup() {
               <Mountain style={{ width: '15px', height: '15px', color: 'white' }} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', lineHeight: 1.2 }}>Sahyadri Adventures</div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', lineHeight: 1.2 }}>TrekOps</div>
               <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.75)', lineHeight: 1.3, transition: 'all 0.2s' }}>
                 {isTyping ? 'typing...' : 'online'}
               </div>
@@ -353,6 +356,144 @@ function IPhoneMockup() {
   );
 }
 
+/* ── Contact Section Component ── */
+function ContactSection() {
+  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
+  const [submitted, setSubmitted] = useState(false);
+  const [createContact, { loading }] = useMutation(CREATE_CONTACT_INQUIRY, {
+    onCompleted: () => setSubmitted(true),
+    onError: (e) => alert(e.message || 'Something went wrong'),
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.message.trim()) return;
+    createContact({ variables: { input: { ...form } } });
+  };
+
+  const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }));
+
+  return (
+    <section id="contact" className="py-20 sm:py-28 bg-gradient-to-b from-slate-50 to-white relative overflow-hidden">
+      <div className="absolute top-20 right-10 w-72 h-72 bg-primary-100/20 rounded-full blur-3xl" />
+      <div className="absolute bottom-10 left-10 w-60 h-60 bg-emerald-100/20 rounded-full blur-3xl" />
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center max-w-2xl mx-auto mb-16">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary-50 border border-primary-200 rounded-full text-sm font-semibold text-primary-700 mb-6">
+            <Mail className="w-3.5 h-3.5" /> Get in Touch
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+            Contact Us
+          </h2>
+          <p className="mt-4 text-lg text-slate-500">
+            Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-5xl mx-auto">
+          {/* Left — Contact Info */}
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8">
+              <h3 className="text-lg font-bold text-slate-900 mb-6">Contact Information</h3>
+              <div className="space-y-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-5 h-5 text-primary-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Email</p>
+                    <a href="mailto:contact@trekops.in" className="text-sm text-primary-600 hover:text-primary-700 transition-colors">contact@trekops.in</a>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <Phone className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Phone</p>
+                    <a href="tel:+918464892914" className="text-sm text-slate-600 hover:text-slate-900 transition-colors block">+91 84648 92914</a>
+                    <a href="tel:+919226001143" className="text-sm text-slate-600 hover:text-slate-900 transition-colors block">+91 92260 01143</a>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <MapPin className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Location</p>
+                    <p className="text-sm text-slate-600">India 🇮🇳</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick links */}
+            <div className="bg-gradient-to-br from-primary-600 to-emerald-500 rounded-2xl p-6 text-white">
+              <h4 className="text-base font-bold mb-3">Ready to get started?</h4>
+              <p className="text-sm text-white/80 mb-4">Start your free 30-day trial — no credit card required.</p>
+              <div className="flex gap-3">
+                <a href="https://wa.me/918464892914" target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
+                </a>
+                <a href="mailto:contact@trekops.in" className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5" /> Email Us
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Right — Contact Form */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8">
+            {submitted ? (
+              <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4">
+                  <Check className="w-8 h-8 text-emerald-600" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Message Sent!</h3>
+                <p className="text-sm text-slate-500 mb-6">We'll get back to you within 24 hours.</p>
+                <button onClick={() => { setSubmitted(false); setForm({ name: '', email: '', phone: '', message: '' }); }}
+                  className="text-sm text-primary-600 hover:text-primary-700 font-medium">
+                  Send another message
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Send us a Message</h3>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Name *</label>
+                  <input type="text" value={form.name} onChange={f('name')} required
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all" placeholder="Your name" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
+                    <input type="email" value={form.email} onChange={f('email')}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all" placeholder="you@company.com" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Phone</label>
+                    <input type="tel" value={form.phone} onChange={f('phone')}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all" placeholder="+91 98765 43210" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Message *</label>
+                  <textarea rows={4} value={form.message} onChange={f('message')} required
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all resize-none" placeholder="Tell us about your trekking business..." />
+                </div>
+                <button type="submit" disabled={loading}
+                  className="w-full px-6 py-3.5 text-base font-semibold text-white bg-gradient-to-r from-primary-600 to-emerald-500 rounded-xl hover:shadow-lg hover:shadow-primary-500/25 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50">
+                  {loading ? 'Sending...' : <><Send className="w-4 h-4" /> Send Message</>}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -372,10 +513,10 @@ export default function LandingPage() {
             </div>
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Features</a>
+              <a href="#flow-builder" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Flow Builder</a>
               <a href="#whatsapp" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">WhatsApp</a>
               <a href="#pricing" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Pricing</a>
-              <a href="#testimonials" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Testimonials</a>
-              <a href="#faq" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">FAQ</a>
+              <a href="#contact" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">Contact</a>
             </div>
             <div className="hidden md:flex items-center gap-3">
               <button onClick={() => navigate('/login')} className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors">
@@ -496,6 +637,145 @@ export default function LandingPage() {
                 <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Flow Builder Demo ── */}
+      <section id="flow-builder" className="py-20 sm:py-28 bg-gradient-to-b from-slate-50 via-indigo-50/30 to-white relative overflow-hidden">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-100/30 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-violet-100/20 rounded-full blur-3xl" />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full text-sm font-semibold text-indigo-700 mb-6">
+              <Workflow className="w-3.5 h-3.5" /> Visual Flow Builder
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight leading-tight">
+              Build <span className="bg-gradient-to-r from-indigo-600 to-violet-500 bg-clip-text text-transparent">WhatsApp Chatbot Flows</span> Visually
+            </h2>
+            <p className="mt-5 text-lg text-slate-600 leading-relaxed">
+              Drag and drop conversation nodes, connect them visually, and see a live WhatsApp preview — all without writing a single line of code.
+            </p>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-12 items-center">
+            {/* Left — Flow Builder Visual Demo */}
+            <div className="flex-1 relative">
+              <div className="bg-white/70 backdrop-blur-xl border border-slate-200/60 rounded-2xl shadow-2xl shadow-indigo-200/30 overflow-hidden">
+                {/* Toolbar */}
+                <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 bg-white/80">
+                  <div className="flex gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-red-400" />
+                    <div className="w-3 h-3 rounded-full bg-amber-400" />
+                    <div className="w-3 h-3 rounded-full bg-green-400" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500 ml-2">TrekOps Flow Builder</span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">✓ Auto-saved</span>
+                  </div>
+                </div>
+                {/* Canvas */}
+                <div className="p-6 min-h-[340px] relative" style={{ background: 'radial-gradient(circle at 20px 20px, #e2e8f0 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
+                  {/* Start Node */}
+                  <div className="flow-node-demo absolute" style={{ left: '8%', top: '25%' }}>
+                    <div className="bg-white rounded-xl border-2 border-emerald-300 shadow-lg shadow-emerald-100/50 px-4 py-3 min-w-[140px]">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-5 h-5 rounded-md bg-emerald-100 flex items-center justify-center">
+                          <Zap className="w-3 h-3 text-emerald-600" />
+                        </div>
+                        <span className="text-[11px] font-bold text-emerald-700">START</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">hi, hello, hey</p>
+                    </div>
+                  </div>
+                  {/* Connection Line 1 */}
+                  <svg className="absolute" style={{ left: '22%', top: '38%', width: '120px', height: '60px' }} viewBox="0 0 120 60">
+                    <path d="M 0 5 C 60 5, 60 55, 120 55" stroke="#818cf8" strokeWidth="2" fill="none" strokeDasharray="4 3" className="flow-line-anim" />
+                    <circle cx="120" cy="55" r="3" fill="#818cf8" />
+                  </svg>
+                  {/* Buttons Node */}
+                  <div className="flow-node-demo absolute" style={{ left: '38%', top: '50%', animationDelay: '0.5s' }}>
+                    <div className="bg-white rounded-xl border-2 border-amber-300 shadow-lg shadow-amber-100/50 px-4 py-3 min-w-[150px]">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-5 h-5 rounded-md bg-amber-100 flex items-center justify-center">
+                          <List className="w-3 h-3 text-amber-600" />
+                        </div>
+                        <span className="text-[11px] font-bold text-amber-700">BUTTONS</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mb-1.5">Choose your city 🏙️</p>
+                      <div className="flex gap-1">
+                        <span className="text-[8px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-medium">Pune</span>
+                        <span className="text-[8px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-medium">Mumbai</span>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Connection Line 2 */}
+                  <svg className="absolute" style={{ left: '58%', top: '30%', width: '100px', height: '40px' }} viewBox="0 0 100 40">
+                    <path d="M 0 35 C 50 35, 50 5, 100 5" stroke="#818cf8" strokeWidth="2" fill="none" strokeDasharray="4 3" className="flow-line-anim" style={{ animationDelay: '1s' }} />
+                    <circle cx="100" cy="5" r="3" fill="#818cf8" />
+                  </svg>
+                  {/* Dynamic List Node */}
+                  <div className="flow-node-demo absolute" style={{ left: '65%', top: '12%', animationDelay: '1s' }}>
+                    <div className="bg-white rounded-xl border-2 border-cyan-300 shadow-lg shadow-cyan-100/50 px-4 py-3 min-w-[150px]">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-5 h-5 rounded-md bg-cyan-100 flex items-center justify-center">
+                          <BarChart3 className="w-3 h-3 text-cyan-600" />
+                        </div>
+                        <span className="text-[11px] font-bold text-cyan-700">DYNAMIC LIST</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">Source: Live Treks</p>
+                      <span className="text-[8px] bg-cyan-50 text-cyan-600 px-1.5 py-0.5 rounded font-medium mt-1 inline-block">from DB</span>
+                    </div>
+                  </div>
+                  {/* Connection Line 3 */}
+                  <svg className="absolute" style={{ left: '72%', top: '40%', width: '80px', height: '50px' }} viewBox="0 0 80 50">
+                    <path d="M 0 0 C 40 0, 40 50, 80 50" stroke="#818cf8" strokeWidth="2" fill="none" strokeDasharray="4 3" className="flow-line-anim" style={{ animationDelay: '1.5s' }} />
+                    <circle cx="80" cy="50" r="3" fill="#818cf8" />
+                  </svg>
+                  {/* End Node */}
+                  <div className="flow-node-demo absolute" style={{ left: '78%', top: '65%', animationDelay: '1.5s' }}>
+                    <div className="bg-white rounded-xl border-2 border-rose-300 shadow-lg shadow-rose-100/50 px-4 py-3 min-w-[130px]">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-5 h-5 rounded-md bg-rose-100 flex items-center justify-center">
+                          <Check className="w-3 h-3 text-rose-600" />
+                        </div>
+                        <span className="text-[11px] font-bold text-rose-700">BOOKING</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">✅ Payment link sent</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right — Feature Highlights */}
+            <div className="flex-1 max-w-lg">
+              <div className="space-y-5">
+                {[
+                  { icon: GitBranch, title: 'Drag & Drop Nodes', desc: 'Build complex conversation flows visually — Start, Text, Buttons, Lists, Dynamic Data, and more.', color: 'bg-indigo-100 text-indigo-600' },
+                  { icon: BarChart3, title: 'Live Data from Your Database', desc: 'Pull cities, treks, departures, and dates directly from your TrekOps data — always up to date.', color: 'bg-cyan-100 text-cyan-600' },
+                  { icon: Sparkles, title: 'Instant WhatsApp Preview', desc: 'Watch your flow come alive in a real-time WhatsApp chat simulator before going live.', color: 'bg-violet-100 text-violet-600' },
+                  { icon: Shield, title: 'One-Click Deploy', desc: 'Save your flow and it instantly goes live on your WhatsApp Business number. Zero downtime.', color: 'bg-emerald-100 text-emerald-600' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-4 p-4 rounded-xl hover:bg-white/80 transition-colors">
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${item.color}`}>
+                      <item.icon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 mb-1">{item.title}</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => navigate('/login')}
+                className="mt-8 px-8 py-3.5 text-base font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-500 rounded-xl hover:shadow-xl hover:shadow-indigo-500/25 transition-all duration-300 inline-flex items-center gap-2 group"
+              >
+                Try Flow Builder
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -729,6 +1009,9 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Contact Section ── */}
+      <ContactSection />
+
       {/* ── Footer ── */}
       <footer className="bg-slate-900 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -741,6 +1024,11 @@ export default function LandingPage() {
                 <span className="text-lg font-bold">TrekOps</span>
               </div>
               <p className="text-sm text-slate-400 leading-relaxed">The complete ERP for trekking operators. Built in India 🇮🇳<br/><span className="text-slate-500">trekops.in</span></p>
+              <div className="mt-3 space-y-1">
+                <a href="mailto:contact@trekops.in" className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2"><Mail className="w-3.5 h-3.5" /> contact@trekops.in</a>
+                <a href="tel:+918464892914" className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2"><Phone className="w-3.5 h-3.5" /> +91 84648 92914</a>
+                <a href="tel:+919226001143" className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2"><Phone className="w-3.5 h-3.5" /> +91 92260 01143</a>
+              </div>
             </div>
             <div>
               <h4 className="text-sm font-semibold text-slate-300 mb-4">Product</h4>
@@ -823,6 +1111,23 @@ export default function LandingPage() {
         @keyframes waTypingBounce {
           0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
           30%           { transform: translateY(-5px); opacity: 1; }
+        }
+
+        /* Flow builder node animation */
+        .flow-node-demo {
+          animation: flowNodeAppear 0.6s ease-out forwards;
+          opacity: 0;
+        }
+        @keyframes flowNodeAppear {
+          from { opacity: 0; transform: translateY(12px) scale(0.9); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .flow-line-anim {
+          stroke-dashoffset: 80;
+          animation: flowLineDash 2s linear infinite;
+        }
+        @keyframes flowLineDash {
+          to { stroke-dashoffset: 0; }
         }
       `}</style>
     </div>

@@ -1,5 +1,85 @@
 import { gql } from '@apollo/client';
 
+// ─── WhatsApp Visual Flow Builder Query ──────────────
+export const GET_FLOW_DEFINITION = gql`
+  query GetFlowDefinition {
+    getFlowDefinition {
+      _id
+      updatedAt
+      nodes {
+        id
+        type
+        position { x y }
+        data {
+          label
+          message
+          buttons { handle label }
+          listButtonLabel
+          sectionTitle
+          rows { handle title description }
+          dynamicSource
+          dynamicButtonLabel
+          dynamicSectionTitle
+          noDataMessage
+          displayMode
+          inputVariable
+          fallbackMessage
+        }
+      }
+      edges {
+        id
+        source
+        sourceHandle
+        target
+      }
+    }
+  }
+`;
+
+// ─── WhatsApp Flow Config Query ──────────────────────
+export const GET_FLOW_CONFIG = gql`
+  query GetFlowConfig {
+    getFlowConfig {
+      _id
+      greetingKeywords
+      cityStepMessage
+      cityStepButtonLabel
+      cityStepSectionTitle
+      browseTypeMessage
+      browseTreksLabel
+      browseDatesLabel
+      trekListMessage
+      trekListButtonLabel
+      trekListSectionTitle
+      dateListMessage
+      dateListButtonLabel
+      dateListSectionTitle
+      departureDateListMessage
+      departureDateListButtonLabel
+      departureDateListSectionTitle
+      trekOnDateListMessage
+      trekOnDateListButtonLabel
+      trekOnDateListSectionTitle
+      groupSizeMessage
+      discountTiers {
+        id
+        label
+        min
+        max
+        discount
+      }
+      exactCountPrompt
+      supportMessage
+      noCitiesMessage
+      noTreksMessage
+      noDatesMessage
+      noTreksOnDateMessage
+      fallbackMessage
+      updatedAt
+    }
+  }
+`;
+
 // ─── Guide Queries ───────────────────────────────────
 export const GET_GUIDES = gql`
   query GetGuides {
@@ -327,6 +407,8 @@ export const GET_DEPARTURES = gql`
     thingsToCarry
     contact
     meetingPoint
+    whatsappGroupInviteLink
+    whatsappGroupName
     guideId
     guideName
     status
@@ -358,6 +440,8 @@ export const GET_DEPARTURE = gql`
     thingsToCarry
     contact
     meetingPoint
+    whatsappGroupInviteLink
+    whatsappGroupName
     guideId
     guideName
     status
@@ -386,6 +470,8 @@ export const GET_PARTICIPANTS_BY_DEPARTURE = gql`
       phone
       boardingPointId
       boardingPointName
+      bloodGroup
+      weight
       createdAt
     }
   }
@@ -714,4 +800,20 @@ export const GET_ALL_PARTICIPANTS = gql`
     createdAt
   }
 }
+`;
+
+// ─── Contact Inquiry Queries ─────────────────────────
+export const GET_CONTACT_INQUIRIES = gql`
+  query GetContactInquiries($status: String, $search: String) {
+    getContactInquiries(status: $status, search: $search) {
+      _id
+      name
+      email
+      phone
+      message
+      status
+      createdAt
+      updatedAt
+    }
+  }
 `;
