@@ -10,7 +10,7 @@ import StatusBadge from '../components/ui/StatusBadge';
 import DatePickerInput from '../components/ui/DatePickerInput';
 import { format } from 'date-fns';
 import { Search, Plus, Edit, Trash2, Download, FileText, CreditCard, RotateCcw } from 'lucide-react';
-import DatePickerInput from '../components/ui/DatePickerInput';
+
 
 export default function FinancePage() {
   const { invoices: invoicesList, payments: paymentsList, refunds: refundsList, loading, error, addInvoice: addInv, updateInvoice: updateInv, removeInvoice: removeInv } = useFinance();
