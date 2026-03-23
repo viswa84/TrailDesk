@@ -203,17 +203,17 @@ export default function DeparturesPage() {
           <h1 className="page-title">Departures & Batches</h1>
           <p className="page-subtitle mt-1">Manage inventory, guide assignments, and capacity.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex bg-slate-100 rounded-lg p-1">
-            <button onClick={() => setView('list')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${view === 'list' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
-              <List className="w-4 h-4" /> List View
+            <button onClick={() => setView('list')} className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${view === 'list' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+              <List className="w-4 h-4" /> <span className="hidden sm:inline">List</span>
             </button>
-            <button onClick={() => setView('calendar')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${view === 'calendar' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
-              <CalendarDays className="w-4 h-4" /> Calendar View
+            <button onClick={() => setView('calendar')} className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${view === 'calendar' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+              <CalendarDays className="w-4 h-4" /> <span className="hidden sm:inline">Calendar</span>
             </button>
           </div>
           <button onClick={handleAdd} className="btn-primary flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Add New Batch
+            <Plus className="w-4 h-4" /> Add Batch
           </button>
         </div>
       </div>
@@ -338,6 +338,8 @@ export default function DeparturesPage() {
       ) : (
         /* ──────────────────── CALENDAR VIEW ──────────────────── */
         <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+          <div style={{ minWidth: '640px' }}>
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
             <button onClick={() => setCalendarDate(subMonths(calendarDate, 1))} className="p-2 hover:bg-white rounded-xl transition-all duration-200 shadow-sm border border-slate-200/80 hover:shadow cursor-pointer">
               <ChevronLeft className="w-4 h-4 text-slate-600" />
@@ -466,6 +468,8 @@ export default function DeparturesPage() {
               ))}
               {Object.keys(trekColorMap).length > 6 && <span className="text-[11px] text-slate-400">+{Object.keys(trekColorMap).length - 6} more</span>}
             </div>
+          </div>
+          </div>
           </div>
         </div>
       )}

@@ -147,7 +147,7 @@ export default function BookingsPage() {
       {/* Table */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px]">
+          <table className="w-full min-w-200">
             <thead className="bg-slate-50/80">
               <tr>
                 <th className="table-header">Txn ID</th>

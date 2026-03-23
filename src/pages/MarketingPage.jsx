@@ -86,7 +86,7 @@ export default function MarketingPage() {
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px]">
+          <table className="w-full min-w-200">
             <thead className="bg-slate-50/80">
               <tr>
                 <th className="table-header">Campaign</th><th className="table-header">Platform</th>
@@ -127,7 +127,7 @@ export default function MarketingPage() {
             <input value={formData.name} onChange={e => { setFormData({...formData, name: e.target.value}); if (errors.name) setErrors({...errors, name: null}); }} className={fieldClass('name')} />
             {errMsg('name')}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Platform</label>
               <select value={formData.platform} onChange={e => setFormData({...formData, platform: e.target.value})} className="select-field">
                 {['Google Ads','Facebook','Instagram','YouTube','LinkedIn','Email'].map(p=><option key={p}>{p}</option>)}
@@ -137,7 +137,7 @@ export default function MarketingPage() {
                 {['Active','Paused','Completed'].map(s=><option key={s}>{s}</option>)}
               </select></div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Spend (₹) *</label>
               <input type="number" value={formData.spend} onChange={e => { setFormData({...formData, spend: e.target.value}); if (errors.spend) setErrors({...errors, spend: null}); }} className={fieldClass('spend')} />

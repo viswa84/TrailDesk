@@ -103,7 +103,7 @@ export default function GuidesPage() {
                     <div className="p-12 text-center text-slate-500">No guides found. Add your first guide!</div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full min-w-160">
                             <thead>
                                 <tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500 tracking-wider">
                                     <th className="px-6 py-4">Name</th>

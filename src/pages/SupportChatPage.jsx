@@ -64,13 +64,13 @@ function InteractiveButtons({ raw, isOutbound }) {
                 className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs mb-0.5
                   ${isOutbound ? 'bg-white/10' : 'bg-slate-50 border border-slate-100'}`}
               >
-                <div>
-                  <div className={`font-medium ${isOutbound ? 'text-white' : 'text-slate-700'}`}>{row.title}</div>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <div className={`font-medium truncate ${isOutbound ? 'text-white' : 'text-slate-700'}`}>{row.title}</div>
                   {row.description && (
-                    <div className={`text-[10px] mt-0.5 ${isOutbound ? 'text-white/60' : 'text-slate-400'}`}>{row.description}</div>
+                    <div className={`text-[10px] mt-0.5 truncate ${isOutbound ? 'text-white/60' : 'text-slate-400'}`}>{row.description}</div>
                   )}
                 </div>
-                <ChevronRight className={`w-3 h-3 shrink-0 ${isOutbound ? 'text-white/40' : 'text-slate-300'}`} />
+                <ChevronRight className={`w-3 h-3 shrink-0 ml-1 ${isOutbound ? 'text-white/40' : 'text-slate-300'}`} />
               </div>
             ))}
           </div>
@@ -241,8 +241,8 @@ export default function SupportChatPage() {
   };
 
   return (
-    <div className="animate-fade-in -m-6 h-[calc(100vh-64px)]">
-      <div className="flex h-full bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden mx-6 mt-6">
+    <div className="animate-fade-in -m-4 lg:-m-6 h-[calc(100vh-64px)] overflow-x-hidden">
+      <div className="flex h-full bg-white rounded-none sm:rounded-xl border-0 sm:border border-slate-200/80 shadow-sm overflow-hidden mx-0 sm:mx-4 sm:mt-4 lg:mx-6 lg:mt-6">
 
         {/* ──────── LEFT: Contact List ──────── */}
         <div className={`w-full sm:w-[340px] lg:w-[360px] border-r border-slate-100 flex flex-col shrink-0 bg-white ${showMobileChat ? 'hidden sm:flex' : 'flex'}`}>
@@ -309,7 +309,7 @@ export default function SupportChatPage() {
         </div>
 
         {/* ──────── RIGHT: Chat Area ──────── */}
-        <div className={`flex-1 flex flex-col ${showMobileChat ? 'flex' : 'hidden sm:flex'}`}>
+        <div className={`flex-1 flex flex-col min-w-0 ${showMobileChat ? 'flex' : 'hidden sm:flex'}`}>
           {activePhone ? (
             <>
               {/* Chat Header */}
@@ -336,7 +336,7 @@ export default function SupportChatPage() {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-5 py-4 bg-gradient-to-b from-slate-50 to-white">
+              <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 bg-linear-to-b from-slate-50 to-white">
                 <div className="max-w-2xl mx-auto space-y-1">
                   {messagesLoading && messages.length === 0 ? (
                     <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 text-slate-300 animate-spin" /></div>
@@ -363,7 +363,7 @@ export default function SupportChatPage() {
                           )}
                           <div className={`flex mb-2 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
                             <div
-                              className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm
+                              className={`max-w-[80%] overflow-hidden rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm
                                 ${isOutbound
                                   ? 'bg-primary-600 text-white rounded-br-md'
                                   : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-md'
@@ -411,12 +411,12 @@ export default function SupportChatPage() {
               </div>
 
               {/* Quick Replies */}
-              <div className="px-5 py-2 border-t border-slate-100 bg-white shrink-0">
+              <div className="px-3 sm:px-5 py-2 border-t border-slate-100 bg-white shrink-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">Quick:</span>
-                  <div className="flex gap-1.5 overflow-x-auto">
+                  <span className="hidden sm:block text-[10px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">Quick:</span>
+                  <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
                     {quickReplies.map(qr => (
-                      <button key={qr.label} onClick={() => setMessage(qr.label)} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full text-xs font-medium whitespace-nowrap transition-colors cursor-pointer">
+                      <button key={qr.label} onClick={() => setMessage(qr.label)} className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full text-xs font-medium whitespace-nowrap transition-colors cursor-pointer">
                         <qr.icon className="w-3 h-3" /> {qr.label}
                       </button>
                     ))}
@@ -425,10 +425,10 @@ export default function SupportChatPage() {
               </div>
 
               {/* Message Input */}
-              <div className="px-5 py-3 border-t border-slate-100 bg-white shrink-0">
-                <div className="flex items-center gap-3">
-                  <button className="p-2 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0"><Paperclip className="w-5 h-5 text-slate-400" /></button>
-                  <button className="p-2 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0"><SmilePlus className="w-5 h-5 text-slate-400" /></button>
+              <div className="px-3 sm:px-5 py-2.5 sm:py-3 border-t border-slate-100 bg-white shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button className="hidden sm:flex p-2 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0"><Paperclip className="w-5 h-5 text-slate-400" /></button>
+                  <button className="hidden sm:flex p-2 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0"><SmilePlus className="w-5 h-5 text-slate-400" /></button>
                   <input
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}

@@ -10,6 +10,7 @@ import StatusBadge from '../components/ui/StatusBadge';
 import DatePickerInput from '../components/ui/DatePickerInput';
 import { format } from 'date-fns';
 import { Search, Plus, Edit, Trash2, Download, FileText, CreditCard, RotateCcw } from 'lucide-react';
+import DatePickerInput from '../components/ui/DatePickerInput';
 
 export default function FinancePage() {
   const { invoices: invoicesList, payments: paymentsList, refunds: refundsList, loading, error, addInvoice: addInv, updateInvoice: updateInv, removeInvoice: removeInv } = useFinance();
@@ -79,7 +80,7 @@ export default function FinancePage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-0">
+      <div className="flex border-b border-slate-200 gap-0 overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -106,7 +107,7 @@ export default function FinancePage() {
       {activeTab === 'invoices' && (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full min-w-175">
               <thead className="bg-slate-50/80">
                 <tr>
                   <th className="table-header">Invoice #</th>
@@ -165,7 +166,7 @@ export default function FinancePage() {
       {activeTab === 'payments' && (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full min-w-175">
               <thead className="bg-slate-50/80">
                 <tr>
                   <th className="table-header">Payment ID</th>
@@ -199,7 +200,7 @@ export default function FinancePage() {
       {activeTab === 'refunds' && (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full min-w-175">
               <thead className="bg-slate-50/80">
                 <tr>
                   <th className="table-header">Refund ID</th>
@@ -237,7 +238,7 @@ export default function FinancePage() {
             <input value={formData.customerName || ''} onChange={(e) => { setFormData({ ...formData, customerName: e.target.value }); if (errors.customerName) setErrors({ ...errors, customerName: null }); }} className={fieldClass('customerName')} />
             {errMsg('customerName')}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹) *</label>
               <input type="number" value={formData.amount || ''} onChange={(e) => { setFormData({ ...formData, amount: e.target.value }); if (errors.amount) setErrors({ ...errors, amount: null }); }} className={fieldClass('amount')} />

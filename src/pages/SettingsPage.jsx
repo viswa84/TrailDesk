@@ -236,7 +236,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-3xl">
+    <div className="space-y-6 animate-fade-in w-full max-w-3xl">
       <div><h1 className="page-title">Settings</h1><p className="page-subtitle mt-1">Manage your account and preferences</p></div>
 
 

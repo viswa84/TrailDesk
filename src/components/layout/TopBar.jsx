@@ -129,7 +129,7 @@ export default function TopBar({ onMenuToggle }) {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl border border-slate-200 shadow-lg animate-scale-in">
+              <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-80 bg-white rounded-xl border border-slate-200 shadow-lg animate-scale-in">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                   <h3 className="font-semibold text-sm text-slate-900">Notifications</h3>
                   {unreadCount > 0 && (
