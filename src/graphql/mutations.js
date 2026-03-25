@@ -854,3 +854,34 @@ export const UPDATE_COMPANY_PROFILE = gql`
     }
   }
 `;
+
+// ─── Contact Inquiry Mutations ───────────────────────
+export const CREATE_CONTACT_INQUIRY = gql`
+  mutation CreateContactInquiry($input: CreateContactInput!) {
+    createContactInquiry(input: $input) {
+      _id
+      name
+      email
+      phone
+      message
+      status
+      createdAt
+    }
+  }
+`;
+
+export const UPDATE_CONTACT_STATUS = gql`
+  mutation UpdateContactStatus($id: ID!, $status: String!) {
+    updateContactStatus(id: $id, status: $status) {
+      _id
+      status
+      updatedAt
+    }
+  }
+`;
+
+export const DELETE_CONTACT_INQUIRY = gql`
+  mutation DeleteContactInquiry($id: ID!) {
+    deleteContactInquiry(id: $id)
+  }
+`;

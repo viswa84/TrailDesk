@@ -10,20 +10,20 @@ export default function ArchitectureDoc() {
     // In a real app we would load this from an API endpoint,
     // but for now since we built it as a markdown file, we can just hardcode the text
     // we want the admin to see so they have full reference.
-    const markdown = `# TrailDesk SaaS — Architecture & Admin Guide
+    const markdown = `# TrekOps SaaS — Architecture & Admin Guide
 
 ## 1. Authentication System
-TrailDesk uses a custom JSON Web Token (JWT) based authentication system designed for a multi-tenant environment.
+TrekOps uses a custom JSON Web Token (JWT) based authentication system designed for a multi-tenant environment.
 
 ### 1.1 Auth Flow
 1. **Login Trigger**: User submits phone + password.
 2. **Backend Verification**: \`login\` mutation verifies bcrypt password and checks if the user's \`Tenant\` is suspended.
 3. **Token Generation**: Backend generates a JWT containing: \`{ userId, tenantId, role }\`
-4. **Token Storage**: Frontend stores the JWT in \`localStorage\` under \`traildesk_token\`.
+4. **Token Storage**: Frontend stores the JWT in \`localStorage\` under \`trekops_token\`.
 5. **Request Auth**: Apollo Client attaches \`Authorization: Bearer <token>\` to every GraphQL request.
 
 ## 2. Multi-Tenancy (Data Isolation)
-TrailDesk uses a **Shared Database / Shared Schema** approach.
+TrekOps uses a **Shared Database / Shared Schema** approach.
 
 ### 2.1 The Rules of Isolation
 1. Every standard document (Trek, Booking, Customer, Invoice, etc.) MUST have a \`tenantId\` field referencing the \`Tenant\` collection.

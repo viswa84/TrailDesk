@@ -801,3 +801,19 @@ export const GET_ALL_PARTICIPANTS = gql`
   }
 }
 `;
+
+// ─── Contact Inquiry Queries ─────────────────────────
+export const GET_CONTACT_INQUIRIES = gql`
+  query GetContactInquiries($status: String, $search: String) {
+    getContactInquiries(status: $status, search: $search) {
+      _id
+      name
+      email
+      phone
+      message
+      status
+      createdAt
+      updatedAt
+    }
+  }
+`;

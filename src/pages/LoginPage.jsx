@@ -97,7 +97,7 @@ export default function LoginPage() {
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
               <Mountain className="w-7 h-7 text-white" />
             </div>
-            <span className="text-2xl font-bold text-white">TrailDesk</span>
+            <span className="text-2xl font-bold text-white">TrekOps</span>
           </div>
           <h2 className="text-4xl font-bold text-white mb-4 leading-tight">
             Manage your treks.<br />Effortlessly.
@@ -128,7 +128,7 @@ export default function LoginPage() {
             <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center">
               <Mountain className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-slate-900">TrailDesk</span>
+            <span className="text-xl font-bold text-slate-900">TrekOps</span>
           </div>
 
           {/* Toggle */}
