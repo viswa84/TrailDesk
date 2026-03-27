@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import {
-  Building2, Upload, Save, Loader2, Image, FileSignature,
+  Building2, Save, Loader2, Image, FileSignature,
   Phone, Mail, Globe, MapPin, Landmark, FileText, Info, X, CheckCircle
 } from 'lucide-react';
 import { GET_COMPANY_PROFILE } from '../graphql/queries';
 import { SAVE_COMPANY_PROFILE } from '../graphql/mutations';
+import FileUpload from '../components/ui/FileUpload';
 
 const TABS = [
   { id: 'brand',   label: 'Brand & Identity',  icon: Building2 },
@@ -30,29 +31,11 @@ function getToken() {
   return localStorage.getItem('trekops_token') || '';
 }
 
-async function uploadImage(file, type) {
-  const field = type === 'logo' ? 'logo' : 'signature';
-  const endpoint = `${API_BASE}/api/company/upload-${type}`;
-  const fd = new FormData();
-  fd.append(field, file);
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${getToken()}` },
-    body: fd,
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || `Upload failed`);
-  return json.url; // e.g. /uploads/logos/logos-xxx.png
-}
 
 export default function CompanyProfilePage() {
   const [activeTab, setActiveTab] = useState('brand');
   const [form, setForm] = useState(EMPTY);
-  const [logoPreview, setLogoPreview] = useState(null);
-  const [sigPreview, setSigPreview] = useState(null);
-  const [logoUploading, setLogoUploading] = useState(false);
-  const [sigUploading, setSigUploading] = useState(false);
-  const [toast, setToast] = useState(null); // { type: 'success'|'error', msg }
+  const [toast, setToast] = useState(null);
 
   const logoInputRef = useRef(null);
   const sigInputRef = useRef(null);
@@ -98,8 +81,9 @@ export default function CompanyProfilePage() {
         logoUrl:             p.logoUrl || '',
         signatureUrl:        p.signatureUrl || '',
       });
-      if (p.logoUrl) setLogoPreview(`${API_BASE}${p.logoUrl}`);
-      if (p.signatureUrl) setSigPreview(`${API_BASE}${p.signatureUrl}`);
+      // R2 URLs are already absolute (https://...) — no API_BASE prefix needed
+      if (p.logoUrl) setForm(prev => ({ ...prev, logoUrl: p.logoUrl }));
+      if (p.signatureUrl) setForm(prev => ({ ...prev, signatureUrl: p.signatureUrl }));
     }
   }, [data]);
 
@@ -112,41 +96,6 @@ export default function CompanyProfilePage() {
 
   const set = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
-
-  // ── Image upload handlers ──────────────────────────────────────────────
-  async function handleLogoChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoPreview(URL.createObjectURL(file));
-    setLogoUploading(true);
-    try {
-      const url = await uploadImage(file, 'logo');
-      setForm((prev) => ({ ...prev, logoUrl: url }));
-      setLogoPreview(`${API_BASE}${url}`);
-    } catch (err) {
-      setToast({ type: 'error', msg: err.message });
-      setLogoPreview(form.logoUrl ? `${API_BASE}${form.logoUrl}` : null);
-    } finally {
-      setLogoUploading(false);
-    }
-  }
-
-  async function handleSigChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSigPreview(URL.createObjectURL(file));
-    setSigUploading(true);
-    try {
-      const url = await uploadImage(file, 'signature');
-      setForm((prev) => ({ ...prev, signatureUrl: url }));
-      setSigPreview(`${API_BASE}${url}`);
-    } catch (err) {
-      setToast({ type: 'error', msg: err.message });
-      setSigPreview(form.signatureUrl ? `${API_BASE}${form.signatureUrl}` : null);
-    } finally {
-      setSigUploading(false);
-    }
-  }
 
   // ── Save ───────────────────────────────────────────────────────────────
   async function handleSave() {
@@ -175,45 +124,6 @@ export default function CompanyProfilePage() {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────
-  function ImageUploadBox({ label, preview, uploading, inputRef, onChange, icon: Icon }) {
-    return (
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-slate-700">{label}</label>
-        <div
-          onClick={() => inputRef.current?.click()}
-          className="relative flex items-center justify-center w-full h-36 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-primary-400 hover:bg-primary-50/30 transition-all duration-200 group overflow-hidden bg-slate-50"
-        >
-          {preview ? (
-            <>
-              <img src={preview} alt={label} className="max-h-full max-w-full object-contain p-2" />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <p className="text-white text-xs font-medium flex items-center gap-1.5">
-                  <Upload className="w-3.5 h-3.5" /> Change image
-                </p>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center gap-2 text-slate-400 group-hover:text-primary-500 transition-colors">
-              {uploading ? (
-                <Loader2 className="w-7 h-7 animate-spin text-primary-500" />
-              ) : (
-                <Icon className="w-7 h-7" />
-              )}
-              <p className="text-xs font-medium">{uploading ? 'Uploading…' : `Upload ${label}`}</p>
-              <p className="text-[10px] text-slate-400">JPG, PNG, WebP · max 5 MB</p>
-            </div>
-          )}
-          {uploading && preview && (
-            <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
-            </div>
-          )}
-        </div>
-        <input ref={inputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/svg+xml" className="hidden" onChange={onChange} />
-      </div>
-    );
-  }
-
   function Field({ label, id, type = 'text', value, onChange, placeholder, half, required }) {
     return (
       <div className={half ? 'sm:col-span-1' : ''}>
@@ -269,7 +179,7 @@ export default function CompanyProfilePage() {
         </div>
         <button
           onClick={handleSave}
-          disabled={saving || logoUploading || sigUploading}
+          disabled={saving}
           className="btn-primary flex items-center gap-2 self-start sm:self-auto"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -308,21 +218,19 @@ export default function CompanyProfilePage() {
               <div className="space-y-6">
                 {/* Logo + Signature row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <ImageUploadBox
+                  <FileUpload
+                    folder="logos"
+                    accept="image"
                     label="Company Logo"
-                    preview={logoPreview}
-                    uploading={logoUploading}
-                    inputRef={logoInputRef}
-                    onChange={handleLogoChange}
-                    icon={Image}
+                    value={form.logoUrl}
+                    onChange={(url) => setForm(prev => ({ ...prev, logoUrl: url }))}
                   />
-                  <ImageUploadBox
+                  <FileUpload
+                    folder="signatures"
+                    accept="image"
                     label="Authorized Signature"
-                    preview={sigPreview}
-                    uploading={sigUploading}
-                    inputRef={sigInputRef}
-                    onChange={handleSigChange}
-                    icon={FileSignature}
+                    value={form.signatureUrl}
+                    onChange={(url) => setForm(prev => ({ ...prev, signatureUrl: url }))}
                   />
                 </div>
 
