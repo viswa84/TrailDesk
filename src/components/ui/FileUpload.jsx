@@ -1,99 +1,100 @@
 /**
- * FileUpload — reusable file upload component for the entire app.
+ * FileUpload — reusable file upload component with:
+ *  • Drag & drop support
+ *  • Real upload progress bar (XHR-based)
+ *  • Compact card (Eye / Download / Replace / Delete) when file exists
+ *  • Preview modal for images and PDFs
  *
- * Usage examples:
- *
- * // Image upload (logo)
- * <FileUpload
- *   folder="logos"
- *   accept="image"
- *   label="Company Logo"
- *   value={form.logoUrl}
- *   onChange={(url) => setForm(f => ({ ...f, logoUrl: url }))}
- * />
- *
- * // PDF upload (departure document)
- * <FileUpload
- *   folder="departures"
- *   accept="pdf"
- *   label="Trek Itinerary PDF"
- *   value={form.itineraryUrl}
- *   onChange={(url) => setForm(f => ({ ...f, itineraryUrl: url }))}
- * />
- *
- * // Any file type
- * <FileUpload
- *   folder="documents"
- *   accept="any"
- *   label="Attachment"
- *   value={form.attachmentUrl}
- *   onChange={(url) => setForm(f => ({ ...f, attachmentUrl: url }))}
- * />
+ * Usage:
+ *   <FileUpload folder="logos"      accept="image" label="Company Logo"   value={form.logoUrl}      onChange={(url) => ...} />
+ *   <FileUpload folder="departures" accept="pdf"   label="Itinerary PDF"  value={form.itineraryUrl} onChange={(url) => ...} />
+ *   <FileUpload folder="documents"  accept="any"   label="Attachment"     value={form.attachUrl}    onChange={(url) => ...} />
  */
 
-import { useRef, useState } from 'react';
-import { Upload, X, Loader2, FileText, FileSpreadsheet, File, Image, CheckCircle } from 'lucide-react';
+import { useRef, useState, useCallback } from 'react';
+import {
+  Upload, X, Loader2, FileText, FileSpreadsheet, File,
+  Eye, Download, Trash2, RefreshCw, Image as ImageIcon,
+} from 'lucide-react';
 import { uploadFile, deleteFile } from '../../utils/fileUpload';
+import FilePreviewModal from './FilePreviewModal';
 
-// ── MIME type configs ─────────────────────────────────────────────────────────
+// ── MIME configs ──────────────────────────────────────────────────────────────
 const ACCEPT_CONFIG = {
-  image:  { mime: 'image/jpeg,image/jpg,image/png,image/webp,image/svg+xml,image/gif', label: 'JPG, PNG, WebP, SVG', maxMB: 5 },
-  pdf:    { mime: 'application/pdf', label: 'PDF', maxMB: 20 },
-  excel:  { mime: 'application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', label: 'XLS, XLSX', maxMB: 20 },
-  word:   { mime: 'application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document', label: 'DOC, DOCX', maxMB: 20 },
-  csv:    { mime: 'text/csv', label: 'CSV', maxMB: 10 },
-  any:    { mime: 'image/*,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/csv', label: 'images, PDF, XLS, DOC, CSV', maxMB: 20 },
+  image: { mime: 'image/jpeg,image/jpg,image/png,image/webp,image/svg+xml,image/gif', label: 'JPG, PNG, WebP, SVG, GIF', maxMB: 5 },
+  pdf:   { mime: 'application/pdf', label: 'PDF only', maxMB: 20 },
+  excel: { mime: 'application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', label: 'XLS, XLSX', maxMB: 20 },
+  word:  { mime: 'application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document', label: 'DOC, DOCX', maxMB: 20 },
+  csv:   { mime: 'text/csv', label: 'CSV', maxMB: 10 },
+  any:   { mime: 'image/*,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/csv', label: 'Images, PDF, XLS, DOC, CSV', maxMB: 20 },
 };
 
-// Determine which icon + preview type to use for a URL or MIME
-function getFileType(url = '', mimeType = '') {
-  const u = url.toLowerCase();
-  const m = mimeType.toLowerCase();
-  if (m.startsWith('image/') || /\.(jpg|jpeg|png|webp|svg|gif)(\?|$)/.test(u)) return 'image';
-  if (m === 'application/pdf'            || u.endsWith('.pdf'))  return 'pdf';
-  if (m.includes('spreadsheet') || m.includes('excel') || /\.(xls|xlsx)(\?|$)/.test(u)) return 'excel';
-  if (m.includes('word') || /\.(doc|docx)(\?|$)/.test(u)) return 'word';
-  if (m === 'text/csv' || u.endsWith('.csv')) return 'csv';
+// ── File type detection ───────────────────────────────────────────────────────
+function detectType(url = '') {
+  const u = url.toLowerCase().split('?')[0];
+  if (/\.(jpg|jpeg|png|webp|svg|gif)$/.test(u)) return 'image';
+  if (u.endsWith('.pdf'))                         return 'pdf';
+  if (/\.(xls|xlsx)$/.test(u))                   return 'excel';
+  if (/\.(doc|docx)$/.test(u))                   return 'word';
+  if (u.endsWith('.csv'))                         return 'csv';
   return 'file';
 }
 
-function FileIcon({ type, className = 'w-8 h-8' }) {
-  switch (type) {
-    case 'image': return <Image className={`${className} text-blue-400`} />;
-    case 'pdf':   return <FileText className={`${className} text-red-400`} />;
-    case 'excel': return <FileSpreadsheet className={`${className} text-green-500`} />;
-    case 'word':  return <FileText className={`${className} text-blue-500`} />;
-    default:      return <File className={`${className} text-slate-400`} />;
-  }
+function getFilename(url = '') {
+  try { return decodeURIComponent(url.split('/').pop().split('?')[0]); } catch { return 'file'; }
 }
 
-function getFilename(url = '') {
-  try { return decodeURIComponent(url.split('/').pop().split('?')[0]); } catch { return url; }
+const TYPE_META = {
+  image: { icon: ImageIcon,       color: 'text-blue-400',  bg: 'bg-blue-50',   label: 'Image'      },
+  pdf:   { icon: FileText,        color: 'text-red-500',   bg: 'bg-red-50',    label: 'PDF'        },
+  excel: { icon: FileSpreadsheet, color: 'text-green-500', bg: 'bg-green-50',  label: 'Spreadsheet'},
+  word:  { icon: FileText,        color: 'text-blue-600',  bg: 'bg-blue-50',   label: 'Document'   },
+  csv:   { icon: FileText,        color: 'text-slate-500', bg: 'bg-slate-50',  label: 'CSV'        },
+  file:  { icon: File,            color: 'text-slate-400', bg: 'bg-slate-100', label: 'File'       },
+};
+
+// ── Progress bar ──────────────────────────────────────────────────────────────
+function ProgressBar({ percent }) {
+  return (
+    <div className="w-full mt-2 space-y-0.5">
+      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-primary-500 rounded-full transition-all duration-150"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className="text-[10px] text-primary-600 font-medium text-right">{percent}%</p>
+    </div>
+  );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function FileUpload({
-  folder     = 'documents',   // R2 subfolder key
-  accept     = 'any',         // 'image' | 'pdf' | 'excel' | 'word' | 'csv' | 'any'
-  label      = 'Upload File', // display label
-  value      = '',            // current file URL (from DB / form state)
-  onChange,                   // (url: string) => void  — called after successful upload
-  onDelete,                   // () => void             — called after successful delete (optional)
-  disabled   = false,
-  className  = '',
+  folder    = 'documents',
+  accept    = 'any',
+  label     = 'Upload File',
+  value     = '',
+  onChange,
+  onDelete,
+  disabled  = false,
+  className = '',
 }) {
-  const inputRef   = useRef(null);
-  const [uploading, setUploading] = useState(false);
-  const [deleting,  setDeleting]  = useState(false);
-  const [error,     setError]     = useState('');
+  const inputRef          = useRef(null);
+  const [progress, setProgress] = useState(null);   // null = idle, 0-100 = uploading
+  const [deleting, setDeleting] = useState(false);
+  const [error,    setError]    = useState('');
+  const [preview,  setPreview]  = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const config   = ACCEPT_CONFIG[accept] || ACCEPT_CONFIG.any;
-  const fileType = getFileType(value);
-  const isImage  = fileType === 'image';
+  const fileType = detectType(value);
+  const meta     = TYPE_META[fileType] || TYPE_META.file;
+  const Icon     = meta.icon;
+  const filename = getFilename(value);
+  const busy     = progress !== null || deleting || disabled;
 
-  // ── Upload ────────────────────────────────────────────────────────────────
-  async function handleChange(e) {
-    const file = e.target.files?.[0];
+  // ── Core upload logic ─────────────────────────────────────────────────────
+  const doUpload = useCallback(async (file) => {
     if (!file) return;
     // Client-side size check
     if (file.size > config.maxMB * 1024 * 1024) {
@@ -101,21 +102,47 @@ export default function FileUpload({
       return;
     }
     setError('');
-    setUploading(true);
+    setProgress(0);
     try {
-      const result = await uploadFile(file, { folder, oldUrl: value }); // auto-deletes old
+      const result = await uploadFile(
+        file,
+        { folder, oldUrl: value },
+        (pct) => setProgress(pct),
+      );
       onChange?.(result.url);
     } catch (err) {
       setError(err.message);
     } finally {
-      setUploading(false);
-      e.target.value = ''; // reset input so same file can be re-selected
+      setProgress(null);
     }
+  }, [folder, value, onChange, config.maxMB]);
+
+  // ── Input change ──────────────────────────────────────────────────────────
+  function handleInputChange(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    doUpload(file);
+  }
+
+  // ── Drag & drop ───────────────────────────────────────────────────────────
+  function handleDragOver(e) {
+    e.preventDefault();
+    if (!busy) setDragging(true);
+  }
+  function handleDragLeave(e) {
+    e.preventDefault();
+    setDragging(false);
+  }
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragging(false);
+    if (busy) return;
+    const file = e.dataTransfer.files?.[0];
+    doUpload(file);
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────
-  async function handleDelete(e) {
-    e.stopPropagation();
+  async function handleDelete() {
     if (!value) return;
     setDeleting(true);
     setError('');
@@ -130,104 +157,134 @@ export default function FileUpload({
     }
   }
 
-  const busy = uploading || deleting || disabled;
+  // ── Empty state (upload zone) ─────────────────────────────────────────────
+  const renderEmpty = () => (
+    <div
+      onClick={() => !busy && inputRef.current?.click()}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`
+        relative flex flex-col items-center justify-center w-full h-36 rounded-xl
+        border-2 border-dashed transition-all duration-200 overflow-hidden select-none
+        ${busy
+          ? 'border-primary-300 bg-primary-50/40 cursor-not-allowed'
+          : dragging
+            ? 'border-primary-400 bg-primary-50 scale-[1.01] cursor-copy'
+            : 'border-slate-200 bg-slate-50 cursor-pointer hover:border-primary-400 hover:bg-primary-50/30'
+        }
+      `}
+    >
+      {progress !== null ? (
+        /* ── uploading state ── */
+        <div className="flex flex-col items-center gap-1 w-full px-6">
+          <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
+          <p className="text-xs font-medium text-primary-600">Uploading…</p>
+          <ProgressBar percent={progress} />
+        </div>
+      ) : (
+        /* ── idle / drag state ── */
+        <div className={`flex flex-col items-center gap-2 transition-colors ${dragging ? 'text-primary-600' : 'text-slate-400'}`}>
+          <Upload className={`w-7 h-7 transition-transform duration-200 ${dragging ? 'scale-125' : ''}`} />
+          <p className="text-xs font-semibold">
+            {dragging ? 'Drop to upload' : 'Drag & drop or click to browse'}
+          </p>
+          <p className="text-[10px] text-slate-400">{config.label} · max {config.maxMB} MB</p>
+        </div>
+      )}
+    </div>
+  );
 
-  return (
-    <div className={`space-y-1.5 ${className}`}>
-      {/* Label */}
-      <label className="block text-sm font-medium text-slate-700">{label}</label>
+  // ── File-exists card ──────────────────────────────────────────────────────
+  const renderCard = () => (
+    <div className="flex items-start gap-3 w-full rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
 
-      {/* Upload zone */}
+      {/* Thumbnail / icon — click to preview */}
       <div
-        onClick={() => !busy && inputRef.current?.click()}
-        className={`
-          relative flex flex-col items-center justify-center w-full rounded-xl border-2 border-dashed
-          transition-all duration-200 overflow-hidden bg-slate-50 group
-          ${busy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-primary-400 hover:bg-primary-50/30'}
-          ${value ? 'border-slate-200 h-36' : 'border-slate-200 h-36'}
-        `}
+        className={`shrink-0 w-14 h-14 rounded-lg ${meta.bg} flex items-center justify-center overflow-hidden cursor-pointer`}
+        onClick={() => setPreview(true)}
+        title="Click to preview"
       >
-        {/* ── Has a file ──────────────────────────────────── */}
-        {value ? (
-          <>
-            {isImage ? (
-              <img src={value} alt={label} className="max-h-full max-w-full object-contain p-2" />
-            ) : (
-              <div className="flex flex-col items-center gap-2 px-4 text-center">
-                <FileIcon type={fileType} className="w-10 h-10" />
-                <p className="text-xs text-slate-600 font-medium truncate max-w-[180px]">
-                  {getFilename(value)}
-                </p>
-                <span className="text-[10px] text-emerald-600 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> Uploaded
-                </span>
-              </div>
-            )}
-
-            {/* Hover overlay: change or delete */}
-            {!busy && (
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                <span className="text-white text-xs font-medium flex items-center gap-1">
-                  <Upload className="w-3.5 h-3.5" /> Replace
-                </span>
-              </div>
-            )}
-          </>
-        ) : (
-          /* ── Empty state ─────────────────────────────────── */
-          <div className="flex flex-col items-center gap-2 text-slate-400 group-hover:text-primary-500 transition-colors">
-            {uploading ? (
-              <Loader2 className="w-7 h-7 animate-spin text-primary-500" />
-            ) : (
-              <Upload className="w-7 h-7" />
-            )}
-            <p className="text-xs font-medium">
-              {uploading ? 'Uploading…' : `Click to upload ${label}`}
-            </p>
-            <p className="text-[10px] text-slate-400">{config.label} · max {config.maxMB} MB</p>
-          </div>
-        )}
-
-        {/* Loading overlay when uploading over an existing file */}
-        {uploading && value && (
-          <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
-          </div>
-        )}
+        {fileType === 'image' ? (
+          <img
+            src={value}
+            alt={filename}
+            className="w-full h-full object-cover rounded-lg"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.parentElement.querySelector('svg')?.classList.remove('hidden');
+            }}
+          />
+        ) : null}
+        <Icon className={`w-7 h-7 ${meta.color} ${fileType === 'image' ? 'hidden' : ''}`} />
       </div>
 
-      {/* Delete button — shown below when file exists */}
-      {value && (
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={busy}
-          className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors disabled:opacity-40"
-        >
-          {deleting
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            : <X className="w-3.5 h-3.5" />
-          }
-          {deleting ? 'Removing…' : 'Remove file'}
-        </button>
-      )}
+      {/* Info + progress */}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-slate-700 truncate leading-tight">{label}</p>
+        <p className="text-[11px] text-slate-400 truncate mt-0.5" title={filename}>{filename}</p>
+        <span className={`inline-block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${meta.bg} ${meta.color}`}>
+          {meta.label}
+        </span>
+        {/* Progress bar shown during replacement upload */}
+        {progress !== null && <ProgressBar percent={progress} />}
+      </div>
 
-      {/* Error message */}
+      {/* Action buttons */}
+      <div className="flex items-center gap-0.5 shrink-0">
+        <button type="button" title="Preview" onClick={() => setPreview(true)} disabled={busy}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-40">
+          <Eye className="w-4 h-4" />
+        </button>
+
+        <a href={value} download target="_blank" rel="noopener noreferrer" title="Download"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+          onClick={(e) => e.stopPropagation()}>
+          <Download className="w-4 h-4" />
+        </a>
+
+        <button type="button" title="Replace file" onClick={() => inputRef.current?.click()} disabled={busy}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-40">
+          {progress !== null
+            ? <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
+            : <RefreshCw className="w-4 h-4" />}
+        </button>
+
+        <button type="button" title="Delete file" onClick={handleDelete} disabled={busy}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40">
+          {deleting
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Trash2 className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <div className={`space-y-1.5 ${className}`}>
+      <label className="block text-sm font-medium text-slate-700">{label}</label>
+
+      {value ? renderCard() : renderEmpty()}
+
       {error && (
-        <p className="text-xs text-red-500 flex items-center gap-1">
-          <X className="w-3 h-3" /> {error}
+        <p className="flex items-center gap-1 text-xs text-red-500">
+          <X className="w-3 h-3 shrink-0" /> {error}
         </p>
       )}
 
-      {/* Hidden file input */}
       <input
         ref={inputRef}
         type="file"
         accept={config.mime}
         className="hidden"
-        onChange={handleChange}
+        onChange={handleInputChange}
         disabled={busy}
       />
+
+      {preview && (
+        <FilePreviewModal url={value} onClose={() => setPreview(false)} />
+      )}
     </div>
   );
 }

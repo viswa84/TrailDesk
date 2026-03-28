@@ -1,14 +1,11 @@
 /**
- * useFileUpload — reusable hook for R2 file uploads & deletes
+ * File upload/delete API utility for the frontend.
  *
- * Usage:
- *   const { upload, remove, uploading } = useFileUpload();
+ * uploadFile(file, options, onProgress)
+ *   Uses XHR so we can report real upload progress (0-100%).
  *
- *   // Upload a file
- *   const url = await upload(file, { folder: 'logos', oldUrl: currentUrl });
- *
- *   // Delete a file
- *   await remove(url);
+ * deleteFile(url)
+ *   Deletes a file from R2 by its public URL.
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -19,32 +16,56 @@ function getToken() {
 
 /**
  * Upload a file to R2 via the generic /api/upload endpoint.
+ * Uses XHR to track real upload progress.
  *
- * @param {File}   file
- * @param {object} options
- * @param {string} options.folder  - R2 subfolder: 'logos'|'signatures'|'departures'|'documents'|...
- * @param {string} [options.oldUrl] - Previous file URL to delete (optional)
- * @returns {Promise<{ url, filename, size, mimeType }>}
+ * @param {File}     file
+ * @param {object}   options
+ * @param {string}   options.folder   - R2 subfolder: 'logos' | 'signatures' | 'departures' | ...
+ * @param {string}   [options.oldUrl] - Previous file URL to auto-delete on server
+ * @param {function} [onProgress]     - (percent: number 0-100) => void
+ * @returns {Promise<{ url, filename, size, mimeType, folder }>}
  */
-export async function uploadFile(file, { folder = 'documents', oldUrl = '' } = {}) {
-  const fd = new FormData();
-  fd.append('file', file);
-  if (oldUrl) fd.append('oldUrl', oldUrl);
+export function uploadFile(file, { folder = 'documents', oldUrl = '' } = {}, onProgress) {
+  return new Promise((resolve, reject) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (oldUrl) fd.append('oldUrl', oldUrl);
 
-  const res = await fetch(`${API_BASE}/api/upload?folder=${encodeURIComponent(folder)}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${getToken()}` },
-    body: fd,
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE}/api/upload?folder=${encodeURIComponent(folder)}`);
+    xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`);
+
+    // Real upload progress
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && typeof onProgress === 'function') {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      try {
+        const json = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(json);
+        } else {
+          reject(new Error(json.error || 'Upload failed'));
+        }
+      } catch {
+        reject(new Error('Invalid server response'));
+      }
+    };
+
+    xhr.onerror   = () => reject(new Error('Network error — upload failed'));
+    xhr.ontimeout = () => reject(new Error('Upload timed out'));
+
+    xhr.send(fd);
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Upload failed');
-  return json; // { url, filename, size, mimeType, folder }
 }
 
 /**
- * Delete a file from R2.
+ * Delete a file from R2 by its full public URL.
  *
- * @param {string} url - The full R2 public URL to delete
+ * @param {string} url
  */
 export async function deleteFile(url) {
   if (!url) return;
