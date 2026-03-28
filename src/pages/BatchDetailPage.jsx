@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { GET_DEPARTURE, GET_PARTICIPANTS_BY_DEPARTURE, GET_BOARDING_POINTS } from '../graphql/queries';
 import { CREATE_PARTICIPANT, DELETE_PARTICIPANT, COLLECT_PENDING_PAYMENT, MARK_REFUNDED } from '../graphql/mutations';
 import { format, parseISO, differenceInDays } from 'date-fns';
-import { ArrowLeft, MapPin, Clock, Users, IndianRupee, Phone, User, CalendarDays, FileText, Building2, AlertTriangle, Plus, Trash2, X, Download, Navigation, CreditCard } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Users, IndianRupee, Phone, User, CalendarDays, FileText, Building2, AlertTriangle, Plus, Trash2, X, Download, Navigation, CreditCard, Copy, ExternalLink, Link2 } from 'lucide-react';
 import StatusBadge from '../components/ui/StatusBadge';
+import { useToast } from '../context/ToastContext';
 
 export default function BatchDetailPage() {
     const { id } = useParams();
@@ -35,6 +36,7 @@ export default function BatchDetailPage() {
     const [collectModal, setCollectModal] = useState(null);
     const [collectAmount, setCollectAmount] = useState('');
     const [deleteModal, setDeleteModal] = useState(null); // { participantId, participantName }
+    const toast = useToast();
 
     const addParticipantRow = () => setParticipants(prev => [...prev, { name: '', phone: '', boardingPointId: '', bloodGroup: '', weight: '' }]);
     const removeParticipantRow = (idx) => setParticipants(prev => prev.filter((_, i) => i !== idx));
@@ -168,6 +170,9 @@ export default function BatchDetailPage() {
         return d;
     };
 
+    const bookingSlug = departure.uniqueId || departure._id;
+    const bookingUrl = `${(import.meta.env.VITE_API_URL || 'http://localhost:8080/').replace(/\/$/, '')}/book/${bookingSlug}`;
+
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Header */}
@@ -196,7 +201,15 @@ export default function BatchDetailPage() {
                 </div>
                 <div className="card p-4">
                     <div className="flex items-center gap-2 text-xs text-slate-400 mb-1"><IndianRupee className="w-3.5 h-3.5" /> Price</div>
-                    <p className="text-sm font-bold text-slate-800">₹{departure.price?.toLocaleString()}</p>
+                    {departure.packages?.length > 0 ? (
+                      <div className="space-y-0.5">
+                        {departure.packages.map((pkg, i) => (
+                          <p key={i} className="text-xs font-bold text-slate-800">{pkg.name}: ₹{pkg.price?.toLocaleString()}</p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm font-bold text-slate-800">₹{departure.price?.toLocaleString()}</p>
+                    )}
                 </div>
                 <div className="card p-4">
                     <div className="flex items-center gap-2 text-xs text-slate-400 mb-1"><Users className="w-3.5 h-3.5" /> Occupancy</div>
@@ -209,6 +222,34 @@ export default function BatchDetailPage() {
                     <div className="flex items-center gap-2 text-xs text-slate-400 mb-1"><User className="w-3.5 h-3.5" /> Guide</div>
                     <p className="text-sm font-bold text-slate-800">{departure.guideName || 'Not Assigned'}</p>
                 </div>
+            </div>
+
+            {/* Booking Link */}
+            <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                    <Link2 className="w-4 h-4 text-primary-500" />
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer Booking Link</p>
+                </div>
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+                    <span className="flex-1 font-mono text-sm text-primary-700 truncate">{bookingUrl}</span>
+                    <button
+                        onClick={() => { navigator.clipboard.writeText(bookingUrl); toast.success('Link copied!'); }}
+                        className="p-1.5 hover:bg-white rounded-lg shrink-0 transition-colors"
+                        title="Copy link"
+                    >
+                        <Copy className="w-4 h-4 text-slate-400" />
+                    </button>
+                    <a
+                        href={bookingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 hover:bg-white rounded-lg shrink-0 transition-colors"
+                        title="Open in new tab"
+                    >
+                        <ExternalLink className="w-4 h-4 text-slate-400" />
+                    </a>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">Share this link with customers to let them book online.</p>
             </div>
 
             {/* Details */}

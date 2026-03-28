@@ -334,6 +334,11 @@ export const CREATE_DEPARTURE = gql`
       endDate
       duration
       price
+      packages {
+        name
+        price
+        inclusions
+      }
       capacity
       booked
       itinerary
@@ -362,6 +367,11 @@ export const UPDATE_DEPARTURE = gql`
       endDate
       duration
       price
+      packages {
+        name
+        price
+        inclusions
+      }
       capacity
       booked
       itinerary

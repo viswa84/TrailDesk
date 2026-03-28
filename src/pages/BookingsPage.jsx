@@ -26,6 +26,8 @@ export default function BookingsPage() {
         (b.trekName || '').toLowerCase().includes(q) ||
         (b.phone || '').toLowerCase().includes(q) ||
         (b.cityName || '').toLowerCase().includes(q) ||
+        (b.name || '').toLowerCase().includes(q) ||
+        (b.email || '').toLowerCase().includes(q) ||
         (b._id || '').toLowerCase().includes(q);
       const matchesStatus = statusFilter === 'All' || (b.status || '').toLowerCase() === statusFilter.toLowerCase();
       return matchesSearch && matchesStatus;
@@ -222,6 +224,18 @@ export default function BookingsPage() {
                 <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">City</p>
                 <p className="font-medium text-slate-900">{selectedBooking.cityName || '—'}</p>
               </div>
+              {selectedBooking.name && (
+                <div>
+                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Name</p>
+                  <p className="font-medium text-slate-900">{selectedBooking.name}</p>
+                </div>
+              )}
+              {selectedBooking.email && (
+                <div>
+                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Email</p>
+                  <p className="font-medium text-slate-900 break-all">{selectedBooking.email}</p>
+                </div>
+              )}
               <div>
                 <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Phone</p>
                 <p className="font-medium text-slate-900 flex items-center gap-1"><Phone className="w-3 h-3" /> {selectedBooking.phone}</p>
@@ -237,10 +251,6 @@ export default function BookingsPage() {
               <div>
                 <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Booked On</p>
                 <p className="font-medium text-slate-900">{selectedBooking.createdAt ? format(new Date(selectedBooking.createdAt), 'dd/MM/yyyy') : '—'}</p>
-              </div>
-              <div>
-                <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Price / person</p>
-                <p className="font-medium text-slate-700">₹{selectedBooking.peopleCount > 0 ? Math.round(selectedBooking.amount / selectedBooking.peopleCount).toLocaleString('en-IN') : '—'}</p>
               </div>
             </div>
 
@@ -265,8 +275,19 @@ export default function BookingsPage() {
               <h4 className="text-xs uppercase tracking-wider text-primary-600/80 font-semibold mb-3">Receipt Summary</h4>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-slate-600">Trek</span><span className="font-medium">{selectedBooking.trekName}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600">Participants</span><span className="font-medium">{selectedBooking.peopleCount}</span></div>
-                <div className="flex justify-between"><span className="text-slate-600">Price per person</span><span className="font-medium">₹{selectedBooking.peopleCount > 0 ? Math.round(selectedBooking.amount / selectedBooking.peopleCount).toLocaleString('en-IN') : '—'}</span></div>
+                {selectedBooking.packageBreakdown && selectedBooking.packageBreakdown.length > 0 ? (
+                  selectedBooking.packageBreakdown.map((pkg, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span className="text-slate-600">{pkg.packageName} × {pkg.count} <span className="text-slate-400 text-xs">(₹{(pkg.pricePerPerson || 0).toLocaleString('en-IN')}/person)</span></span>
+                      <span className="font-medium">₹{(pkg.subtotal || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                  ))
+                ) : (
+                  <>
+                    <div className="flex justify-between"><span className="text-slate-600">Participants</span><span className="font-medium">{selectedBooking.peopleCount}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-600">Price per person</span><span className="font-medium">₹{selectedBooking.peopleCount > 0 ? Math.round(selectedBooking.amount / selectedBooking.peopleCount).toLocaleString('en-IN') : '—'}</span></div>
+                  </>
+                )}
                 <div className="border-t border-primary-200/50 pt-2 flex justify-between text-base">
                   <span className="font-bold text-slate-900">Total</span>
                   <span className="font-bold text-primary-700">₹{(selectedBooking.amount || 0).toLocaleString('en-IN')}</span>

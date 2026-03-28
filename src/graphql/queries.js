@@ -279,11 +279,19 @@ export const GET_BOOKINGS = gql`
     trekName
     departureId
     cityName
+    name
+    email
     phone
     peopleCount
     amount
     status
     paymentLink
+    packageBreakdown {
+      packageName
+      pricePerPerson
+      count
+      subtotal
+    }
     createdAt
   }
 }
@@ -298,11 +306,19 @@ export const GET_BOOKING = gql`
     trekName
     departureId
     cityName
+    name
+    email
     phone
     peopleCount
     amount
     status
     paymentLink
+    packageBreakdown {
+      packageName
+      pricePerPerson
+      count
+      subtotal
+    }
     createdAt
   }
 }
@@ -401,6 +417,11 @@ export const GET_DEPARTURES = gql`
     nights
     days
     price
+    packages {
+      name
+      price
+      inclusions
+    }
     capacity
     booked
     itinerary
@@ -447,6 +468,11 @@ export const GET_DEPARTURE = gql`
     status
     boardingPointIds
     cancellationReason
+    packages {
+      name
+      price
+      inclusions
+    }
   }
 }
 `;

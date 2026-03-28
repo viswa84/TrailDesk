@@ -17,6 +17,7 @@ const emptyDeparture = {
   nights: '', days: '', capacity: '', guideId: '', price: '',
   meetingPoint: '', itinerary: '', thingsToCarry: '', contact: '',
   whatsappGroupInviteLink: '', whatsappGroupName: '', status: 'Open', boardingPointIds: [],
+  packages: [],
 };
 
 const trekColors = [
@@ -78,6 +79,11 @@ export default function DeparturesPage() {
       nights: dep.nights != null ? String(dep.nights) : '',
       days: dep.days != null ? String(dep.days) : '',
       boardingPointIds: dep.boardingPointIds || [],
+      packages: (dep.packages || []).map(p => ({
+        name: p.name || '',
+        price: String(p.price ?? ''),
+        inclusions: (p.inclusions || []).join('\n'),
+      })),
     });
     setErrors({});
     setShowForm(true);
@@ -121,6 +127,13 @@ export default function DeparturesPage() {
       whatsappGroupInviteLink: formData.whatsappGroupInviteLink?.trim() || undefined,
       whatsappGroupName: formData.whatsappGroupName?.trim() || undefined,
       boardingPointIds: formData.boardingPointIds || [],
+      packages: (formData.packages || [])
+        .filter(p => p.name.trim() && p.price !== '')
+        .map(p => ({
+          name: p.name.trim(),
+          price: parseFloat(p.price),
+          inclusions: p.inclusions.split('\n').map(s => s.trim()).filter(Boolean),
+        })),
     };
 
     if (!editingDep) {
@@ -274,7 +287,16 @@ export default function DeparturesPage() {
                       <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{duration}</span>
                       {dep.cityName && <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{dep.cityName}</span>}
                       <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{dep.meetingPoint}</span>
-                      <span className="flex items-center gap-1"><IndianRupee className="w-3.5 h-3.5" />₹{dep.price?.toLocaleString()}</span>
+                      {dep.packages?.length > 0 ? (
+                        <span className="flex items-center gap-1">
+                          <IndianRupee className="w-3.5 h-3.5" />
+                          ₹{Math.min(...dep.packages.map(p => p.price)).toLocaleString()}
+                          {dep.packages.length > 1 && ` – ₹${Math.max(...dep.packages.map(p => p.price)).toLocaleString()}`}
+                          <span className="text-[10px] text-slate-400">({dep.packages.length} pkg)</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1"><IndianRupee className="w-3.5 h-3.5" />₹{dep.price?.toLocaleString()}</span>
+                      )}
                     </div>
                   </div>
 
@@ -525,8 +547,18 @@ export default function DeparturesPage() {
                 </div>
                 <div className="bg-slate-50 rounded-xl p-3">
                   <p className="text-xs text-slate-400 mb-0.5">Price</p>
-                  <p className="font-semibold text-slate-800">₹{selectedDep.price?.toLocaleString()}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">per person</p>
+                  {selectedDep.packages?.length > 0 ? (
+                    <div className="space-y-0.5">
+                      {selectedDep.packages.map((pkg, i) => (
+                        <p key={i} className="text-xs font-semibold text-slate-800">{pkg.name}: ₹{pkg.price?.toLocaleString()}</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-slate-800">₹{selectedDep.price?.toLocaleString()}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">per person</p>
+                    </>
+                  )}
                 </div>
                 <div className="bg-slate-50 rounded-xl p-3">
                   <p className="text-xs text-slate-400 mb-0.5">Guide</p>
@@ -728,6 +760,78 @@ export default function DeparturesPage() {
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Group Name (optional)</label><input value={formData.whatsappGroupName || ''} onChange={(e) => setFormData({ ...formData, whatsappGroupName: e.target.value })} className="input-field" placeholder="e.g. Harishchandragad Batch 12 Apr" /></div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Itinerary</label><textarea value={formData.itinerary} onChange={(e) => setFormData({ ...formData, itinerary: e.target.value })} className="input-field min-h-[100px] resize-none" placeholder="Day 1: ...\nDay 2: ..." /></div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Things to Carry</label><textarea value={formData.thingsToCarry} onChange={(e) => setFormData({ ...formData, thingsToCarry: e.target.value })} className="input-field min-h-[60px] resize-none" placeholder="Torch, water, raincoat..." /></div>
+
+          {/* ── Packages ── */}
+          <div className="sm:col-span-2">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-slate-700">Pricing Packages</label>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, packages: [...(formData.packages || []), { name: '', price: '', inclusions: '' }] })}
+                className="text-xs px-2 py-1 rounded-md bg-primary-50 text-primary-700 hover:bg-primary-100 border border-primary-200 font-medium"
+              >
+                + Add Package
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400 mb-2">
+              Leave empty to use the single Price field above. Add packages for multi-tier pricing (e.g. Standard / Premium).
+            </p>
+            {(formData.packages || []).length === 0 && (
+              <div className="text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg py-3 text-center">No packages added — using single price</div>
+            )}
+            {(formData.packages || []).map((pkg, idx) => (
+              <div key={idx} className="border border-slate-200 rounded-lg p-3 mb-2 bg-slate-50 space-y-2">
+                <div className="flex gap-2 items-start">
+                  <div className="flex-1">
+                    <input
+                      placeholder="Package name (e.g. Standard, Premium)"
+                      value={pkg.name}
+                      onChange={(e) => {
+                        const pkgs = [...formData.packages];
+                        pkgs[idx] = { ...pkgs[idx], name: e.target.value };
+                        setFormData({ ...formData, packages: pkgs });
+                      }}
+                      className="input-field text-sm"
+                    />
+                  </div>
+                  <div className="w-28">
+                    <input
+                      type="number"
+                      placeholder="Price ₹"
+                      value={pkg.price}
+                      onChange={(e) => {
+                        const pkgs = [...formData.packages];
+                        pkgs[idx] = { ...pkgs[idx], price: e.target.value };
+                        setFormData({ ...formData, packages: pkgs });
+                      }}
+                      className="input-field text-sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pkgs = formData.packages.filter((_, i) => i !== idx);
+                      setFormData({ ...formData, packages: pkgs });
+                    }}
+                    className="mt-1 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                    title="Remove package"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <textarea
+                  placeholder={"Inclusions (one per line)\ne.g.\nTravel Pune to Pune\nBreakfast & Lunch\nCertified Guide"}
+                  value={pkg.inclusions}
+                  onChange={(e) => {
+                    const pkgs = [...formData.packages];
+                    pkgs[idx] = { ...pkgs[idx], inclusions: e.target.value };
+                    setFormData({ ...formData, packages: pkgs });
+                  }}
+                  className="input-field text-sm min-h-[72px] resize-none w-full"
+                />
+              </div>
+            ))}
+          </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
           <button onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
