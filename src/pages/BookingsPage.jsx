@@ -1,19 +1,20 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@apollo/client/react';
 import { useBookings } from '../hooks/useBookings';
 import { useToast } from '../context/ToastContext';
-import { MY_ORGANIZATION } from '../graphql/queries';
-import { generateInvoicePDF } from '../utils/invoicePdf';
+import { useAuth } from '../context/AuthContext';
 import Modal from '../components/ui/Modal';
 import Drawer from '../components/ui/Drawer';
 import StatusBadge from '../components/ui/StatusBadge';
 import { format } from 'date-fns';
-import { Search, Eye, BookOpen, Phone, Users, Copy, ExternalLink, FileDown } from 'lucide-react';
+import { Search, Eye, BookOpen, Phone, Users, Copy, ExternalLink, FileDown, Loader2 } from 'lucide-react';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 export default function BookingsPage() {
   const { data: bookingsList, loading, error } = useBookings();
-  const { data: orgData } = useQuery(MY_ORGANIZATION);
+  const { token } = useAuth();
   const toast = useToast();
+  const [downloadingPdf, setDownloadingPdf] = useState(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -50,18 +51,29 @@ export default function BookingsPage() {
     toast.success('Copied to clipboard');
   };
 
-  const handleDownloadInvoice = (booking) => {
-    const org = orgData?.myOrganization || {};
-    generateInvoicePDF({
-      booking,
-      company: {
-        name: org.name || '',
-        address: org.address || '',
-        gst: org.gst || '',
-        website: org.website || '',
-        logo: org.logo || '',
-      },
-    });
+  const handleDownloadInvoice = async (booking) => {
+    try {
+      setDownloadingPdf(booking._id);
+      const res = await fetch(`${API_BASE}/api/booking-pdf/${booking._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to download PDF');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Booking_${booking.txnid || booking._id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('PDF downloaded');
+    } catch (err) {
+      console.error('PDF download error:', err);
+      toast.error('Failed to download PDF');
+    } finally {
+      setDownloadingPdf(null);
+    }
   };
 
   const totalRevenue = useMemo(() => {
@@ -189,8 +201,8 @@ export default function BookingsPage() {
                       <button onClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); }} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" title="View Details">
                         <Eye className="w-4 h-4 text-slate-400" />
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(booking); }} className="p-1.5 hover:bg-primary-50 rounded-lg transition-colors" title="Download Invoice">
-                        <FileDown className="w-4 h-4 text-primary-500" />
+                      <button onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(booking); }} disabled={downloadingPdf === booking._id} className="p-1.5 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-50" title="Download PDF">
+                        {downloadingPdf === booking._id ? <Loader2 className="w-4 h-4 text-primary-500 animate-spin" /> : <FileDown className="w-4 h-4 text-primary-500" />}
                       </button>
                     </div>
                   </td>
@@ -296,8 +308,8 @@ export default function BookingsPage() {
             </div>
 
             {/* Download Invoice Button */}
-            <button onClick={() => handleDownloadInvoice(selectedBooking)} className="w-full btn-primary flex items-center justify-center gap-2 py-3">
-              <FileDown className="w-4 h-4" /> Download Invoice PDF
+            <button onClick={() => handleDownloadInvoice(selectedBooking)} disabled={downloadingPdf === selectedBooking._id} className="w-full btn-primary flex items-center justify-center gap-2 py-3 disabled:opacity-50">
+              {downloadingPdf === selectedBooking._id ? <><Loader2 className="w-4 h-4 animate-spin" /> Downloading...</> : <><FileDown className="w-4 h-4" /> Download Booking PDF</>}
             </button>
           </div>
         )}

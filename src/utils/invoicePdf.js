@@ -7,13 +7,18 @@
  * @param {Object} options.company  - Company info { name, address, gst, website, logo, phone, email }
  */
 export function generateInvoicePDF({ booking, company = {} }) {
-  const companyName  = company.name    || 'Your Company';
-  const companyAddr  = company.address || '';
-  const companyGst   = company.gst     || '';
-  const companyWeb   = company.website || '';
-  const companyLogo  = company.logo    || '';
-  const companyPhone = company.phone   || '';
-  const companyEmail = company.email   || '';
+  const companyName        = company.name             || company.companyName   || 'Your Company';
+  const companyAddr        = company.address          || company.addressLine1  || '';
+  const companyGst         = company.gst              || company.gstNumber     || '';
+  const companyPan         = company.pan              || company.panNumber     || '';
+  const companyRegNo       = company.regNo            || company.registrationNumber || '';
+  const companyWeb         = company.website          || '';
+  const companyLogo        = company.logo             || company.logoUrl       || '';
+  const companyPhone       = company.phone            || '';
+  const companyEmail       = company.email            || '';
+  const pdfFooterText      = company.pdfFooterText    || `Thank you for booking with ${companyName}!`;
+  const termsAndConditions = company.termsAndConditions || '';
+  const cancellationPolicy = company.cancellationPolicy || '';
 
   const invoiceNo = booking.txnid || `INV-${Date.now()}`;
   const invoiceDate = booking.createdAt
@@ -81,6 +86,11 @@ export function generateInvoicePDF({ booking, company = {} }) {
     .footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #f1f5f9; text-align: center; }
     .footer p { font-size: 12px; color: #94a3b8; line-height: 1.6; }
     .footer .thanks { font-size: 16px; font-weight: 700; color: #334155; margin-bottom: 8px; }
+
+    /* Legal sections */
+    .legal-section { margin-top: 32px; padding: 20px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .legal-section h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: #64748b; font-weight: 700; margin-bottom: 10px; }
+    .legal-section p { font-size: 12px; color: #475569; line-height: 1.8; white-space: pre-wrap; }
 
     /* Print */
     @media print {
@@ -187,11 +197,25 @@ export function generateInvoicePDF({ booking, company = {} }) {
       </div>
     </div>
 
+    <!-- Terms & Conditions -->
+    ${termsAndConditions ? `
+    <div class="legal-section">
+      <h4>Terms &amp; Conditions</h4>
+      <p>${termsAndConditions.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+    </div>` : ''}
+
+    <!-- Cancellation Policy -->
+    ${cancellationPolicy ? `
+    <div class="legal-section" style="margin-top:16px;">
+      <h4>Cancellation Policy</h4>
+      <p>${cancellationPolicy.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+    </div>` : ''}
+
     <!-- Footer -->
     <div class="footer">
-      <p class="thanks">Thank you for booking with us! 🏔</p>
-      <p>This is a computer-generated invoice. For questions, contact us at ${companyPhone || companyEmail || companyWeb || companyName}.</p>
-      <p style="margin-top:8px;">© ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+      <p class="thanks">${pdfFooterText}</p>
+      <p>This is a computer-generated invoice. For queries, contact us at ${companyPhone || companyEmail || companyWeb || companyName}.</p>
+      <p style="margin-top:8px;">&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
     </div>
   </div>
 </body>

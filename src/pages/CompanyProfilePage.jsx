@@ -27,7 +27,7 @@ const EMPTY = {
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 function getToken() {
-  return localStorage.getItem('traildesk_token') || '';
+  return localStorage.getItem('trekops_token') || '';
 }
 
 async function uploadImage(file, type) {

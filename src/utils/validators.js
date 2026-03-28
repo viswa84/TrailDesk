@@ -1,5 +1,5 @@
 /**
- * Form validation utilities for TrailDesk.
+ * Form validation utilities for TrekOps.
  * All validators return an error string or null if valid.
  */
 

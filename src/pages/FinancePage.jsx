@@ -3,17 +3,18 @@ import { useQuery } from '@apollo/client/react';
 import { useFinance } from '../hooks/useFinance';
 import { useToast } from '../context/ToastContext';
 import { v, validateForm } from '../utils/validators';
-import { MY_ORGANIZATION } from '../graphql/queries';
+import { GET_COMPANY_PROFILE } from '../graphql/queries';
 import { generateInvoicePDF } from '../utils/invoicePdf';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
+import DatePickerInput from '../components/ui/DatePickerInput';
 import { format } from 'date-fns';
 import { Search, Plus, Edit, Trash2, Download, FileText, CreditCard, RotateCcw } from 'lucide-react';
-import DatePickerInput from '../components/ui/DatePickerInput';
+
 
 export default function FinancePage() {
   const { invoices: invoicesList, payments: paymentsList, refunds: refundsList, loading, error, addInvoice: addInv, updateInvoice: updateInv, removeInvoice: removeInv } = useFinance();
-  const { data: orgData } = useQuery(MY_ORGANIZATION);
+  const { data: orgData } = useQuery(GET_COMPANY_PROFILE);
   const toast = useToast();
   const [activeTab, setActiveTab] = useState('invoices');
   const [search, setSearch] = useState('');
@@ -130,10 +131,23 @@ export default function FinancePage() {
                     <td className="table-cell text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => {
-                          const org = orgData?.myOrganization || {};
+                          const org = orgData?.getCompanyProfile || {};
                           generateInvoicePDF({
                             booking: { _id: inv.id || inv._id, txnid: inv.id || inv._id || 'INV', trekName: inv.customerName || 'Invoice', phone: '', peopleCount: 1, amount: inv.amount || 0, status: inv.status === 'Paid' ? 'paid' : 'pending', createdAt: inv.date },
-                            company: { name: org.name || '', address: org.address || '', gst: org.gst || '', website: org.website || '', logo: org.logo || '' },
+                            company: {
+                              name: org.companyName || '',
+                              address: org.addressLine1 || '',
+                              gst: org.gstNumber || '',
+                              pan: org.panNumber || '',
+                              regNo: org.registrationNumber || '',
+                              website: org.website || '',
+                              logo: org.logoUrl || '',
+                              phone: org.phone || '',
+                              email: org.email || '',
+                              pdfFooterText: org.pdfFooterText || '',
+                              termsAndConditions: org.termsAndConditions || '',
+                              cancellationPolicy: org.cancellationPolicy || '',
+                            },
                           });
                         }} className="p-1.5 hover:bg-primary-50 rounded-lg transition-colors" title="Download PDF"><Download className="w-4 h-4 text-primary-500" /></button>
                         <button onClick={() => handleEditInvoice(inv)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><Edit className="w-4 h-4 text-slate-400" /></button>

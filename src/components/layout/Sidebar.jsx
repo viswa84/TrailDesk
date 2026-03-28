@@ -49,7 +49,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
             <div className="w-9 h-9 bg-gradient-to-br from-primary-600 to-emerald-500 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
               <Mountain className="w-5 h-5 text-white" />
             </div>
-            {!collapsed && <span className="text-lg font-bold text-slate-900 tracking-tight">TrailDesk</span>}
+            {!collapsed && <span className="text-lg font-bold text-slate-900 tracking-tight">TrekOps</span>}
           </div>
           <button onClick={onClose} className="lg:hidden p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-slate-500" />
