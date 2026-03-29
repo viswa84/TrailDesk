@@ -3,7 +3,68 @@ import { useQuery, useMutation } from '@apollo/client/react';
 import { GET_CHATS, GET_MESSAGES } from '../graphql/queries';
 import { SEND_MESSAGE } from '../graphql/mutations';
 import { io } from 'socket.io-client';
-import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X } from 'lucide-react';
+import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, Check, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X, Image, Film, Music, File, AlertCircle } from 'lucide-react';
+
+function DeliveryTick({ status, failureReason }) {
+  if (status === 'read') return <CheckCheck className="w-3.5 h-3.5 text-blue-300" title="Read" />;
+  if (status === 'delivered') return <CheckCheck className="w-3.5 h-3.5" title="Delivered" />;
+  if (status === 'sent') return <Check className="w-3.5 h-3.5 opacity-70" title="Sent" />;
+  if (status === 'failed') return <AlertCircle className="w-3.5 h-3.5 text-red-400" title={failureReason || 'Failed to deliver'} />;
+  return <Check className="w-3.5 h-3.5 opacity-40" title="Sending…" />;
+}
+
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080/').replace(/\/$/, '');
+
+function fileIcon(file) {
+  if (!file) return File;
+  const t = file.type || '';
+  if (t.startsWith('image/')) return Image;
+  if (t.startsWith('video/')) return Film;
+  if (t.startsWith('audio/')) return Music;
+  return FileText;
+}
+
+function MediaMessage({ raw, message, isOutbound }) {
+  const type = raw?.type;
+  if (type === 'image') {
+    const caption = raw.image?.caption || message || '';
+    return (
+      <div>
+        <div className={`flex items-center gap-2 px-1 py-2 rounded-lg ${isOutbound ? 'bg-white/10' : 'bg-slate-50'}`}>
+          <Image className="w-8 h-8 shrink-0 text-current opacity-70" />
+          <span className="text-xs opacity-80">Photo</span>
+        </div>
+        {caption && <p className="text-xs mt-1 opacity-90">{caption}</p>}
+      </div>
+    );
+  }
+  if (type === 'document') {
+    const name = raw.document?.filename || raw.document?.caption || message || 'Document';
+    return (
+      <div className={`flex items-center gap-2 px-2 py-2 rounded-lg ${isOutbound ? 'bg-white/10' : 'bg-slate-50'}`}>
+        <FileText className="w-7 h-7 shrink-0 opacity-70" />
+        <span className="text-xs font-medium truncate max-w-[160px]">{name}</span>
+      </div>
+    );
+  }
+  if (type === 'video') {
+    return (
+      <div className={`flex items-center gap-2 px-2 py-2 rounded-lg ${isOutbound ? 'bg-white/10' : 'bg-slate-50'}`}>
+        <Film className="w-7 h-7 shrink-0 opacity-70" />
+        <span className="text-xs opacity-80">Video</span>
+      </div>
+    );
+  }
+  if (type === 'audio') {
+    return (
+      <div className={`flex items-center gap-2 px-2 py-2 rounded-lg ${isOutbound ? 'bg-white/10' : 'bg-slate-50'}`}>
+        <Music className="w-7 h-7 shrink-0 opacity-70" />
+        <span className="text-xs opacity-80">Audio</span>
+      </div>
+    );
+  }
+  return null;
+}
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_GRAPHQL_URL?.replace('/graphql', '') || 'http://localhost:8080';
 
@@ -88,8 +149,12 @@ export default function SupportChatPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [liveMessages, setLiveMessages] = useState([]);
+  const [statusUpdates, setStatusUpdates] = useState({}); // waMessageId → deliveryStatus
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [attachedFiles, setAttachedFiles] = useState([]);
+  const [sendingFiles, setSendingFiles] = useState(false);
 
   // ─── New Message Modal ─────────────────────────────
   const [showNewMsg, setShowNewMsg] = useState(false);
@@ -129,6 +194,15 @@ export default function SupportChatPage() {
       refetchChats();
     });
 
+    socket.on('messageStatusUpdate', ({ waMessageId, deliveryStatus, deliveryFailureReason }) => {
+      if (!waMessageId) return;
+      setStatusUpdates(prev => ({ ...prev, [waMessageId]: { deliveryStatus, deliveryFailureReason } }));
+      // Also patch liveMessages if the message is there
+      setLiveMessages(prev => prev.map(m =>
+        m.waMessageId === waMessageId ? { ...m, deliveryStatus, deliveryFailureReason } : m
+      ));
+    });
+
     socket.on('disconnect', () => {
       console.log('🔌 Socket disconnected');
     });
@@ -139,9 +213,11 @@ export default function SupportChatPage() {
     };
   }, [refetchChats]);
 
-  // Reset live messages when switching chats and refetch from DB
+  // Reset live messages and attachments when switching chats
   useEffect(() => {
     setLiveMessages([]);
+    setAttachedFiles([]);
+    setMessage('');
   }, [activePhone]);
 
   const contacts = useMemo(() => {
@@ -189,6 +265,41 @@ export default function SupportChatPage() {
     }
   }, [message, activePhone, sendMessageMutation]);
 
+  const handleRetry = useCallback(async (msg) => {
+    const text = msg.message;
+    if (!text || !activePhone) return;
+    try {
+      await sendMessageMutation({ variables: { phone: activePhone, text } });
+    } catch (err) {
+      console.error('Retry failed:', err);
+    }
+  }, [activePhone, sendMessageMutation]);
+
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files || []).slice(0, 10);
+    setAttachedFiles(prev => [...prev, ...files].slice(0, 10));
+    e.target.value = '';
+  };
+
+  const removeAttachment = (idx) => setAttachedFiles(prev => prev.filter((_, i) => i !== idx));
+
+  const handleSendFiles = useCallback(async () => {
+    if (!activePhone || (attachedFiles.length === 0 && !message.trim())) return;
+    setSendingFiles(true);
+    try {
+      const form = new FormData();
+      attachedFiles.forEach(f => form.append('files', f));
+      if (message.trim()) form.append('text', message.trim());
+      await fetch(`${API_URL}/api/chat/${activePhone}/send-files`, { method: 'POST', body: form });
+      setAttachedFiles([]);
+      setMessage('');
+    } catch (err) {
+      console.error('Failed to send files:', err);
+    } finally {
+      setSendingFiles(false);
+    }
+  }, [activePhone, attachedFiles, message]);
+
   const handleSelectChat = (contact) => {
     setActivePhone(contact.phone);
     setShowMobileChat(true);
@@ -234,7 +345,12 @@ export default function SupportChatPage() {
     } catch { return ''; }
   };
 
-  const getAvatar = (phone) => {
+  const getAvatar = (phone, name) => {
+    if (name) {
+      const parts = name.trim().split(/\s+/);
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      return parts[0].slice(0, 2).toUpperCase();
+    }
     if (!phone) return '?';
     const digits = phone.replace(/\D/g, '');
     return digits.slice(-2);
@@ -289,12 +405,12 @@ export default function SupportChatPage() {
                   `}
                 >
                   <div className="relative shrink-0">
-                    <div className="w-11 h-11 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-sm font-bold">{getAvatar(contact.phone)}</div>
+                    <div className="w-11 h-11 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-sm font-bold">{getAvatar(contact.phone, contact.name)}</div>
                     {contact.source === 'chat' && <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-slate-900 truncate">{contact.phone}</h4>
+                      <h4 className="text-sm font-semibold text-slate-900 truncate">{contact.name || contact.phone}</h4>
                       <span className="text-[10px] text-slate-400 shrink-0 ml-2">{formatTime(contact.lastMessageTime)}</span>
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
@@ -318,11 +434,11 @@ export default function SupportChatPage() {
                   <button onClick={() => setShowMobileChat(false)} className="sm:hidden p-1.5 hover:bg-slate-100 rounded-lg mr-1 cursor-pointer">
                     <ArrowLeft className="w-5 h-5 text-slate-600" />
                   </button>
-                  <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-sm font-bold">{getAvatar(activePhone)}</div>
+                  <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-sm font-bold">{getAvatar(activePhone, activeContact?.name)}</div>
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-900">{activePhone}</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">{activeContact?.name || activePhone}</h3>
                     <p className="text-[11px] text-slate-500">
-                      {activeContact?.source === 'chat' ? `${activeContact.messageCount} messages` : activeContact?.step ? `Bot step: ${activeContact.step}` : 'WhatsApp'}
+                      {activeContact?.name ? activePhone : (activeContact?.source === 'chat' ? `${activeContact.messageCount} messages` : activeContact?.step ? `Bot step: ${activeContact.step}` : 'WhatsApp')}
                     </p>
                   </div>
                 </div>
@@ -354,6 +470,11 @@ export default function SupportChatPage() {
                       const isButtonReply = interactiveType === 'button_reply';
                       const isListReply = interactiveType === 'list_reply';
 
+                      const live = msg.waMessageId ? statusUpdates[msg.waMessageId] : null;
+                      const resolvedStatus = live?.deliveryStatus || msg.deliveryStatus;
+                      const resolvedReason = live?.deliveryFailureReason || msg.deliveryFailureReason;
+                      const isFailed = isOutbound && resolvedStatus === 'failed';
+
                       return (
                         <div key={msg._id || idx}>
                           {showDate && (
@@ -361,19 +482,21 @@ export default function SupportChatPage() {
                               <span className="px-3 py-1 bg-white rounded-full text-[11px] font-medium text-slate-500 shadow-sm border border-slate-100">{msgDate}</span>
                             </div>
                           )}
-                          <div className={`flex mb-2 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
-                            <div
-                              className={`max-w-[80%] overflow-hidden rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm
-                                ${isOutbound
-                                  ? 'bg-primary-600 text-white rounded-br-md'
-                                  : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-md'
-                                }
-                              `}
+                          <div className={`flex mb-1 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[80%] overflow-hidden rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm
+                              ${isOutbound
+                                ? 'bg-primary-600 text-white rounded-br-md'
+                                : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-md'
+                              }`}
                             >
-                              {/* Message text with WhatsApp bold parsing */}
-                              <div style={{ whiteSpace: 'pre-line' }}>
-                                {parseWhatsAppText(msg.message)}
-                              </div>
+                              {/* Media messages */}
+                              {['image','document','video','audio'].includes(msg.raw?.type) ? (
+                                <MediaMessage raw={msg.raw} message={msg.message} isOutbound={isOutbound} />
+                              ) : (
+                                <div style={{ whiteSpace: 'pre-line' }}>
+                                  {parseWhatsAppText(msg.message)}
+                                </div>
+                              )}
 
                               {/* If inbound is a button/list reply, show what they selected */}
                               {isButtonReply && msg.raw.interactive.button_reply && (
@@ -395,13 +518,31 @@ export default function SupportChatPage() {
                               {/* For outbound interactive messages: show buttons or list */}
                               {isOutbound && <InteractiveButtons raw={msg.raw} isOutbound={isOutbound} />}
 
-                              {/* Timestamp + checkmarks */}
+                              {/* Timestamp + delivery status tick */}
                               <div className={`flex items-center justify-end gap-1 mt-1.5 ${isOutbound ? 'text-primary-200' : 'text-slate-400'}`}>
                                 <span className="text-[10px]">{formatTime(msg.createdAt)}</span>
-                                {isOutbound && <CheckCheck className="w-3.5 h-3.5" />}
+                                {isOutbound && <DeliveryTick status={resolvedStatus} failureReason={resolvedReason} />}
                               </div>
                             </div>
                           </div>
+
+                          {/* Retry row — shown below failed outbound messages */}
+                          {isFailed && (
+                            <div className="flex justify-end mb-2 pr-1">
+                              <div className="flex items-center gap-2">
+                                {resolvedReason && (
+                                  <span className="text-[10px] text-red-400 max-w-[200px] truncate" title={resolvedReason}>{resolvedReason}</span>
+                                )}
+                                <button
+                                  onClick={() => handleRetry(msg)}
+                                  className="flex items-center gap-1 text-[11px] font-medium text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-full transition-colors"
+                                >
+                                  <RefreshCw className="w-3 h-3" />
+                                  Retry
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })
@@ -424,25 +565,70 @@ export default function SupportChatPage() {
                 </div>
               </div>
 
+              {/* File Attachments Preview */}
+              {attachedFiles.length > 0 && (
+                <div className="px-3 sm:px-5 pt-2.5 pb-1 bg-white border-t border-slate-100">
+                  <div className="flex flex-wrap gap-2">
+                    {attachedFiles.map((f, i) => {
+                      const Icon = fileIcon(f);
+                      const isImg = f.type?.startsWith('image/');
+                      return (
+                        <div key={i} className="relative group flex items-center gap-1.5 bg-slate-100 rounded-xl px-2.5 py-1.5 pr-7 max-w-[160px]">
+                          {isImg ? (
+                            <img src={URL.createObjectURL(f)} alt={f.name} className="w-7 h-7 rounded-lg object-cover shrink-0" />
+                          ) : (
+                            <Icon className="w-5 h-5 text-slate-500 shrink-0" />
+                          )}
+                          <span className="text-xs text-slate-700 truncate">{f.name}</span>
+                          <button
+                            onClick={() => removeAttachment(i)}
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-slate-300 hover:bg-red-400 hover:text-white transition-colors cursor-pointer"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Message Input */}
               <div className="px-3 sm:px-5 py-2.5 sm:py-3 border-t border-slate-100 bg-white shrink-0">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <button className="hidden sm:flex p-2 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0"><Paperclip className="w-5 h-5 text-slate-400" /></button>
-                  <button className="hidden sm:flex p-2 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0"><SmilePlus className="w-5 h-5 text-slate-400" /></button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`flex p-2 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0 ${attachedFiles.length > 0 ? 'text-primary-600' : 'text-slate-400'}`}
+                    title="Attach files"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
                   <input
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                    placeholder="Type a message..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        attachedFiles.length > 0 ? handleSendFiles() : handleSend();
+                      }
+                    }}
+                    placeholder={attachedFiles.length > 0 ? 'Add a caption (optional)…' : 'Type a message…'}
                     className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
-                    disabled={sending}
+                    disabled={sending || sendingFiles}
                   />
                   <button
-                    onClick={handleSend}
-                    disabled={!message.trim() || sending}
-                    className={`p-2.5 rounded-xl transition-all duration-200 shrink-0 cursor-pointer ${message.trim() && !sending ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm hover:shadow-md' : 'bg-slate-100 text-slate-300'}`}
+                    onClick={attachedFiles.length > 0 ? handleSendFiles : handleSend}
+                    disabled={(!message.trim() && attachedFiles.length === 0) || sending || sendingFiles}
+                    className={`p-2.5 rounded-xl transition-all duration-200 shrink-0 cursor-pointer ${(message.trim() || attachedFiles.length > 0) && !sending && !sendingFiles ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm hover:shadow-md' : 'bg-slate-100 text-slate-300'}`}
                   >
-                    {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                    {(sending || sendingFiles) ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                   </button>
                 </div>
               </div>

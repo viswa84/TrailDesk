@@ -245,28 +245,32 @@ export const GET_LIVE_TREK = gql`
 export const GET_CHATS = gql`
   query GetChats {
     getChats {
-    phone
-    lastMessage
-    lastMessageTime
-    messageCount
-    source
-    step
+      phone
+      name
+      lastMessage
+      lastMessageTime
+      messageCount
+      source
+      step
+    }
   }
-}
 `;
 
 export const GET_MESSAGES = gql`
   query GetMessages($phone: String!) {
-  getMessages(phone: $phone) {
-    _id
-    phone
-    direction
-    message
-    raw
-    createdAt
-    updatedAt
+    getMessages(phone: $phone) {
+      _id
+      phone
+      direction
+      message
+      raw
+      waMessageId
+      deliveryStatus
+      deliveryFailureReason
+      createdAt
+      updatedAt
+    }
   }
-}
 `;
 
 // ─── Booking Queries ─────────────────────────────────
