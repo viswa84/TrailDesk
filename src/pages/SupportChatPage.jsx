@@ -74,13 +74,21 @@ const quickReplies = [
   { label: 'Trek Itinerary', icon: FileText },
 ];
 
-// Parse WhatsApp-style bold (*text*) and render as <strong>
+// Parse WhatsApp-style bold (*text*) and URLs, render as <strong> / <a>
 function parseWhatsAppText(text) {
   if (!text) return null;
-  const parts = text.split(/(\*[^*]+\*)/g);
+  const parts = text.split(/(\*[^*]+\*|https?:\/\/[^\s]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith('*') && part.endsWith('*')) {
       return <strong key={i}>{part.slice(1, -1)}</strong>;
+    }
+    if (/^https?:\/\//.test(part)) {
+      return (
+        <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+          className="underline break-all"
+          onClick={e => e.stopPropagation()}
+        >{part}</a>
+      );
     }
     return <span key={i}>{part}</span>;
   });
