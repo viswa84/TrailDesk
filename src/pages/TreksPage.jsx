@@ -5,6 +5,7 @@ import { CREATE_TREK, UPDATE_TREK, DELETE_TREK, PUBLISH_TREK, UNPUBLISH_TREK } f
 import { useToast } from '../context/ToastContext';
 import { v, validateForm, onlyDigits } from '../utils/validators';
 import Modal from '../components/ui/Modal';
+import FileUpload from '../components/ui/FileUpload';
 import {
   Search, Plus, Clock, IndianRupee, MapPin, Mountain, Users, Calendar,
   Phone, Backpack, Edit, Trash2, Eye, RefreshCw, Rocket, X, EyeOff, Layers
@@ -484,7 +485,13 @@ export default function TreksPage() {
           {f('Altitude', 'altitude', 'text', 'e.g. 12,500 ft')}
           {f('Location', 'location', 'text', 'e.g. Uttarakhand')}
           {f('Best Season', 'bestSeason', 'text', 'e.g. Winter')}
-          {f('Image URL', 'image', 'text', 'https://... (optional)')}
+          <FileUpload
+            folder="departures"
+            accept="image"
+            label="Trek Image"
+            value={formData.image || ''}
+            onChange={(url) => setFormData({ ...formData, image: url })}
+          />
           {f('Description', 'description', 'textarea', 'Describe the trek...', { full: true })}
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">

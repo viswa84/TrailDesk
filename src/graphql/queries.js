@@ -432,6 +432,9 @@ export const GET_DEPARTURES = gql`
     thingsToCarry
     contact
     meetingPoint
+    transport
+    imageUrl
+    brochureUrl
     whatsappGroupInviteLink
     whatsappGroupName
     guideId
@@ -465,6 +468,9 @@ export const GET_DEPARTURE = gql`
     thingsToCarry
     contact
     meetingPoint
+    transport
+    imageUrl
+    brochureUrl
     whatsappGroupInviteLink
     whatsappGroupName
     guideId

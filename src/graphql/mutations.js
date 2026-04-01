@@ -345,6 +345,9 @@ export const CREATE_DEPARTURE = gql`
       thingsToCarry
       contact
       meetingPoint
+      transport
+      imageUrl
+      brochureUrl
       whatsappGroupInviteLink
       whatsappGroupName
       guideId
@@ -378,6 +381,9 @@ export const UPDATE_DEPARTURE = gql`
       thingsToCarry
       contact
       meetingPoint
+      transport
+      imageUrl
+      brochureUrl
       whatsappGroupInviteLink
       whatsappGroupName
       guideId

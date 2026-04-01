@@ -266,10 +266,11 @@ export default function BatchDetailPage() {
                         <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">{departure.thingsToCarry}</p>
                     </div>
                 )}
-                {(departure.meetingPoint || departure.contact || departure.whatsappGroupInviteLink) && (
+                {(departure.meetingPoint || departure.transport || departure.contact || departure.whatsappGroupInviteLink) && (
                     <div className="card p-5">
                         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Logistics</h3>
                         {departure.meetingPoint && <div className="flex items-center gap-2 text-sm text-slate-700 mb-2"><MapPin className="w-4 h-4 text-slate-400" /> Meeting: {departure.meetingPoint}</div>}
+                        {departure.transport && <div className="flex items-center gap-2 text-sm text-slate-700 mb-2"><Navigation className="w-4 h-4 text-slate-400" /> Transport: {departure.transport}</div>}
                         {departure.contact && <div className="flex items-center gap-2 text-sm text-slate-700 mb-2"><Phone className="w-4 h-4 text-slate-400" /> Contact: {departure.contact}</div>}
                         {departure.whatsappGroupInviteLink && (
                             <div className="text-sm text-slate-700">
@@ -287,6 +288,42 @@ export default function BatchDetailPage() {
                                 </a>
                             </div>
                         )}
+                    </div>
+                )}
+                {(departure.imageUrl || departure.brochureUrl) && (
+                    <div className="card p-5">
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Assets</h3>
+                        <div className="space-y-3">
+                            {departure.imageUrl && (
+                                <div>
+                                    <p className="text-xs text-slate-400 mb-2">Departure Image</p>
+                                    <a href={departure.imageUrl} target="_blank" rel="noreferrer" className="block">
+                                        <img
+                                            src={departure.imageUrl}
+                                            alt={departure.trekName || 'Departure'}
+                                            className="w-full h-44 object-cover rounded-xl border border-slate-200"
+                                        />
+                                    </a>
+                                </div>
+                            )}
+                            {departure.brochureUrl && (
+                                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-slate-400">Brochure</p>
+                                        <p className="text-sm font-medium text-slate-700 truncate">Open uploaded PDF brochure</p>
+                                    </div>
+                                    <a
+                                        href={departure.brochureUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-primary-700 border border-slate-200 hover:bg-slate-100"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Open
+                                    </a>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>

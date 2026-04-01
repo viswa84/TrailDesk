@@ -24,6 +24,7 @@ import {
   CREATE_DEPARTURE, UPDATE_DEPARTURE, DELETE_DEPARTURE,
 } from '../graphql/mutations';
 import { useToast } from '../context/ToastContext';
+import FileUpload from '../components/ui/FileUpload';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -520,7 +521,8 @@ function DepartureModal({ cities, treks, onClose, onSaved }) {
   const [form, setForm] = useState({
     startDate: '', endDate: '', duration: '', nights: '', days: '',
     price: '', capacity: 50, status: 'Open',
-    itinerary: '', thingsToCarry: '', contact: '', meetingPoint: '',
+    itinerary: '', thingsToCarry: '', contact: '', meetingPoint: '', transport: '',
+    imageUrl: '', brochureUrl: '',
     whatsappGroupInviteLink: '', whatsappGroupName: '',
   });
 
@@ -541,7 +543,8 @@ function DepartureModal({ cities, treks, onClose, onSaved }) {
     setForm({
       startDate: '', endDate: '', duration: '', nights: '', days: '',
       price: '', capacity: 50, status: 'Open', itinerary: '', thingsToCarry: '',
-      contact: '', meetingPoint: '', whatsappGroupInviteLink: '', whatsappGroupName: '',
+      contact: '', meetingPoint: '', transport: '', imageUrl: '', brochureUrl: '',
+      whatsappGroupInviteLink: '', whatsappGroupName: '',
     });
     setShowForm(true);
   };
@@ -561,6 +564,9 @@ function DepartureModal({ cities, treks, onClose, onSaved }) {
       thingsToCarry: dep.thingsToCarry || '',
       contact:      dep.contact   || '',
       meetingPoint: dep.meetingPoint || '',
+      transport: dep.transport || '',
+      imageUrl: dep.imageUrl || '',
+      brochureUrl: dep.brochureUrl || '',
       whatsappGroupInviteLink: dep.whatsappGroupInviteLink || '',
       whatsappGroupName: dep.whatsappGroupName || '',
     });
@@ -592,6 +598,9 @@ function DepartureModal({ cities, treks, onClose, onSaved }) {
       thingsToCarry: form.thingsToCarry || undefined,
       contact:      form.contact      || undefined,
       meetingPoint: form.meetingPoint || undefined,
+      transport: form.transport?.trim() || undefined,
+      imageUrl: form.imageUrl || undefined,
+      brochureUrl: form.brochureUrl || undefined,
       whatsappGroupInviteLink: form.whatsappGroupInviteLink?.trim() || undefined,
       whatsappGroupName: form.whatsappGroupName?.trim() || undefined,
     };
@@ -756,6 +765,26 @@ function DepartureModal({ cities, treks, onClose, onSaved }) {
                 <div className="col-span-2">
                   <label className="text-xs font-semibold text-slate-500 block mb-1">Contact</label>
                   <input type="text" value={form.contact} onChange={f('contact')} placeholder="+91 9999999999" className="input-field text-xs" />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs font-semibold text-slate-500 block mb-1">Transport</label>
+                  <input type="text" value={form.transport} onChange={f('transport')} placeholder="e.g. Bus from Pune / Self drive" className="input-field text-xs" />
+                </div>
+                <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FileUpload
+                    folder="departures"
+                    accept="image"
+                    label="Departure Image"
+                    value={form.imageUrl || ''}
+                    onChange={(url) => setForm(p => ({ ...p, imageUrl: url }))}
+                  />
+                  <FileUpload
+                    folder="documents"
+                    accept="pdf"
+                    label="Departure Brochure"
+                    value={form.brochureUrl || ''}
+                    onChange={(url) => setForm(p => ({ ...p, brochureUrl: url }))}
+                  />
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs font-semibold text-slate-500 block mb-1">WhatsApp Group Invite Link</label>

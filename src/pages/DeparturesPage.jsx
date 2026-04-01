@@ -9,13 +9,15 @@ import { v, validateForm } from '../utils/validators';
 import Modal from '../components/ui/Modal';
 import DatePickerInput from '../components/ui/DatePickerInput';
 import StatusBadge from '../components/ui/StatusBadge';
+import FileUpload from '../components/ui/FileUpload';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isSameDay, differenceInDays, addMonths, subMonths } from 'date-fns';
 import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, X, Eye, AlertTriangle, IndianRupee, Building2, Phone, FileText } from 'lucide-react';
 
 const emptyDeparture = {
   trekId: '', trekName: '', cityId: '', startDate: '', endDate: '',
   nights: '', days: '', capacity: '', guideId: '', price: '',
-  meetingPoint: '', itinerary: '', thingsToCarry: '', contact: '',
+  meetingPoint: '', transport: '', itinerary: '', thingsToCarry: '', contact: '',
+  imageUrl: '', brochureUrl: '',
   whatsappGroupInviteLink: '', whatsappGroupName: '', status: 'Open', boardingPointIds: [],
   packages: [],
 };
@@ -74,6 +76,9 @@ export default function DeparturesPage() {
       itinerary: dep.itinerary || '',
       thingsToCarry: dep.thingsToCarry || '',
       contact: dep.contact || '',
+      transport: dep.transport || '',
+      imageUrl: dep.imageUrl || '',
+      brochureUrl: dep.brochureUrl || '',
       whatsappGroupInviteLink: dep.whatsappGroupInviteLink || '',
       whatsappGroupName: dep.whatsappGroupName || '',
       nights: dep.nights != null ? String(dep.nights) : '',
@@ -121,6 +126,9 @@ export default function DeparturesPage() {
       thingsToCarry: formData.thingsToCarry || undefined,
       contact: formData.contact || undefined,
       meetingPoint: formData.meetingPoint || undefined,
+      transport: formData.transport?.trim() || undefined,
+      imageUrl: formData.imageUrl || undefined,
+      brochureUrl: formData.brochureUrl || undefined,
       guideId: formData.guideId || undefined,
       guideName: formData.guideName || undefined,
       status: formData.status,
@@ -287,6 +295,7 @@ export default function DeparturesPage() {
                       <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{duration}</span>
                       {dep.cityName && <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{dep.cityName}</span>}
                       <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{dep.meetingPoint}</span>
+                      {dep.transport && <span>{dep.transport}</span>}
                       {dep.packages?.length > 0 ? (
                         <span className="flex items-center gap-1">
                           <IndianRupee className="w-3.5 h-3.5" />
@@ -755,7 +764,24 @@ export default function DeparturesPage() {
             </select>
           </div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Meeting Point</label><input value={formData.meetingPoint} onChange={(e) => setFormData({ ...formData, meetingPoint: e.target.value })} className="input-field" placeholder="e.g. Pune Railway Station" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Transport</label><input value={formData.transport || ''} onChange={(e) => setFormData({ ...formData, transport: e.target.value })} className="input-field" placeholder="e.g. Bus from Pune" /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Contact Phone</label><input value={formData.contact} onChange={(e) => setFormData({ ...formData, contact: e.target.value.replace(/\D/g, '').slice(0, 10) })} maxLength={10} className="input-field" placeholder="e.g. 9876543210" /></div>
+          <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FileUpload
+              folder="departures"
+              accept="image"
+              label="Departure Image"
+              value={formData.imageUrl || ''}
+              onChange={(url) => setFormData({ ...formData, imageUrl: url })}
+            />
+            <FileUpload
+              folder="documents"
+              accept="pdf"
+              label="Departure Brochure"
+              value={formData.brochureUrl || ''}
+              onChange={(url) => setFormData({ ...formData, brochureUrl: url })}
+            />
+          </div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Group Invite Link</label><input value={formData.whatsappGroupInviteLink || ''} onChange={(e) => setFormData({ ...formData, whatsappGroupInviteLink: e.target.value })} className="input-field" placeholder="https://chat.whatsapp.com/xxxxxxxxxxxx" /></div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Group Name (optional)</label><input value={formData.whatsappGroupName || ''} onChange={(e) => setFormData({ ...formData, whatsappGroupName: e.target.value })} className="input-field" placeholder="e.g. Harishchandragad Batch 12 Apr" /></div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Itinerary</label><textarea value={formData.itinerary} onChange={(e) => setFormData({ ...formData, itinerary: e.target.value })} className="input-field min-h-[100px] resize-none" placeholder="Day 1: ...\nDay 2: ..." /></div>
