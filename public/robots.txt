@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+Allow: /#features
+Allow: /#pricing
+Allow: /#contact
+Allow: /#whatsapp
+
+# Block CRM dashboard routes from indexing (behind login)
+Disallow: /dashboard
+Disallow: /bookings
+Disallow: /departures
+Disallow: /customers
+Disallow: /finance
+Disallow: /settings
+Disallow: /treks
+Disallow: /guides
+Disallow: /cities
+Disallow: /participants
+Disallow: /marketing
+Disallow: /flow-builder
+Disallow: /graphql
+
+Sitemap: https://trekops.in/sitemap.xml
