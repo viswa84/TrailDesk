@@ -435,7 +435,7 @@ function ContactSection() {
                 <a href="https://wa.me/918464892914" target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5">
                   <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
                 </a>
-                <a href="mailto:contact@trekops.in" className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5">
+                <a href="mailto:info@trekops.in" className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5" /> Email Us
                 </a>
               </div>
@@ -1025,7 +1025,7 @@ export default function LandingPage() {
               </div>
               <p className="text-sm text-slate-400 leading-relaxed">The complete ERP for trekking operators. Built in India 🇮🇳<br/><span className="text-slate-500">trekops.in</span></p>
               <div className="mt-3 space-y-1">
-                <a href="mailto:contact@trekops.in" className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2"><Mail className="w-3.5 h-3.5" /> contact@trekops.in</a>
+                <a href="mailto:info@trekops.in" className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2"><Mail className="w-3.5 h-3.5" /> info@trekops.in</a>
                 <a href="tel:+918464892914" className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2"><Phone className="w-3.5 h-3.5" /> +91 84648 92914</a>
                 <a href="tel:+919226001143" className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2"><Phone className="w-3.5 h-3.5" /> +91 92260 01143</a>
               </div>
