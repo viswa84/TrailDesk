@@ -234,3 +234,130 @@
   border-color: #ef4444 !important;
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
 }
+
+/* ── Landing page animations ──────────────────────────────────────────── */
+
+/* Scroll-reveal: elements fade & slide up when entering viewport */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 0.08s; }
+.reveal-delay-2 { transition-delay: 0.16s; }
+.reveal-delay-3 { transition-delay: 0.24s; }
+.reveal-delay-4 { transition-delay: 0.32s; }
+
+/* Logo / stats marquee */
+@keyframes marqueeScroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.marquee {
+  display: flex;
+  width: max-content;
+  animation: marqueeScroll 30s linear infinite;
+}
+.marquee:hover { animation-play-state: paused; }
+
+/* Gradient text shift (for hero highlight) */
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.gradient-shift {
+  background-size: 200% 200%;
+  animation: gradientShift 6s ease infinite;
+}
+
+/* Glow pulse around CTA / phone */
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); }
+  50%      { box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
+}
+.glow-pulse { animation: glowPulse 2.4s ease-in-out infinite; }
+
+/* Soft float (for icons / illustrations) */
+@keyframes softFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+.soft-float { animation: softFloat 4s ease-in-out infinite; }
+
+/* Slow rotate (for orbit illustrations) */
+@keyframes spinSlow { to { transform: rotate(360deg); } }
+.spin-slow { animation: spinSlow 24s linear infinite; }
+
+/* Number count-up baseline */
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* Shimmer for "live" badges */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.45) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+}
+
+/* Funnel arrow flow */
+@keyframes funnelFlow {
+  0%   { transform: translateX(-12px); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateX(12px); opacity: 0; }
+}
+.funnel-flow {
+  animation: funnelFlow 1.8s ease-in-out infinite;
+}
+
+/* Banned shake */
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+.shake-x { animation: shakeX 0.6s ease-in-out 2; }
+
+/* Verified tick bounce */
+@keyframes tickBounce {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.tick-bounce { animation: tickBounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+/* AI sparkle */
+@keyframes sparkleSpin {
+  0%, 100% { transform: rotate(0) scale(1); opacity: 1; }
+  50%      { transform: rotate(180deg) scale(1.15); opacity: 0.85; }
+}
+.sparkle-spin { animation: sparkleSpin 3s ease-in-out infinite; }
+
+/* Subtle blob morph */
+@keyframes blobMorph {
+  0%, 100% { border-radius: 42% 58% 60% 40% / 50% 45% 55% 50%; }
+  50%      { border-radius: 60% 40% 45% 55% / 40% 60% 50% 50%; }
+}
+.blob-morph { animation: blobMorph 10s ease-in-out infinite; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .marquee, .gradient-shift, .glow-pulse, .soft-float, .spin-slow,
+  .shimmer, .funnel-flow, .shake-x, .sparkle-spin, .blob-morph,
+  .iphone-float, .flow-line-anim, .flow-node-demo {
+    animation: none !important;
+  }
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

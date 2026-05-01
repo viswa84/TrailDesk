@@ -45,7 +45,7 @@
     <meta name="geo.country" content="India" />
     <meta name="language" content="English" />
 
-    <!-- ── JSON-LD Structured Data ──────────────────────────── -->
+    <!-- ── JSON-LD: SoftwareApplication ──────────────────────── -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -87,20 +87,53 @@
           "contactType": "customer support",
           "email": "contact@trekops.in",
           "areaServed": "IN",
-          "availableLanguage": "English"
+          "availableLanguage": ["English", "Hindi"]
         }
       }
+    }
+    </script>
+
+    <!-- ── JSON-LD: FAQPage ──────────────────────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Will my WhatsApp number get banned if I use TrekOps?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. TrekOps uses the official Meta WhatsApp Business API (Cloud API). Your number is verified, gets the green tick, and has no daily message limits — completely safe from bans."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I redirect my Instagram, Facebook and Google ads to WhatsApp automatically?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. TrekOps supports click-to-WhatsApp ads. When a customer clicks your ad, our AI chatbot greets them, qualifies the lead, shares trek details and even confirms the booking — 24×7."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How long is the free trial?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Professional plan comes with a 30-day free trial. No credit card required. The Starter plan is free forever."
+          }
+        }
+      ]
     }
     </script>
 
     <!-- ── Fonts ─────────────────────────────────────────────── -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
-
