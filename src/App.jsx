@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import AppLayout from './components/layout/AppLayout';
@@ -20,6 +21,21 @@ import SupportChatPage from './pages/SupportChatPage';
 import WhatsAppFlowPage from './pages/WhatsAppFlowPage';
 import FlowBuilderPage from './pages/FlowBuilderPage';
 import SuperAdminPage  from './pages/SuperAdminPage';
+
+function PrivacyPolicyPage() {
+  useEffect(() => { window.location.replace('/privacy-policy/index.html'); }, []);
+  return null;
+}
+
+function TermsOfServicePage() {
+  useEffect(() => { window.location.replace('/terms-of-service/index.html'); }, []);
+  return null;
+}
+
+function RefundPolicyPage() {
+  useEffect(() => { window.location.replace('/refund-policy/index.html'); }, []);
+  return null;
+}
 
 function AuthRedirect({ children }) {
   const { isAuthenticated } = useAuth();
@@ -71,6 +87,10 @@ function App() {
 
             {/* Super Admin only route */}
             <Route path="/superadmin" element={<RequireSuperAdmin><SuperAdminPage /></RequireSuperAdmin>} />
+
+            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+            <Route path="/refund-policy" element={<RefundPolicyPage />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
