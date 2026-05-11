@@ -191,6 +191,14 @@ export default function BatchDetailPage() {
                         {startStr && <><span className="text-slate-300">•</span><CalendarDays className="w-3.5 h-3.5" /> {startStr} → {endStr}</>}
                     </p>
                 </div>
+                <button
+                    onClick={() => navigate('/departures', { state: { duplicateFrom: departure } })}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors text-sm font-medium cursor-pointer shrink-0"
+                    title="Duplicate this departure"
+                >
+                    <Copy className="w-4 h-4" />
+                    <span className="hidden sm:inline">Duplicate</span>
+                </button>
             </div>
 
             {/* Info Cards */}

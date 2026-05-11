@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { GET_CHATS, GET_MESSAGES } from '../graphql/queries';
+import { GET_CHATS, GET_MESSAGES, GET_CONVERSATION_LOGS, GET_STAFF_USERS, ASSIGN_GUIDE, UNASSIGN_GUIDE, TOGGLE_AI } from '../graphql/queries';
 import { SEND_MESSAGE } from '../graphql/mutations';
 import { io } from 'socket.io-client';
-import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, Check, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X, Image, Film, Music, File, AlertCircle } from 'lucide-react';
+import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, Check, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X, Image, Film, Music, File, AlertCircle, Bot, BotOff, UserPlus, UserMinus, UserCheck, Info } from 'lucide-react';
 
 function DeliveryTick({ status, failureReason }) {
   if (status === 'read') return <CheckCheck className="w-3.5 h-3.5 text-blue-300" title="Read" />;
@@ -164,6 +164,10 @@ export default function SupportChatPage() {
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [sendingFiles, setSendingFiles] = useState(false);
 
+  // ─── Guide Oversight State ─────────────────────────
+  const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [selectedGuideId, setSelectedGuideId] = useState('');
+
   // ─── New Message Modal ─────────────────────────────
   const [showNewMsg, setShowNewMsg] = useState(false);
   const [newPhone, setNewPhone] = useState('91');
@@ -179,8 +183,23 @@ export default function SupportChatPage() {
     skip: !activePhone,
   });
 
+  // ─── GraphQL: Conversation logs for active phone ───
+  const { data: logsData, refetch: refetchLogs } = useQuery(GET_CONVERSATION_LOGS, {
+    variables: { phone: activePhone },
+    skip: !activePhone,
+    fetchPolicy: 'cache-and-network',
+  });
+
+  // ─── GraphQL: Staff users for guide assignment ─────
+  const { data: staffData } = useQuery(GET_STAFF_USERS, { fetchPolicy: 'cache-first' });
+
   // ─── GraphQL: Send message ─────────────────────────
   const [sendMessageMutation, { loading: sending }] = useMutation(SEND_MESSAGE);
+
+  // ─── GraphQL: Guide oversight mutations ───────────
+  const [assignGuide, { loading: assigning }] = useMutation(ASSIGN_GUIDE);
+  const [unassignGuide, { loading: unassigning }] = useMutation(UNASSIGN_GUIDE);
+  const [toggleAIMutation, { loading: toggling }] = useMutation(TOGGLE_AI);
 
   // ─── Socket.IO for real-time updates ───────────────
   useEffect(() => {
@@ -188,7 +207,7 @@ export default function SupportChatPage() {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('🔌 Socket connected:', socket.id);
+      console.log('Socket connected:', socket.id);
     });
 
     socket.on('newMessage', (msg) => {
@@ -211,8 +230,11 @@ export default function SupportChatPage() {
       ));
     });
 
+    socket.on('conversationAssigned', () => { refetchChats(); });
+    socket.on('aiToggled', () => { refetchChats(); });
+
     socket.on('disconnect', () => {
-      console.log('🔌 Socket disconnected');
+      console.log('Socket disconnected');
     });
 
     return () => {
@@ -221,11 +243,13 @@ export default function SupportChatPage() {
     };
   }, [refetchChats]);
 
-  // Reset live messages and attachments when switching chats
+  // Reset live messages, attachments, and panel state when switching chats
   useEffect(() => {
     setLiveMessages([]);
     setAttachedFiles([]);
     setMessage('');
+    setShowInfoPanel(false);
+    setSelectedGuideId('');
   }, [activePhone]);
 
   const contacts = useMemo(() => {
@@ -256,9 +280,61 @@ export default function SupportChatPage() {
     [contacts, searchTerm]
   );
 
+  // ─── Derive guide oversight values from active contact ─
+  const logs = logsData?.getConversationLogs || [];
+  const staffUsers = staffData?.getStaffUsers || [];
+  const aiEnabled = activeContact?.aiEnabled !== false; // default true if not set
+  const assignedGuideId = activeContact?.assignedGuideId || null;
+  const assignedGuideName = activeContact?.assignedGuideName || null;
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // ─── Helper: format relative time for activity log ─
+  const formatTimeAgo = (dateStr) => {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+
+  // ─── Guide oversight handlers ──────────────────────
+  const handleToggleAI = useCallback(async () => {
+    const newEnabled = !aiEnabled;
+    if (!newEnabled) {
+      const ok = window.confirm('Turn off AI? The bot will stop responding. You must reply manually.');
+      if (!ok) return;
+    }
+    try {
+      await toggleAIMutation({ variables: { phone: activePhone, enabled: newEnabled } });
+      await refetchChats();
+      refetchLogs();
+    } catch (e) { console.error(e); }
+  }, [aiEnabled, activePhone, toggleAIMutation, refetchChats, refetchLogs]);
+
+  const handleAssignGuide = useCallback(async () => {
+    if (!selectedGuideId || !activePhone) return;
+    try {
+      await assignGuide({ variables: { phone: activePhone, guideId: selectedGuideId } });
+      setSelectedGuideId('');
+      await refetchChats();
+      refetchLogs();
+    } catch (e) { console.error(e); }
+  }, [selectedGuideId, activePhone, assignGuide, refetchChats, refetchLogs]);
+
+  const handleUnassignGuide = useCallback(async () => {
+    if (!activePhone) return;
+    try {
+      await unassignGuide({ variables: { phone: activePhone } });
+      await refetchChats();
+      refetchLogs();
+    } catch (e) { console.error(e); }
+  }, [activePhone, unassignGuide, refetchChats, refetchLogs]);
 
   const handleSend = useCallback(async () => {
     if (!message.trim() || !activePhone) return;
@@ -425,6 +501,25 @@ export default function SupportChatPage() {
                       <p className="text-xs text-slate-500 truncate">{contact.lastMessage || (contact.source === 'session' ? `Bot step: ${contact.step}` : 'No messages')}</p>
                       {contact.messageCount > 0 && <span className="ml-2 shrink-0 text-[10px] text-slate-400">{contact.messageCount}</span>}
                     </div>
+                    {/* AI status badge + assigned guide chip */}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {contact.aiEnabled === false ? (
+                        <span className="flex items-center gap-0.5 text-[10px] text-amber-600 font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                          Manual
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                          AI
+                        </span>
+                      )}
+                      {contact.assignedGuideName && (
+                        <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full truncate max-w-[90px]">
+                          {contact.assignedGuideName}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
@@ -432,221 +527,356 @@ export default function SupportChatPage() {
           </div>
         </div>
 
-        {/* ──────── RIGHT: Chat Area ──────── */}
-        <div className={`flex-1 flex flex-col min-w-0 ${showMobileChat ? 'flex' : 'hidden sm:flex'}`}>
-          {activePhone ? (
-            <>
-              {/* Chat Header */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-white shrink-0">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setShowMobileChat(false)} className="sm:hidden p-1.5 hover:bg-slate-100 rounded-lg mr-1 cursor-pointer">
-                    <ArrowLeft className="w-5 h-5 text-slate-600" />
-                  </button>
-                  <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-sm font-bold">{getAvatar(activePhone, activeContact?.name)}</div>
+        {/* ──────── RIGHT: Chat Area + Info Panel ──────── */}
+        <div className={`flex-1 flex min-w-0 ${showMobileChat ? 'flex' : 'hidden sm:flex'}`}>
+
+          {/* Chat column */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {activePhone ? (
+              <>
+                {/* Chat Header */}
+                <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-white shrink-0">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setShowMobileChat(false)} className="sm:hidden p-1.5 hover:bg-slate-100 rounded-lg mr-1 cursor-pointer">
+                      <ArrowLeft className="w-5 h-5 text-slate-600" />
+                    </button>
+                    <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-sm font-bold">{getAvatar(activePhone, activeContact?.name)}</div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">{activeContact?.name || activePhone}</h3>
+                      <p className="text-[11px] text-slate-500">
+                        {activeContact?.name ? activePhone : (activeContact?.source === 'chat' ? `${activeContact.messageCount} messages` : activeContact?.step ? `Bot step: ${activeContact.step}` : 'WhatsApp')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {/* AI status badge */}
+                    {aiEnabled ? (
+                      <span className="hidden sm:flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full font-medium">
+                        <Bot className="w-3.5 h-3.5" /> AI Active
+                      </span>
+                    ) : (
+                      <span className="hidden sm:flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full font-medium">
+                        <UserCheck className="w-3.5 h-3.5" /> Manual
+                      </span>
+                    )}
+                    {/* Info panel toggle */}
+                    <button
+                      onClick={() => setShowInfoPanel(p => !p)}
+                      className={`p-2 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors ${showInfoPanel ? 'bg-slate-100 text-primary-600' : 'text-slate-400'}`}
+                      title="Conversation info"
+                    >
+                      <Info className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => refetchMessages()} className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer" title="Refresh">
+                      <RefreshCw className={`w-4 h-4 text-slate-400 ${messagesLoading ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"><PhoneIcon className="w-4 h-4 text-slate-400" /></button>
+                    <button className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"><MoreVertical className="w-4 h-4 text-slate-400" /></button>
+                  </div>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 bg-linear-to-b from-slate-50 to-white">
+                  <div className="max-w-2xl mx-auto space-y-1">
+                    {messagesLoading && messages.length === 0 ? (
+                      <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 text-slate-300 animate-spin" /></div>
+                    ) : messages.length === 0 ? (
+                      <div className="text-center py-12"><p className="text-sm text-slate-400">No messages yet. Send a message to start the conversation.</p></div>
+                    ) : (
+                      messages.map((msg, idx) => {
+                        const isOutbound = msg.direction === 'outbound';
+                        const msgDate = formatDate(msg.createdAt);
+                        const prevDate = idx > 0 ? formatDate(messages[idx - 1].createdAt) : null;
+                        const showDate = msgDate && msgDate !== prevDate;
+
+                        // Detect interactive type from raw payload
+                        const interactiveType = msg.raw?.interactive?.type;
+                        const isButtonReply = interactiveType === 'button_reply';
+                        const isListReply = interactiveType === 'list_reply';
+
+                        const live = msg.waMessageId ? statusUpdates[msg.waMessageId] : null;
+                        const resolvedStatus = live?.deliveryStatus || msg.deliveryStatus;
+                        const resolvedReason = live?.deliveryFailureReason || msg.deliveryFailureReason;
+                        const isFailed = isOutbound && resolvedStatus === 'failed';
+
+                        return (
+                          <div key={msg._id || idx}>
+                            {showDate && (
+                              <div className="flex items-center justify-center my-4">
+                                <span className="px-3 py-1 bg-white rounded-full text-[11px] font-medium text-slate-500 shadow-sm border border-slate-100">{msgDate}</span>
+                              </div>
+                            )}
+                            <div className={`flex mb-1 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`max-w-[80%] overflow-hidden rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm
+                                ${isOutbound
+                                  ? 'bg-primary-600 text-white rounded-br-md'
+                                  : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-md'
+                                }`}
+                              >
+                                {/* Media messages */}
+                                {['image','document','video','audio'].includes(msg.raw?.type) ? (
+                                  <MediaMessage raw={msg.raw} message={msg.message} isOutbound={isOutbound} />
+                                ) : (
+                                  <div style={{ whiteSpace: 'pre-line' }}>
+                                    {parseWhatsAppText(msg.message)}
+                                  </div>
+                                )}
+
+                                {/* If inbound is a button/list reply, show what they selected */}
+                                {isButtonReply && msg.raw.interactive.button_reply && (
+                                  <div className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium
+                                    ${isOutbound ? 'bg-white/15 text-white/80' : 'bg-primary-50 text-primary-600'}`}>
+                                    ↩ {msg.raw.interactive.button_reply.title}
+                                  </div>
+                                )}
+                                {isListReply && msg.raw.interactive.list_reply && (
+                                  <div className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium
+                                    ${isOutbound ? 'bg-white/15 text-white/80' : 'bg-primary-50 text-primary-600'}`}>
+                                    ☰ {msg.raw.interactive.list_reply.title}
+                                    {msg.raw.interactive.list_reply.description && (
+                                      <span className="opacity-60 ml-1">· {msg.raw.interactive.list_reply.description}</span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* For outbound interactive messages: show buttons or list */}
+                                {isOutbound && <InteractiveButtons raw={msg.raw} isOutbound={isOutbound} />}
+
+                                {/* Timestamp + delivery status tick */}
+                                <div className={`flex items-center justify-end gap-1 mt-1.5 ${isOutbound ? 'text-primary-200' : 'text-slate-400'}`}>
+                                  <span className="text-[10px]">{formatTime(msg.createdAt)}</span>
+                                  {isOutbound && <DeliveryTick status={resolvedStatus} failureReason={resolvedReason} />}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Retry row — shown below failed outbound messages */}
+                            {isFailed && (
+                              <div className="flex justify-end mb-2 pr-1">
+                                <div className="flex items-center gap-2">
+                                  {resolvedReason && (
+                                    <span className="text-[10px] text-red-400 max-w-[200px] truncate" title={resolvedReason}>{resolvedReason}</span>
+                                  )}
+                                  <button
+                                    onClick={() => handleRetry(msg)}
+                                    className="flex items-center gap-1 text-[11px] font-medium text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-full transition-colors"
+                                  >
+                                    <RefreshCw className="w-3 h-3" />
+                                    Retry
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </div>
+
+                {/* Quick Replies */}
+                <div className="px-3 sm:px-5 py-2 border-t border-slate-100 bg-white shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className="hidden sm:block text-[10px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">Quick:</span>
+                    <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                      {quickReplies.map(qr => (
+                        <button key={qr.label} onClick={() => setMessage(qr.label)} className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full text-xs font-medium whitespace-nowrap transition-colors cursor-pointer">
+                          <qr.icon className="w-3 h-3" /> {qr.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* File Attachments Preview */}
+                {attachedFiles.length > 0 && (
+                  <div className="px-3 sm:px-5 pt-2.5 pb-1 bg-white border-t border-slate-100">
+                    <div className="flex flex-wrap gap-2">
+                      {attachedFiles.map((f, i) => {
+                        const Icon = fileIcon(f);
+                        const isImg = f.type?.startsWith('image/');
+                        return (
+                          <div key={i} className="relative group flex items-center gap-1.5 bg-slate-100 rounded-xl px-2.5 py-1.5 pr-7 max-w-[160px]">
+                            {isImg ? (
+                              <img src={URL.createObjectURL(f)} alt={f.name} className="w-7 h-7 rounded-lg object-cover shrink-0" />
+                            ) : (
+                              <Icon className="w-5 h-5 text-slate-500 shrink-0" />
+                            )}
+                            <span className="text-xs text-slate-700 truncate">{f.name}</span>
+                            <button
+                              onClick={() => removeAttachment(i)}
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-slate-300 hover:bg-red-400 hover:text-white transition-colors cursor-pointer"
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Message Input */}
+                <div className="px-3 sm:px-5 py-2.5 sm:py-3 border-t border-slate-100 bg-white shrink-0">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`flex p-2 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0 ${attachedFiles.length > 0 ? 'text-primary-600' : 'text-slate-400'}`}
+                      title="Attach files"
+                    >
+                      <Paperclip className="w-5 h-5" />
+                    </button>
+                    <input
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          attachedFiles.length > 0 ? handleSendFiles() : handleSend();
+                        }
+                      }}
+                      placeholder={attachedFiles.length > 0 ? 'Add a caption (optional)…' : 'Type a message…'}
+                      className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                      disabled={sending || sendingFiles}
+                    />
+                    <button
+                      onClick={attachedFiles.length > 0 ? handleSendFiles : handleSend}
+                      disabled={(!message.trim() && attachedFiles.length === 0) || sending || sendingFiles}
+                      className={`p-2.5 rounded-xl transition-all duration-200 shrink-0 cursor-pointer ${(message.trim() || attachedFiles.length > 0) && !sending && !sendingFiles ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm hover:shadow-md' : 'bg-slate-100 text-slate-300'}`}
+                    >
+                      {(sending || sendingFiles) ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <MessageCircle className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-400">Select a conversation</h3>
+                  <p className="text-sm text-slate-400 mt-1">Choose a contact to start chatting</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ──────── Info Panel (collapsible, desktop only) ──────── */}
+          {activePhone && showInfoPanel && (
+            <div className="w-64 shrink-0 border-l border-slate-100 bg-white flex-col overflow-y-auto hidden sm:flex">
+
+              {/* Assigned Guide section */}
+              <div className="p-4 border-b border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Assigned Guide</p>
+                {assignedGuideId ? (
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-900">{activeContact?.name || activePhone}</h3>
-                    <p className="text-[11px] text-slate-500">
-                      {activeContact?.name ? activePhone : (activeContact?.source === 'chat' ? `${activeContact.messageCount} messages` : activeContact?.step ? `Bot step: ${activeContact.step}` : 'WhatsApp')}
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold">
+                        {assignedGuideName?.[0] || '?'}
+                      </div>
+                      <span className="text-sm font-semibold text-slate-800">{assignedGuideName}</span>
+                    </div>
+                    <button
+                      onClick={handleUnassignGuide}
+                      disabled={unassigning}
+                      className="text-xs text-red-500 hover:text-red-600 disabled:opacity-50 font-medium transition-colors"
+                    >
+                      {unassigning ? 'Removing…' : 'Remove Assignment'}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs text-slate-400 mb-2">No guide assigned</p>
+                    <select
+                      value={selectedGuideId}
+                      onChange={e => setSelectedGuideId(e.target.value)}
+                      className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    >
+                      <option value="">Select guide...</option>
+                      {staffUsers.map(u => (
+                        <option key={u._id} value={u._id}>{u.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleAssignGuide}
+                      disabled={!selectedGuideId || assigning}
+                      className="w-full text-xs bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg py-1.5 font-semibold transition-colors"
+                    >
+                      {assigning ? 'Assigning...' : 'Assign'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* AI Control section */}
+              <div className="p-4 border-b border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">AI Agent</p>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Bot Responses</p>
+                    <p className={`text-xs font-medium ${aiEnabled ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {aiEnabled ? 'Active' : 'Disabled'}
                     </p>
                   </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => refetchMessages()} className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer" title="Refresh">
-                    <RefreshCw className={`w-4 h-4 text-slate-400 ${messagesLoading ? 'animate-spin' : ''}`} />
+                  {/* Toggle switch */}
+                  <button
+                    onClick={handleToggleAI}
+                    disabled={toggling}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 cursor-pointer ${aiEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${aiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
-                  <button className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"><PhoneIcon className="w-4 h-4 text-slate-400" /></button>
-                  <button className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"><MoreVertical className="w-4 h-4 text-slate-400" /></button>
                 </div>
+                {!aiEnabled && (
+                  <p className="text-[11px] text-amber-600">Bot is silent. Reply manually using the chat input below.</p>
+                )}
               </div>
 
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 bg-linear-to-b from-slate-50 to-white">
-                <div className="max-w-2xl mx-auto space-y-1">
-                  {messagesLoading && messages.length === 0 ? (
-                    <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 text-slate-300 animate-spin" /></div>
-                  ) : messages.length === 0 ? (
-                    <div className="text-center py-12"><p className="text-sm text-slate-400">No messages yet. Send a message to start the conversation.</p></div>
-                  ) : (
-                    messages.map((msg, idx) => {
-                      const isOutbound = msg.direction === 'outbound';
-                      const msgDate = formatDate(msg.createdAt);
-                      const prevDate = idx > 0 ? formatDate(messages[idx - 1].createdAt) : null;
-                      const showDate = msgDate && msgDate !== prevDate;
-
-                      // Detect interactive type from raw payload
-                      const interactiveType = msg.raw?.interactive?.type;
-                      const isButtonReply = interactiveType === 'button_reply';
-                      const isListReply = interactiveType === 'list_reply';
-
-                      const live = msg.waMessageId ? statusUpdates[msg.waMessageId] : null;
-                      const resolvedStatus = live?.deliveryStatus || msg.deliveryStatus;
-                      const resolvedReason = live?.deliveryFailureReason || msg.deliveryFailureReason;
-                      const isFailed = isOutbound && resolvedStatus === 'failed';
-
-                      return (
-                        <div key={msg._id || idx}>
-                          {showDate && (
-                            <div className="flex items-center justify-center my-4">
-                              <span className="px-3 py-1 bg-white rounded-full text-[11px] font-medium text-slate-500 shadow-sm border border-slate-100">{msgDate}</span>
-                            </div>
-                          )}
-                          <div className={`flex mb-1 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[80%] overflow-hidden rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm
-                              ${isOutbound
-                                ? 'bg-primary-600 text-white rounded-br-md'
-                                : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-md'
-                              }`}
-                            >
-                              {/* Media messages */}
-                              {['image','document','video','audio'].includes(msg.raw?.type) ? (
-                                <MediaMessage raw={msg.raw} message={msg.message} isOutbound={isOutbound} />
-                              ) : (
-                                <div style={{ whiteSpace: 'pre-line' }}>
-                                  {parseWhatsAppText(msg.message)}
-                                </div>
-                              )}
-
-                              {/* If inbound is a button/list reply, show what they selected */}
-                              {isButtonReply && msg.raw.interactive.button_reply && (
-                                <div className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium
-                                  ${isOutbound ? 'bg-white/15 text-white/80' : 'bg-primary-50 text-primary-600'}`}>
-                                  ↩ {msg.raw.interactive.button_reply.title}
-                                </div>
-                              )}
-                              {isListReply && msg.raw.interactive.list_reply && (
-                                <div className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium
-                                  ${isOutbound ? 'bg-white/15 text-white/80' : 'bg-primary-50 text-primary-600'}`}>
-                                  ☰ {msg.raw.interactive.list_reply.title}
-                                  {msg.raw.interactive.list_reply.description && (
-                                    <span className="opacity-60 ml-1">· {msg.raw.interactive.list_reply.description}</span>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* For outbound interactive messages: show buttons or list */}
-                              {isOutbound && <InteractiveButtons raw={msg.raw} isOutbound={isOutbound} />}
-
-                              {/* Timestamp + delivery status tick */}
-                              <div className={`flex items-center justify-end gap-1 mt-1.5 ${isOutbound ? 'text-primary-200' : 'text-slate-400'}`}>
-                                <span className="text-[10px]">{formatTime(msg.createdAt)}</span>
-                                {isOutbound && <DeliveryTick status={resolvedStatus} failureReason={resolvedReason} />}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Retry row — shown below failed outbound messages */}
-                          {isFailed && (
-                            <div className="flex justify-end mb-2 pr-1">
-                              <div className="flex items-center gap-2">
-                                {resolvedReason && (
-                                  <span className="text-[10px] text-red-400 max-w-[200px] truncate" title={resolvedReason}>{resolvedReason}</span>
-                                )}
-                                <button
-                                  onClick={() => handleRetry(msg)}
-                                  className="flex items-center gap-1 text-[11px] font-medium text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-full transition-colors"
-                                >
-                                  <RefreshCw className="w-3 h-3" />
-                                  Retry
-                                </button>
-                              </div>
-                            </div>
-                          )}
+              {/* Activity Log section */}
+              <div className="p-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Recent Activity</p>
+                {logs.length === 0 ? (
+                  <p className="text-xs text-slate-400">No activity yet</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {logs.slice(0, 6).map(log => (
+                      <div key={log.id} className="flex items-start gap-2">
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                          log.action === 'assigned' ? 'bg-blue-100' :
+                          log.action === 'unassigned' ? 'bg-red-100' :
+                          log.action === 'ai_enabled' ? 'bg-emerald-100' :
+                          log.action === 'ai_disabled' ? 'bg-amber-100' : 'bg-slate-100'
+                        }`}>
+                          {log.action === 'assigned' && <UserPlus className="w-2.5 h-2.5 text-blue-600" />}
+                          {log.action === 'unassigned' && <UserMinus className="w-2.5 h-2.5 text-red-500" />}
+                          {log.action === 'ai_enabled' && <Bot className="w-2.5 h-2.5 text-emerald-600" />}
+                          {log.action === 'ai_disabled' && <BotOff className="w-2.5 h-2.5 text-amber-600" />}
+                          {log.action === 'guide_message' && <UserCheck className="w-2.5 h-2.5 text-slate-500" />}
                         </div>
-                      );
-                    })
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-              </div>
-
-              {/* Quick Replies */}
-              <div className="px-3 sm:px-5 py-2 border-t border-slate-100 bg-white shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className="hidden sm:block text-[10px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">Quick:</span>
-                  <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
-                    {quickReplies.map(qr => (
-                      <button key={qr.label} onClick={() => setMessage(qr.label)} className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full text-xs font-medium whitespace-nowrap transition-colors cursor-pointer">
-                        <qr.icon className="w-3 h-3" /> {qr.label}
-                      </button>
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-slate-700 leading-tight">
+                            {log.action === 'assigned' && `Guide assigned${log.guideName ? `: ${log.guideName}` : ''}`}
+                            {log.action === 'unassigned' && 'Guide removed'}
+                            {log.action === 'ai_enabled' && 'AI turned on'}
+                            {log.action === 'ai_disabled' && 'AI turned off'}
+                            {log.action === 'guide_message' && 'Guide sent message'}
+                          </p>
+                          {log.performedByName && (
+                            <p className="text-[10px] text-slate-400">by {log.performedByName}</p>
+                          )}
+                          <p className="text-[10px] text-slate-300">{formatTimeAgo(log.createdAt)}</p>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                </div>
-              </div>
-
-              {/* File Attachments Preview */}
-              {attachedFiles.length > 0 && (
-                <div className="px-3 sm:px-5 pt-2.5 pb-1 bg-white border-t border-slate-100">
-                  <div className="flex flex-wrap gap-2">
-                    {attachedFiles.map((f, i) => {
-                      const Icon = fileIcon(f);
-                      const isImg = f.type?.startsWith('image/');
-                      return (
-                        <div key={i} className="relative group flex items-center gap-1.5 bg-slate-100 rounded-xl px-2.5 py-1.5 pr-7 max-w-[160px]">
-                          {isImg ? (
-                            <img src={URL.createObjectURL(f)} alt={f.name} className="w-7 h-7 rounded-lg object-cover shrink-0" />
-                          ) : (
-                            <Icon className="w-5 h-5 text-slate-500 shrink-0" />
-                          )}
-                          <span className="text-xs text-slate-700 truncate">{f.name}</span>
-                          <button
-                            onClick={() => removeAttachment(i)}
-                            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-slate-300 hover:bg-red-400 hover:text-white transition-colors cursor-pointer"
-                          >
-                            <X className="w-2.5 h-2.5" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Message Input */}
-              <div className="px-3 sm:px-5 py-2.5 sm:py-3 border-t border-slate-100 bg-white shrink-0">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`flex p-2 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0 ${attachedFiles.length > 0 ? 'text-primary-600' : 'text-slate-400'}`}
-                    title="Attach files"
-                  >
-                    <Paperclip className="w-5 h-5" />
-                  </button>
-                  <input
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        attachedFiles.length > 0 ? handleSendFiles() : handleSend();
-                      }
-                    }}
-                    placeholder={attachedFiles.length > 0 ? 'Add a caption (optional)…' : 'Type a message…'}
-                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
-                    disabled={sending || sendingFiles}
-                  />
-                  <button
-                    onClick={attachedFiles.length > 0 ? handleSendFiles : handleSend}
-                    disabled={(!message.trim() && attachedFiles.length === 0) || sending || sendingFiles}
-                    className={`p-2.5 rounded-xl transition-all duration-200 shrink-0 cursor-pointer ${(message.trim() || attachedFiles.length > 0) && !sending && !sendingFiles ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm hover:shadow-md' : 'bg-slate-100 text-slate-300'}`}
-                  >
-                    {(sending || sendingFiles) ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <MessageCircle className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-slate-400">Select a conversation</h3>
-                <p className="text-sm text-slate-400 mt-1">Choose a contact to start chatting</p>
+                )}
               </div>
             </div>
           )}

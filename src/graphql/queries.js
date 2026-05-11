@@ -252,6 +252,9 @@ export const GET_CHATS = gql`
       messageCount
       source
       step
+      aiEnabled
+      assignedGuideId
+      assignedGuideName
     }
   }
 `;
@@ -851,5 +854,120 @@ export const GET_CONTACT_INQUIRIES = gql`
       createdAt
       updatedAt
     }
+  }
+`;
+
+// ─── Staff Users Query ────────────────────────────────
+export const GET_STAFF_USERS = gql`
+  query GetStaffUsers {
+    getStaffUsers {
+      _id
+      name
+      email
+      phone
+      role
+    }
+  }
+`;
+
+// ─── Conversations ─────────────────────────────────────
+export const GET_CONVERSATIONS = gql`
+  query GetConversations($filter: String, $search: String) {
+    getConversations(filter: $filter, search: $search) {
+      phone
+      customerName
+      step
+      aiEnabled
+      assignedGuideId
+      assignedGuideName
+      assignedAt
+      assignedByName
+      lastMessageAt
+      tenantId
+    }
+  }
+`;
+
+export const GET_CONVERSATION_MESSAGES = gql`
+  query GetConversationMessages($phone: String!, $limit: Int) {
+    getConversationMessages(phone: $phone, limit: $limit) {
+      id
+      phone
+      direction
+      message
+      deliveryStatus
+      createdAt
+    }
+  }
+`;
+
+export const GET_CONVERSATION_LOGS = gql`
+  query GetConversationLogs($phone: String!) {
+    getConversationLogs(phone: $phone) {
+      id
+      phone
+      action
+      performedByName
+      guideName
+      note
+      createdAt
+    }
+  }
+`;
+
+export const ASSIGN_GUIDE = gql`
+  mutation AssignGuide($phone: String!, $guideId: ID!) {
+    assignGuide(phone: $phone, guideId: $guideId) {
+      phone
+      customerName
+      step
+      aiEnabled
+      assignedGuideId
+      assignedGuideName
+      assignedAt
+      assignedByName
+      lastMessageAt
+      tenantId
+    }
+  }
+`;
+
+export const UNASSIGN_GUIDE = gql`
+  mutation UnassignGuide($phone: String!) {
+    unassignGuide(phone: $phone) {
+      phone
+      customerName
+      step
+      aiEnabled
+      assignedGuideId
+      assignedGuideName
+      assignedAt
+      assignedByName
+      lastMessageAt
+      tenantId
+    }
+  }
+`;
+
+export const TOGGLE_AI = gql`
+  mutation ToggleAI($phone: String!, $enabled: Boolean!) {
+    toggleAI(phone: $phone, enabled: $enabled) {
+      phone
+      customerName
+      step
+      aiEnabled
+      assignedGuideId
+      assignedGuideName
+      assignedAt
+      assignedByName
+      lastMessageAt
+      tenantId
+    }
+  }
+`;
+
+export const SEND_GUIDE_MESSAGE = gql`
+  mutation SendGuideMessage($phone: String!, $message: String!) {
+    sendGuideMessage(phone: $phone, message: $message)
   }
 `;

@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDepartures } from '../hooks/useDepartures';
 import { useCities } from '../hooks/useCities';
 import { useBoardingPoints } from '../hooks/useBoardingPoints';
@@ -11,7 +11,7 @@ import DatePickerInput from '../components/ui/DatePickerInput';
 import StatusBadge from '../components/ui/StatusBadge';
 import FileUpload from '../components/ui/FileUpload';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isSameDay, differenceInDays, addMonths, subMonths } from 'date-fns';
-import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, X, Eye, AlertTriangle, IndianRupee, Building2, Phone, FileText } from 'lucide-react';
+import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, X, Eye, AlertTriangle, IndianRupee, Building2, Phone, FileText, Copy } from 'lucide-react';
 
 const emptyDeparture = {
   trekId: '', trekName: '', cityId: '', startDate: '', endDate: '',
@@ -41,6 +41,7 @@ export default function DeparturesPage() {
   const { guides } = useGuides();
   const toast = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const [view, setView] = useState('list');
   const [selectedDep, setSelectedDep] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -53,6 +54,7 @@ export default function DeparturesPage() {
   const [errors, setErrors] = useState({});
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [isDuplicating, setIsDuplicating] = useState(false);
 
   const trekColorMap = useMemo(() => {
     const uniqueTreks = [...new Set(deps.map(d => d.trekName))];
@@ -61,7 +63,16 @@ export default function DeparturesPage() {
     return map;
   }, [deps]);
 
-  const handleAdd = () => { setEditingDep(null); setFormData(emptyDeparture); setErrors({}); setShowForm(true); };
+  useEffect(() => {
+    if (location.state?.duplicateFrom) {
+      handleDuplicate(location.state.duplicateFrom);
+      // Clear the state so a refresh doesn't re-open the modal
+      navigate('/departures', { replace: true, state: {} });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleAdd = () => { setEditingDep(null); setIsDuplicating(false); setFormData(emptyDeparture); setErrors({}); setShowForm(true); };
 
   const handleEdit = (dep, e) => {
     if (e) e.stopPropagation();
@@ -83,6 +94,44 @@ export default function DeparturesPage() {
       whatsappGroupName: dep.whatsappGroupName || '',
       nights: dep.nights != null ? String(dep.nights) : '',
       days: dep.days != null ? String(dep.days) : '',
+      boardingPointIds: dep.boardingPointIds || [],
+      packages: (dep.packages || []).map(p => ({
+        name: p.name || '',
+        price: String(p.price ?? ''),
+        inclusions: (p.inclusions || []).join('\n'),
+      })),
+    });
+    setErrors({});
+    setShowForm(true);
+  };
+
+  const handleDuplicate = (dep, e) => {
+    if (e) e.stopPropagation();
+    setEditingDep(null);
+    setIsDuplicating(true);
+    setFormData({
+      trekId: dep.trekId || '',
+      trekName: dep.trekName || '',
+      cityId: dep.cityId || '',
+      cityName: dep.cityName || '',
+      startDate: '',
+      endDate: '',
+      nights: dep.nights != null ? String(dep.nights) : '',
+      days: dep.days != null ? String(dep.days) : '',
+      capacity: String(dep.capacity),
+      price: String(dep.price),
+      guideId: dep.guideId ? String(dep.guideId) : '',
+      guideName: dep.guideName || '',
+      itinerary: dep.itinerary || '',
+      thingsToCarry: dep.thingsToCarry || '',
+      contact: dep.contact || '',
+      transport: dep.transport || '',
+      meetingPoint: dep.meetingPoint || '',
+      imageUrl: dep.imageUrl || '',
+      brochureUrl: dep.brochureUrl || '',
+      whatsappGroupInviteLink: '',
+      whatsappGroupName: '',
+      status: 'Open',
       boardingPointIds: dep.boardingPointIds || [],
       packages: (dep.packages || []).map(p => ({
         name: p.name || '',
@@ -156,6 +205,7 @@ export default function DeparturesPage() {
         toast.success('Batch created successfully');
       }
       setShowForm(false);
+      setIsDuplicating(false);
       setErrors({});
     } catch (err) {
       toast.error(err.message || 'Failed to save departure');
@@ -343,6 +393,9 @@ export default function DeparturesPage() {
                     </button>
                     <button onClick={(e) => handleEdit(dep, e)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Edit">
                       <Edit className="w-4 h-4 text-slate-400" />
+                    </button>
+                    <button onClick={(e) => handleDuplicate(dep, e)} className="p-2 hover:bg-primary-50 rounded-lg transition-colors" title="Duplicate Departure">
+                      <Copy className="w-4 h-4 text-primary-400" />
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(dep.id || dep._id); }} className="p-2 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                       <Trash2 className="w-4 h-4 text-red-400" />
@@ -639,7 +692,13 @@ export default function DeparturesPage() {
       </Modal>
 
       {/* ──────────────────── CRUD FORM MODAL ──────────────────── */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingDep ? 'Edit Departure' : 'New Departure'} size="lg">
+      <Modal isOpen={showForm} onClose={() => { setShowForm(false); setIsDuplicating(false); }} title={editingDep ? 'Edit Departure' : isDuplicating ? 'Duplicate Departure' : 'New Departure'} size="lg">
+        {isDuplicating && (
+          <div className="flex items-center gap-2 mb-4 px-3 py-2.5 rounded-lg bg-primary-50 border border-primary-200 text-primary-700 text-sm">
+            <Copy className="w-4 h-4 shrink-0" />
+            <span>Pre-filled from the original batch. Update the <strong>dates</strong> and any other details before saving.</span>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Trek *</label>
@@ -860,8 +919,10 @@ export default function DeparturesPage() {
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-          <button onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
-          <button onClick={handleSave} className="btn-primary">{editingDep ? 'Save Changes' : 'Create Batch'}</button>
+          <button onClick={() => { setShowForm(false); setIsDuplicating(false); }} className="btn-secondary">Cancel</button>
+          <button onClick={handleSave} className="btn-primary">
+            {editingDep ? 'Save Changes' : isDuplicating ? 'Create Duplicate' : 'Create Batch'}
+          </button>
         </div>
       </Modal>
 
