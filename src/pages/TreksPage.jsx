@@ -56,9 +56,11 @@ function formatDate(iso) {
 
 const emptyForm = {
   name: '',
+  shortName: '',
   description: '',
   difficulty: 'Easy',
   image: '',
+  images: [],
   location: '',
   altitude: '',
   bestSeason: '',
@@ -127,9 +129,11 @@ export default function TreksPage() {
     setEditingTrek(trek);
     setFormData({
       name: trek.name || '',
+      shortName: trek.shortName || '',
       description: trek.description || '',
       difficulty: trek.difficulty || 'Easy',
       image: trek.image || '',
+      images: trek.images || [],
       location: trek.location || '',
       altitude: trek.altitude || '',
       bestSeason: trek.bestSeason || '',
@@ -481,6 +485,23 @@ export default function TreksPage() {
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingTrek ? 'Edit Trek' : 'Add New Trek'} size="lg">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {f('Trek Name', 'name', 'text', 'e.g. Kedarkantha Winter Trek', { full: true })}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Short name for WhatsApp</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={formData.shortName}
+                onChange={e => setFormData({ ...formData, shortName: e.target.value.slice(0, 24) })}
+                className="input-field pr-14"
+                placeholder="e.g. Kalsubai Sunrise"
+                maxLength={24}
+              />
+              <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono ${formData.shortName.length > 24 ? 'text-red-500' : formData.shortName.length >= 20 ? 'text-amber-500' : 'text-slate-400'}`}>
+                {formData.shortName.length}/24
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">Max 24 characters. Used as the button/list label in WhatsApp chat — the full name is shown elsewhere. Leave blank to use the trek name (truncated).</p>
+          </div>
           {f('Difficulty', 'difficulty', 'select', '', { options: ['Easy', 'Easy-Moderate', 'Moderate', 'Hard', 'Difficult'] })}
           {f('Altitude', 'altitude', 'text', 'e.g. 12,500 ft')}
           {f('Location', 'location', 'text', 'e.g. Uttarakhand')}
@@ -488,7 +509,7 @@ export default function TreksPage() {
           <FileUpload
             folder="departures"
             accept="image"
-            label="Trek Image"
+            label="Trek Image (Hero)"
             value={formData.image || ''}
             onChange={(url) => setFormData({ ...formData, image: url })}
           />

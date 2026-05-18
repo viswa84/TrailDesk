@@ -10,6 +10,7 @@ import {
   Image, FileSignature, Upload, MapPin, Landmark, FileText, Info, ChevronDown, ChevronUp
 } from 'lucide-react';
 import ArchitectureDoc from './ArchitectureDoc';
+import PaymentGatewaysSection from './PaymentGatewaysSection';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -33,7 +34,7 @@ async function uploadImage(file, type) {
 const COMPANY_EMPTY = {
   companyName: '', tagline: '', establishedYear: '', registrationNumber: '',
   gstNumber: '', panNumber: '', aboutUs: '',
-  email: '', phone: '', altPhone: '', website: '',
+  email: '', phone: '', altPhone: '', businessWhatsappNumber: '', website: '',
   addressLine1: '', addressLine2: '', city: '', state: '', country: 'India', pincode: '',
   bankName: '', accountNumber: '', ifscCode: '', branchName: '', accountHolderName: '',
   pdfFooterText: '', termsAndConditions: '', cancellationPolicy: '',
@@ -103,6 +104,7 @@ export default function SettingsPage() {
       registrationNumber: p.registrationNumber || '', gstNumber: p.gstNumber || '',
       panNumber: p.panNumber || '', aboutUs: p.aboutUs || '',
       email: p.email || '', phone: p.phone || '', altPhone: p.altPhone || '',
+      businessWhatsappNumber: p.businessWhatsappNumber || '',
       website: p.website || '', addressLine1: p.addressLine1 || '',
       addressLine2: p.addressLine2 || '', city: p.city || '', state: p.state || '',
       country: p.country || 'India', pincode: p.pincode || '',
@@ -455,6 +457,7 @@ export default function SettingsPage() {
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Email</label><input type="email" value={company.email} onChange={setC('email')} className="input-field" /></div>
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Phone</label><input type="tel" value={company.phone} onChange={setC('phone')} className="input-field" /></div>
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Alternate Phone</label><input type="tel" value={company.altPhone} onChange={setC('altPhone')} className="input-field" /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Business WhatsApp Number</label><input type="tel" value={company.businessWhatsappNumber} onChange={setC('businessWhatsappNumber')} className="input-field" placeholder="918055127575 (with country code, no +)" /><p className="text-xs text-slate-500 mt-1">Customers are redirected here after submitting the participant form.</p></div>
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Website</label><input type="url" value={company.website} onChange={setC('website')} className="input-field" placeholder="https://yourcompany.com" /></div>
             </div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider pt-2">Address</p>
@@ -493,6 +496,10 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+
+
+      {/* Payment Gateways */}
+      <PaymentGatewaysSection />
 
     </div>
   );

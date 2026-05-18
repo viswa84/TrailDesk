@@ -73,12 +73,12 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
                   className={`flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-200 group
                     ${collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
                     ${isActive
-                      ? 'bg-primary-50 text-primary-700 shadow-sm shadow-primary-100'
+                      ? 'bg-secondary-50 text-secondary-700 shadow-sm'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                     }
                   `}
                 >
-                  <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                  <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? 'text-secondary-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
                   {!collapsed && <span>{item.label}</span>}
                 </NavLink>
               );

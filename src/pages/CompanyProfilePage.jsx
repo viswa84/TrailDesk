@@ -15,14 +15,17 @@ const TABS = [
   { id: 'pdf',     label: 'PDF & Legal',        icon: FileText },
 ];
 
+const DEFAULT_THEME_COLOR = '#22c55e';
+
 const EMPTY = {
   companyName: '', tagline: '', establishedYear: '', registrationNumber: '',
   gstNumber: '', panNumber: '', aboutUs: '',
-  email: '', phone: '', altPhone: '', website: '',
+  email: '', phone: '', altPhone: '', businessWhatsappNumber: '', website: '',
   addressLine1: '', addressLine2: '', city: '', state: '', country: 'India', pincode: '',
   bankName: '', accountNumber: '', ifscCode: '', branchName: '', accountHolderName: '',
   pdfFooterText: '', termsAndConditions: '', cancellationPolicy: '',
   logoUrl: '', signatureUrl: '',
+  themeColor: DEFAULT_THEME_COLOR,
 };
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -63,6 +66,7 @@ export default function CompanyProfilePage() {
         email:               p.email || '',
         phone:               p.phone || '',
         altPhone:            p.altPhone || '',
+        businessWhatsappNumber: p.businessWhatsappNumber || '',
         website:             p.website || '',
         addressLine1:        p.addressLine1 || '',
         addressLine2:        p.addressLine2 || '',
@@ -80,6 +84,7 @@ export default function CompanyProfilePage() {
         cancellationPolicy:  p.cancellationPolicy || '',
         logoUrl:             p.logoUrl || '',
         signatureUrl:        p.signatureUrl || '',
+        themeColor:          p.themeColor || DEFAULT_THEME_COLOR,
       });
       // R2 URLs are already absolute (https://...) — no API_BASE prefix needed
       if (p.logoUrl) setForm(prev => ({ ...prev, logoUrl: p.logoUrl }));
@@ -265,6 +270,7 @@ export default function CompanyProfilePage() {
                     <Field label="Primary Email" id="email" type="email" value={form.email} onChange={set('email')} />
                     <Field label="Primary Phone" id="phone" type="tel" value={form.phone} onChange={set('phone')} />
                     <Field label="Alternate Phone" id="altPhone" type="tel" value={form.altPhone} onChange={set('altPhone')} />
+                    <Field label="Business WhatsApp Number" id="businessWhatsappNumber" type="tel" value={form.businessWhatsappNumber} onChange={set('businessWhatsappNumber')} placeholder="918055127575 (no +)" />
                     <div>
                       <label htmlFor="website" className="block text-sm font-medium text-slate-700 mb-1.5">
                         <span className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5" /> Website</span>

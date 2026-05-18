@@ -243,9 +243,11 @@ export const CREATE_TREK = gql`
     createTrek(input: $input) {
       _id
       name
+      shortName
       description
       difficulty
       image
+      images
       location
       altitude
       bestSeason
@@ -260,9 +262,11 @@ export const UPDATE_TREK = gql`
     updateTrek(id: $id, input: $input) {
       _id
       name
+      shortName
       description
       difficulty
       image
+      images
       location
       altitude
       bestSeason
@@ -328,6 +332,14 @@ export const CREATE_DEPARTURE = gql`
       _id
       trekId
       trekName
+      cityPickups {
+        cityId
+        cityName
+        boardingPoints {
+          _id
+          name
+        }
+      }
       cityId
       cityName
       startDate
@@ -364,6 +376,14 @@ export const UPDATE_DEPARTURE = gql`
       _id
       trekId
       trekName
+      cityPickups {
+        cityId
+        cityName
+        boardingPoints {
+          _id
+          name
+        }
+      }
       cityId
       cityName
       startDate
@@ -814,6 +834,7 @@ export const SAVE_COMPANY_PROFILE = gql`
       email
       phone
       altPhone
+      businessWhatsappNumber
       website
       addressLine1
       addressLine2
@@ -830,6 +851,9 @@ export const SAVE_COMPANY_PROFILE = gql`
       termsAndConditions
       cancellationPolicy
       aboutUs
+      themeColor
+      primaryColor
+      secondaryColor
       updatedAt
     }
   }
@@ -850,6 +874,7 @@ export const UPDATE_COMPANY_PROFILE = gql`
       email
       phone
       altPhone
+      businessWhatsappNumber
       website
       addressLine1
       addressLine2
@@ -866,6 +891,9 @@ export const UPDATE_COMPANY_PROFILE = gql`
       termsAndConditions
       cancellationPolicy
       aboutUs
+      themeColor
+      primaryColor
+      secondaryColor
       updatedAt
     }
   }
@@ -899,5 +927,34 @@ export const UPDATE_CONTACT_STATUS = gql`
 export const DELETE_CONTACT_INQUIRY = gql`
   mutation DeleteContactInquiry($id: ID!) {
     deleteContactInquiry(id: $id)
+  }
+`;
+
+// ─── Payment Gateways ──────────────────────────────────
+export const UPSERT_PAYMENT_GATEWAY = gql`
+  mutation UpsertPaymentGateway($input: PaymentGatewayInput!) {
+    upsertPaymentGateway(input: $input) {
+      _id
+      tenantId
+      provider
+      enabled
+      isDefault
+      env
+      maskedCredentials
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const DELETE_PAYMENT_GATEWAY = gql`
+  mutation DeletePaymentGateway($provider: String!) {
+    deletePaymentGateway(provider: $provider)
+  }
+`;
+
+export const SET_DEFAULT_PAYMENT_GATEWAY = gql`
+  mutation SetDefaultPaymentGateway($provider: String!) {
+    setDefaultPaymentGateway(provider: $provider)
   }
 `;

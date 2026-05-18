@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { useQuery, useMutation } from '@apollo/client/react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
+import { useQuery, useMutation, useApolloClient } from '@apollo/client/react';
 import { GET_CHATS, GET_MESSAGES, GET_CONVERSATION_LOGS, GET_STAFF_USERS, ASSIGN_GUIDE, UNASSIGN_GUIDE, TOGGLE_AI } from '../graphql/queries';
 import { SEND_MESSAGE } from '../graphql/mutations';
 import { io } from 'socket.io-client';
-import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, Check, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X, Image, Film, Music, File, AlertCircle, Bot, BotOff, UserPlus, UserMinus, UserCheck, Info } from 'lucide-react';
+import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, PhoneOff, PhoneIncoming, Mic, MicOff, Check, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X, Image, Film, Music, File, AlertCircle, Bot, BotOff, UserPlus, UserMinus, UserCheck, Info } from 'lucide-react';
+import { useWhatsAppCall } from '../hooks/useWhatsAppCall';
 
 function DeliveryTick({ status, failureReason }) {
   if (status === 'read') return <CheckCheck className="w-3.5 h-3.5 text-blue-300" title="Read" />;
@@ -151,6 +152,8 @@ function InteractiveButtons({ raw, isOutbound }) {
   return null;
 }
 
+const PAGE_SIZE = 30;
+
 export default function SupportChatPage() {
   const [activePhone, setActivePhone] = useState(null);
   const [message, setMessage] = useState('');
@@ -159,10 +162,64 @@ export default function SupportChatPage() {
   const [liveMessages, setLiveMessages] = useState([]);
   const [statusUpdates, setStatusUpdates] = useState({}); // waMessageId → deliveryStatus
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null); // scroll container for messages area
   const socketRef = useRef(null);
+  // socketInstance is kept in state so hook re-renders when the socket connects
+  const [socketInstance, setSocketInstance] = useState(null);
   const fileInputRef = useRef(null);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [sendingFiles, setSendingFiles] = useState(false);
+
+  // ─── Pagination state ──────────────────────────────
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  // Saved scroll offset used to restore position after prepending older messages
+  const savedScrollOffset = useRef(null);
+  // Whether user is near bottom — controls auto-scroll vs "new messages" pill
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const [showNewMsgPill, setShowNewMsgPill] = useState(false);
+  const apolloClient = useApolloClient();
+
+  // ─── WhatsApp Call ─────────────────────────────────
+  const {
+    callState,
+    incomingCall,
+    permissionPhone,
+    muted,
+    error: callError,
+    audioRef,
+    startCall,
+    answerCall,
+    rejectCall,
+    terminateCall,
+    toggleMute,
+    requestCallPermission,
+  } = useWhatsAppCall({ socket: socketInstance });
+
+  // ─── Active call: elapsed seconds timer ───────────
+  const [callSeconds, setCallSeconds] = useState(0);
+  useEffect(() => {
+    if (callState !== 'in-call') { setCallSeconds(0); return; }
+    const id = setInterval(() => setCallSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [callState]);
+
+  const handleCallClick = useCallback(() => {
+    if (!activePhone) return;
+    if (callState === 'idle') {
+      startCall(activePhone);
+    } else if (callState === 'needs-permission') {
+      requestCallPermission(activePhone);
+    } else if (callState !== 'ringing-in' && callState !== 'needs-permission' && callState !== 'permission-requested') {
+      terminateCall();
+    }
+  }, [activePhone, callState, startCall, terminateCall, requestCallPermission]);
+
+  const formatCallDuration = (secs) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   // ─── Guide Oversight State ─────────────────────────
   const [showInfoPanel, setShowInfoPanel] = useState(false);
@@ -177,10 +234,14 @@ export default function SupportChatPage() {
   // ─── GraphQL: Contacts (initial load only) ─────────
   const { data: chatsData, loading: chatsLoading, refetch: refetchChats } = useQuery(GET_CHATS);
 
-  // ─── GraphQL: Messages for active phone (initial load) ─
-  const { data: messagesData, loading: messagesLoading, refetch: refetchMessages } = useQuery(GET_MESSAGES, {
-    variables: { phone: activePhone },
+  // ─── GraphQL: Messages for active phone (initial load, paginated) ─
+  const { data: messagesData, loading: messagesLoading, refetch: refetchMessages, fetchMore } = useQuery(GET_MESSAGES, {
+    variables: { phone: activePhone, limit: PAGE_SIZE },
     skip: !activePhone,
+    fetchPolicy: 'network-only',
+    onCompleted: (data) => {
+      setHasMore(data?.getMessages?.hasMore ?? false);
+    },
   });
 
   // ─── GraphQL: Conversation logs for active phone ───
@@ -205,6 +266,8 @@ export default function SupportChatPage() {
   useEffect(() => {
     const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
+    // Expose to state so useWhatsAppCall can subscribe once connected
+    setSocketInstance(socket);
 
     socket.on('connect', () => {
       console.log('Socket connected:', socket.id);
@@ -219,6 +282,7 @@ export default function SupportChatPage() {
       });
       // Refresh contact list to update last message / counts
       refetchChats();
+      // The scroll auto-scroll / pill logic runs in the messages useEffect
     });
 
     socket.on('messageStatusUpdate', ({ waMessageId, deliveryStatus, deliveryFailureReason }) => {
@@ -240,25 +304,40 @@ export default function SupportChatPage() {
     return () => {
       socket.disconnect();
       socketRef.current = null;
+      setSocketInstance(null);
     };
   }, [refetchChats]);
 
-  // Reset live messages, attachments, and panel state when switching chats
+  // Reset live messages, attachments, pagination state, and panel state when switching chats
   useEffect(() => {
     setLiveMessages([]);
     setAttachedFiles([]);
     setMessage('');
     setShowInfoPanel(false);
     setSelectedGuideId('');
-  }, [activePhone]);
+    setHasMore(false);
+    setLoadingOlder(false);
+    setIsNearBottom(true);
+    setShowNewMsgPill(false);
+    savedScrollOffset.current = null;
+    // Evict cached messages for the previous phone so the next chat starts fresh
+    // (the keyArgs policy means each phone has its own cache entry)
+    if (activePhone) {
+      apolloClient.cache.evict({
+        fieldName: 'getMessages',
+        args: { phone: activePhone },
+      });
+      apolloClient.cache.gc();
+    }
+  }, [activePhone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const contacts = useMemo(() => {
     return chatsData?.getChats || [];
   }, [chatsData]);
 
-  // Merge DB messages with live socket messages for the active phone
+  // Merge paginated DB messages with live socket messages for the active phone
   const messages = useMemo(() => {
-    const dbMessages = messagesData?.getMessages || [];
+    const dbMessages = messagesData?.getMessages?.messages || [];
     const phoneMessages = liveMessages.filter(m => m.phone === activePhone);
     // Merge and deduplicate
     const allMap = new Map();
@@ -272,6 +351,13 @@ export default function SupportChatPage() {
   const activeContact = useMemo(() => {
     return contacts.find(c => c.phone === activePhone) || null;
   }, [contacts, activePhone]);
+
+  // Caller name for incoming call modal
+  const incomingCallerName = useMemo(() => {
+    if (!incomingCall?.phone) return null;
+    const contact = contacts.find(c => c.phone === incomingCall.phone);
+    return contact?.name || null;
+  }, [incomingCall, contacts]);
 
   const filteredContacts = useMemo(() =>
     contacts.filter(c =>
@@ -287,9 +373,36 @@ export default function SupportChatPage() {
   const assignedGuideId = activeContact?.assignedGuideId || null;
   const assignedGuideName = activeContact?.assignedGuideName || null;
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // After older messages are prepended: restore scroll position so the user stays on the
+  // same message they were reading (no visible jump). Must be synchronous (useLayoutEffect).
+  useLayoutEffect(() => {
+    if (savedScrollOffset.current !== null && messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      container.scrollTop = container.scrollHeight - savedScrollOffset.current;
+      savedScrollOffset.current = null;
+    }
   }, [messages]);
+
+  // Scroll to bottom when the chat first loads (initial render with messages)
+  const prevActivePhoneRef = useRef(null);
+  useEffect(() => {
+    if (activePhone !== prevActivePhoneRef.current) {
+      prevActivePhoneRef.current = activePhone;
+      // Chat switched — scroll to bottom after first paint
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+      }
+      return;
+    }
+    // Existing chat: only auto-scroll if user is near the bottom
+    if (isNearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setShowNewMsgPill(false);
+    } else {
+      // User is reading old messages — show the pill for new arrivals
+      setShowNewMsgPill(true);
+    }
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Helper: format relative time for activity log ─
   const formatTimeAgo = (dateStr) => {
@@ -383,6 +496,51 @@ export default function SupportChatPage() {
       setSendingFiles(false);
     }
   }, [activePhone, attachedFiles, message]);
+
+  // ─── Load older messages (scroll-up pagination) ────
+  const loadOlderMessages = useCallback(async () => {
+    if (!hasMore || loadingOlder || !activePhone || messages.length === 0) return;
+    const oldest = messages[0];
+    if (!oldest?.createdAt) return;
+
+    // Save scroll offset BEFORE the fetch so useLayoutEffect can restore it
+    if (messagesContainerRef.current) {
+      savedScrollOffset.current =
+        messagesContainerRef.current.scrollHeight - messagesContainerRef.current.scrollTop;
+    }
+
+    setLoadingOlder(true);
+    try {
+      const result = await fetchMore({
+        variables: {
+          phone: activePhone,
+          limit: PAGE_SIZE,
+          before: String(oldest.createdAt),
+        },
+      });
+      setHasMore(result?.data?.getMessages?.hasMore ?? false);
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+      savedScrollOffset.current = null; // clear on error so layout effect is a no-op
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [hasMore, loadingOlder, activePhone, messages, fetchMore]);
+
+  // ─── Scroll event handler ───────────────────────────
+  const handleMessagesScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const nearBottom = distanceFromBottom < 100;
+    setIsNearBottom(nearBottom);
+    if (nearBottom) setShowNewMsgPill(false);
+
+    // Trigger older message load when scrolled near the top
+    if (container.scrollTop < 100 && hasMore && !loadingOlder) {
+      loadOlderMessages();
+    }
+  }, [hasMore, loadingOlder, loadOlderMessages]);
 
   const handleSelectChat = (contact) => {
     setActivePhone(contact.phone);
@@ -570,13 +728,101 @@ export default function SupportChatPage() {
                     <button onClick={() => refetchMessages()} className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer" title="Refresh">
                       <RefreshCw className={`w-4 h-4 text-slate-400 ${messagesLoading ? 'animate-spin' : ''}`} />
                     </button>
-                    <button className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"><PhoneIcon className="w-4 h-4 text-slate-400" /></button>
+
+                    {/* Call button area — adapts to permission state */}
+                    {(callState === 'idle' || callState === 'ringing-in') && (
+                      <button
+                        onClick={handleCallClick}
+                        disabled={callState === 'ringing-in'}
+                        className={`p-2 rounded-lg cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-40 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600`}
+                        title={`Call ${activePhone}`}
+                      >
+                        <PhoneIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                    {callState === 'needs-permission' && (
+                      <button
+                        onClick={() => requestCallPermission(activePhone)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-medium border border-amber-200"
+                        title="User has not granted call permission — click to send a permission request via WhatsApp"
+                      >
+                        <PhoneIcon className="w-3.5 h-3.5" />
+                        Request Call Permission
+                      </button>
+                    )}
+                    {callState === 'permission-requested' && (
+                      <span
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-amber-600 text-xs font-medium bg-amber-50 border border-amber-200 cursor-default"
+                        title="Waiting for customer to tap Allow in WhatsApp"
+                      >
+                        <PhoneIcon className="w-3.5 h-3.5" />
+                        Permission Sent…
+                      </span>
+                    )}
+
                     <button className="p-2 hover:bg-slate-100 rounded-lg cursor-pointer"><MoreVertical className="w-4 h-4 text-slate-400" /></button>
                   </div>
                 </div>
 
+                {/* Active Call Bar — shown when a call is in progress */}
+                {(callState === 'in-call' || callState === 'dialing') && (
+                  <div className="shrink-0 flex items-center justify-between px-5 py-2.5 bg-emerald-600 text-white text-sm">
+                    <div className="flex items-center gap-2.5">
+                      <PhoneIcon className="w-4 h-4 animate-pulse" />
+                      <span className="font-medium">
+                        {callState === 'dialing' ? 'Connecting…' : `In call · ${formatCallDuration(callSeconds)}`}
+                      </span>
+                      <span className="text-emerald-200 text-xs">{activePhone}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={toggleMute}
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${muted ? 'bg-white/20 text-white' : 'hover:bg-emerald-700 text-emerald-100'}`}
+                        title={muted ? 'Unmute' : 'Mute'}
+                      >
+                        {muted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={terminateCall}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                        title="End call"
+                      >
+                        <PhoneOff className="w-3.5 h-3.5" /> End Call
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Permission-requested info banner */}
+                {callState === 'permission-requested' && (
+                  <div className="shrink-0 flex items-center gap-2.5 px-5 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs">
+                    <PhoneIcon className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                    <span>
+                      Waiting for <strong>{activePhone}</strong> to approve the call permission in WhatsApp. Once they tap <em>Allow</em>, try calling again.
+                    </span>
+                  </div>
+                )}
+
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 bg-linear-to-b from-slate-50 to-white">
+                <div
+                  ref={messagesContainerRef}
+                  onScroll={handleMessagesScroll}
+                  className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 bg-linear-to-b from-slate-50 to-white relative"
+                >
+                  {/* Older-messages loading spinner — shown at top while fetching */}
+                  {loadingOlder && (
+                    <div className="flex justify-center py-3">
+                      <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+                    </div>
+                  )}
+
+                  {/* "No more history" indicator */}
+                  {!hasMore && !messagesLoading && messages.length > 0 && (
+                    <div className="flex justify-center py-2">
+                      <span className="text-[10px] text-slate-300 px-3 py-1 bg-slate-50 rounded-full border border-slate-100">Beginning of conversation</span>
+                    </div>
+                  )}
+
                   <div className="max-w-2xl mx-auto space-y-1">
                     {messagesLoading && messages.length === 0 ? (
                       <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 text-slate-300 animate-spin" /></div>
@@ -673,6 +919,22 @@ export default function SupportChatPage() {
                     )}
                     <div ref={messagesEndRef} />
                   </div>
+
+                  {/* "New messages" pill — shown when the user has scrolled up and new messages arrive */}
+                  {showNewMsgPill && (
+                    <div className="sticky bottom-4 flex justify-center pointer-events-none">
+                      <button
+                        className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-full shadow-lg transition-colors cursor-pointer"
+                        onClick={() => {
+                          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                          setShowNewMsgPill(false);
+                          setIsNearBottom(true);
+                        }}
+                      >
+                        New messages {'↓'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Quick Replies */}
@@ -965,6 +1227,62 @@ export default function SupportChatPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Hidden audio sink for remote call audio */}
+      <audio ref={audioRef} autoPlay playsInline className="hidden" />
+
+      {/* ──────── Incoming Call Modal ──────── */}
+      {callState === 'ringing-in' && incomingCall && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+            {/* Animated ring header */}
+            <div className="bg-emerald-600 px-6 py-6 flex flex-col items-center text-white">
+              <div className="relative mb-4">
+                <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center animate-pulse">
+                  <PhoneIncoming className="w-9 h-9" />
+                </div>
+              </div>
+              <p className="text-sm font-medium text-emerald-100 mb-1">Incoming WhatsApp Call</p>
+              <h2 className="text-xl font-bold">
+                {incomingCallerName || incomingCall.phone}
+              </h2>
+              {incomingCallerName && (
+                <p className="text-sm text-emerald-200 mt-0.5">{incomingCall.phone}</p>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex divide-x divide-slate-100">
+              <button
+                onClick={rejectCall}
+                className="flex-1 flex flex-col items-center gap-2 py-5 hover:bg-red-50 transition-colors cursor-pointer group"
+              >
+                <div className="w-12 h-12 bg-red-100 group-hover:bg-red-200 rounded-full flex items-center justify-center transition-colors">
+                  <PhoneOff className="w-5 h-5 text-red-600" />
+                </div>
+                <span className="text-sm font-semibold text-red-600">Decline</span>
+              </button>
+              <button
+                onClick={answerCall}
+                className="flex-1 flex flex-col items-center gap-2 py-5 hover:bg-emerald-50 transition-colors cursor-pointer group"
+              >
+                <div className="w-12 h-12 bg-emerald-100 group-hover:bg-emerald-200 rounded-full flex items-center justify-center transition-colors">
+                  <PhoneIncoming className="w-5 h-5 text-emerald-600" />
+                </div>
+                <span className="text-sm font-semibold text-emerald-700">Answer</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Non-blocking call error toast */}
+      {callError && (
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 bg-red-600 text-white text-sm px-4 py-3 rounded-xl shadow-lg">
+          <PhoneOff className="w-4 h-4 shrink-0" />
+          <span>Call failed: {callError}</span>
         </div>
       )}
     </div>

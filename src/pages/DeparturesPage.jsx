@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useQuery as useApolloQuery } from '@apollo/client/react';
+import { GET_BOARDING_POINTS } from '../graphql/queries';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDepartures } from '../hooks/useDepartures';
 import { useCities } from '../hooks/useCities';
-import { useBoardingPoints } from '../hooks/useBoardingPoints';
+// useBoardingPoints is used inside CityBoardingSection below
 import { useGuides } from '../hooks/useGuides';
 import { useToast } from '../context/ToastContext';
 import { v, validateForm } from '../utils/validators';
@@ -19,6 +21,7 @@ const emptyDeparture = {
   meetingPoint: '', transport: '', itinerary: '', thingsToCarry: '', contact: '',
   imageUrl: '', brochureUrl: '',
   whatsappGroupInviteLink: '', whatsappGroupName: '', status: 'Open', boardingPointIds: [],
+  cityPickups: [],   // [{ cityId, boardingPointIds: [] }]
   packages: [],
 };
 
@@ -35,6 +38,49 @@ const trekColors = [
   { bg: 'bg-teal-100', text: 'text-teal-800', dot: 'bg-teal-500', border: 'border-teal-200' },
 ];
 
+// ── CityBoardingSection: per-city boarding-point checkbox list ──────────────
+function CityBoardingSection({ cityName, cityId, selectedBpIds, onBpToggle }) {
+  const { data, loading } = useApolloQuery(GET_BOARDING_POINTS, {
+    variables: { cityId },
+    skip: !cityId,
+  });
+  const bpOptions = (data?.getBoardingPoints || []).map(bp => ({ ...bp, id: bp._id }));
+
+  return (
+    <div className="mb-3 border border-slate-200 rounded-lg overflow-hidden">
+      <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+        <span className="text-sm font-semibold text-slate-700">{cityName}</span>
+        {selectedBpIds.length > 0 && (
+          <span className="text-[11px] text-primary-600 font-medium">{selectedBpIds.length} point{selectedBpIds.length !== 1 ? 's' : ''} selected</span>
+        )}
+      </div>
+      {loading ? (
+        <div className="px-3 py-2 text-xs text-slate-400">Loading boarding points...</div>
+      ) : bpOptions.length === 0 ? (
+        <div className="px-3 py-2 text-xs text-slate-400 italic">No boarding points configured for this city.</div>
+      ) : (
+        <div className="p-2 space-y-1 max-h-36 overflow-y-auto">
+          {bpOptions.map(bp => {
+            const bpId = bp._id || bp.id;
+            const checked = selectedBpIds.includes(bpId);
+            return (
+              <label key={bpId} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-50 cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onBpToggle(bpId, !checked)}
+                  className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-slate-700">{bp.name}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DeparturesPage() {
   const { data: deps, treks: treksList, loading, error, add: addDep, update: updateDep, remove: removeDep, cancel: cancelDep } = useDepartures();
   const { data: citiesList } = useCities();
@@ -47,7 +93,7 @@ export default function DeparturesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingDep, setEditingDep] = useState(null);
   const [formData, setFormData] = useState(emptyDeparture);
-  const { data: bpOptions } = useBoardingPoints(formData.cityId);
+  // Per-city boarding points are now fetched inside CityBoardingSection components
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [expandedDay, setExpandedDay] = useState(null);
@@ -95,6 +141,12 @@ export default function DeparturesPage() {
       nights: dep.nights != null ? String(dep.nights) : '',
       days: dep.days != null ? String(dep.days) : '',
       boardingPointIds: dep.boardingPointIds || [],
+      cityPickups: (dep.cityPickups && dep.cityPickups.length > 0)
+        ? dep.cityPickups.map(cp => ({
+            cityId: cp.cityId,
+            boardingPointIds: (cp.boardingPoints || []).map(bp => bp._id),
+          }))
+        : (dep.cityId ? [{ cityId: dep.cityId, boardingPointIds: dep.boardingPointIds || [] }] : []),
       packages: (dep.packages || []).map(p => ({
         name: p.name || '',
         price: String(p.price ?? ''),
@@ -133,6 +185,12 @@ export default function DeparturesPage() {
       whatsappGroupName: '',
       status: 'Open',
       boardingPointIds: dep.boardingPointIds || [],
+      cityPickups: (dep.cityPickups && dep.cityPickups.length > 0)
+        ? dep.cityPickups.map(cp => ({
+            cityId: cp.cityId,
+            boardingPointIds: (cp.boardingPoints || []).map(bp => bp._id),
+          }))
+        : (dep.cityId ? [{ cityId: dep.cityId, boardingPointIds: dep.boardingPointIds || [] }] : []),
       packages: (dep.packages || []).map(p => ({
         name: p.name || '',
         price: String(p.price ?? ''),
@@ -184,6 +242,9 @@ export default function DeparturesPage() {
       whatsappGroupInviteLink: formData.whatsappGroupInviteLink?.trim() || undefined,
       whatsappGroupName: formData.whatsappGroupName?.trim() || undefined,
       boardingPointIds: formData.boardingPointIds || [],
+      cityPickups: (formData.cityPickups || [])
+        .filter(cp => cp.cityId)
+        .map(cp => ({ cityId: cp.cityId, boardingPointIds: cp.boardingPointIds || [] })),
       packages: (formData.packages || [])
         .filter(p => p.name.trim() && p.price !== '')
         .map(p => ({
@@ -343,7 +404,17 @@ export default function DeparturesPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                       <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{duration}</span>
-                      {dep.cityName && <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{dep.cityName}</span>}
+                      {(dep.cityPickups && dep.cityPickups.length > 0
+                        ? dep.cityPickups.map(cp => cp.cityName).join(', ')
+                        : dep.cityName
+                      ) && (
+                        <span className="flex items-center gap-1">
+                          <Building2 className="w-3.5 h-3.5" />
+                          {dep.cityPickups && dep.cityPickups.length > 0
+                            ? dep.cityPickups.map(cp => cp.cityName).join(', ')
+                            : dep.cityName}
+                        </span>
+                      )}
                       <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{dep.meetingPoint}</span>
                       {dep.transport && <span>{dep.transport}</span>}
                       {dep.packages?.length > 0 ? (
@@ -484,7 +555,7 @@ export default function DeparturesPage() {
                           className={`text-[10px] leading-tight px-1.5 py-[3px] rounded-md truncate cursor-pointer transition-all duration-150 border
                             ${colors.bg} ${colors.text} ${colors.border} hover:shadow-sm hover:scale-[1.02]
                           `}
-                          title={`${d.uniqueId ? d.uniqueId + ' — ' : ''}${d.trekName} (${d.cityName || ''}) — ${d.booked}/${d.capacity} booked`}
+                          title={`${d.uniqueId ? d.uniqueId + ' — ' : ''}${d.trekName} (${d.cityPickups && d.cityPickups.length > 0 ? d.cityPickups.map(cp => cp.cityName).join(', ') : (d.cityName || '')}) — ${d.booked}/${d.capacity} booked`}
                         >
                           <div className="flex items-center gap-1">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${colors.dot}`} />
@@ -594,8 +665,16 @@ export default function DeparturesPage() {
                     <h3 className="text-lg font-bold text-slate-900">{selectedDep.trekName}</h3>
                     <StatusBadge status={getStatusLabel(selectedDep)} />
                   </div>
-                  {selectedDep.cityName && (
-                    <p className="text-sm text-slate-500 flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> From: {selectedDep.cityName}</p>
+                  {(selectedDep.cityPickups && selectedDep.cityPickups.length > 0
+                    ? selectedDep.cityPickups.map(cp => cp.cityName).join(', ')
+                    : selectedDep.cityName
+                  ) && (
+                    <p className="text-sm text-slate-500 flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5" /> From:{' '}
+                      {selectedDep.cityPickups && selectedDep.cityPickups.length > 0
+                        ? selectedDep.cityPickups.map(cp => cp.cityName).join(', ')
+                        : selectedDep.cityName}
+                    </p>
                   )}
                 </div>
               </div>
@@ -712,39 +791,65 @@ export default function DeparturesPage() {
             </select>
             {errMsg('trekName')}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">City (departure from)</label>
-            <select value={formData.cityId} onChange={(e) => setFormData({ ...formData, cityId: e.target.value, boardingPointIds: [] })} className="select-field">
-              <option value="">Select City</option>
-              {(citiesList || []).map(c => <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>)}
-            </select>
-          </div>
-          {formData.cityId && bpOptions.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Boarding Points</label>
-              <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto p-2 space-y-1 bg-white">
-                {bpOptions.map(bp => {
-                  const bpId = bp._id || bp.id;
-                  const checked = (formData.boardingPointIds || []).includes(bpId);
-                  return (
-                    <label key={bpId} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-50 cursor-pointer text-sm">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {
-                          const ids = formData.boardingPointIds || [];
-                          setFormData({ ...formData, boardingPointIds: checked ? ids.filter(i => i !== bpId) : [...ids, bpId] });
-                        }}
-                        className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                      />
-                      <span className="text-slate-700">{bp.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">{(formData.boardingPointIds || []).length} selected</p>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2">Cities & Boarding Points</label>
+            <p className="text-[11px] text-slate-400 mb-3">Select one or more departure cities. For each city, check the boarding points that apply to this batch.</p>
+            {/* City multi-selector */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {(citiesList || []).map(c => {
+                const cId = c.id || c._id;
+                const isSelected = (formData.cityPickups || []).some(cp => cp.cityId === cId);
+                return (
+                  <button
+                    key={cId}
+                    type="button"
+                    onClick={() => {
+                      const picks = formData.cityPickups || [];
+                      const already = picks.some(cp => cp.cityId === cId);
+                      const updated = already
+                        ? picks.filter(cp => cp.cityId !== cId)
+                        : [...picks, { cityId: cId, boardingPointIds: [] }];
+                      setFormData({ ...formData, cityPickups: updated, cityId: updated[0]?.cityId || '' });
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'bg-white text-slate-600 border-slate-300 hover:border-primary-400'
+                    }`}
+                  >
+                    {c.name}
+                    {isSelected && <span className="ml-1 text-primary-200">✓</span>}
+                  </button>
+                );
+              })}
             </div>
-          )}
+            {(formData.cityPickups || []).length === 0 && (
+              <p className="text-[11px] text-amber-600 mb-2">Select at least one city above.</p>
+            )}
+            {/* Per-city boarding point lists */}
+            {(formData.cityPickups || []).map((cp, cpIdx) => {
+              const city = (citiesList || []).find(c => (c.id || c._id) === cp.cityId);
+              return (
+                <CityBoardingSection
+                  key={cp.cityId}
+                  cityName={city?.name || cp.cityId}
+                  cityId={cp.cityId}
+                  selectedBpIds={cp.boardingPointIds || []}
+                  onBpToggle={(bpId, checked) => {
+                    const picks = [...(formData.cityPickups || [])];
+                    const entry = picks[cpIdx];
+                    picks[cpIdx] = {
+                      ...entry,
+                      boardingPointIds: checked
+                        ? [...(entry.boardingPointIds || []), bpId]
+                        : (entry.boardingPointIds || []).filter(id => id !== bpId),
+                    };
+                    setFormData({ ...formData, cityPickups: picks });
+                  }}
+                />
+              );
+            })}
+          </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Start Date *</label>
             <DatePickerInput

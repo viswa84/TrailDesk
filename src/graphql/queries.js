@@ -131,6 +131,7 @@ export const GET_TREKS = gql`
   getTreks(isActive: $isActive) {
     _id
     name
+    shortName
     description
     difficulty
     duration
@@ -140,6 +141,7 @@ export const GET_TREKS = gql`
     thingsToCarry
     contact
     image
+    images
     location
     altitude
     bestSeason
@@ -260,18 +262,21 @@ export const GET_CHATS = gql`
 `;
 
 export const GET_MESSAGES = gql`
-  query GetMessages($phone: String!) {
-    getMessages(phone: $phone) {
-      _id
-      phone
-      direction
-      message
-      raw
-      waMessageId
-      deliveryStatus
-      deliveryFailureReason
-      createdAt
-      updatedAt
+  query GetMessages($phone: String!, $limit: Int, $before: String) {
+    getMessages(phone: $phone, limit: $limit, before: $before) {
+      messages {
+        _id
+        phone
+        direction
+        message
+        raw
+        waMessageId
+        deliveryStatus
+        deliveryFailureReason
+        createdAt
+        updatedAt
+      }
+      hasMore
     }
   }
 `;
@@ -416,6 +421,14 @@ export const GET_DEPARTURES = gql`
     uniqueId
     trekId
     trekName
+    cityPickups {
+      cityId
+      cityName
+      boardingPoints {
+        _id
+        name
+      }
+    }
     cityId
     cityName
     startDate
@@ -457,6 +470,14 @@ export const GET_DEPARTURE = gql`
     uniqueId
     trekId
     trekName
+    cityPickups {
+      cityId
+      cityName
+      boardingPoints {
+        _id
+        name
+      }
+    }
     cityId
     cityName
     startDate
@@ -777,6 +798,7 @@ export const GET_COMPANY_PROFILE = gql`
       email
       phone
       altPhone
+      businessWhatsappNumber
       website
       addressLine1
       addressLine2
@@ -793,6 +815,9 @@ export const GET_COMPANY_PROFILE = gql`
       termsAndConditions
       cancellationPolicy
       aboutUs
+      themeColor
+      primaryColor
+      secondaryColor
       createdAt
       updatedAt
     }
@@ -969,5 +994,37 @@ export const TOGGLE_AI = gql`
 export const SEND_GUIDE_MESSAGE = gql`
   mutation SendGuideMessage($phone: String!, $message: String!) {
     sendGuideMessage(phone: $phone, message: $message)
+  }
+`;
+
+// ─── Payment Gateways ──────────────────────────────────
+export const LIST_SUPPORTED_PROVIDERS = gql`
+  query ListSupportedProviders {
+    listSupportedProviders {
+      name
+      displayName
+      requiredFields {
+        key
+        label
+        type
+        required
+      }
+    }
+  }
+`;
+
+export const LIST_PAYMENT_GATEWAYS = gql`
+  query ListPaymentGateways {
+    listPaymentGateways {
+      _id
+      tenantId
+      provider
+      enabled
+      isDefault
+      env
+      maskedCredentials
+      createdAt
+      updatedAt
+    }
   }
 `;

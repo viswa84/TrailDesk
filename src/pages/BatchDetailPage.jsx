@@ -187,7 +187,14 @@ export default function BatchDetailPage() {
                         <StatusBadge status={departure.status} />
                     </div>
                     <p className="page-subtitle mt-0.5 flex items-center gap-2 flex-wrap">
-                        {departure.cityName && <><Building2 className="w-3.5 h-3.5" /> From: {departure.cityName}</>}
+                        {(departure.cityPickups && departure.cityPickups.length > 0
+                            ? departure.cityPickups.map(cp => cp.cityName).join(', ')
+                            : departure.cityName
+                          ) && (
+                            <><Building2 className="w-3.5 h-3.5" /> From: {departure.cityPickups && departure.cityPickups.length > 0
+                              ? departure.cityPickups.map(cp => cp.cityName).join(', ')
+                              : departure.cityName}</>
+                          )}
                         {startStr && <><span className="text-slate-300">•</span><CalendarDays className="w-3.5 h-3.5" /> {startStr} → {endStr}</>}
                     </p>
                 </div>

@@ -33,6 +33,20 @@ export const apolloClient = new ApolloClient({
           getNotifications: { merge: false },
           getCities: { merge: false },
           getParticipantsByDeparture: { merge: false },
+          // Paginated chat messages — keyed by phone only; merges older pages
+          // in front of newer ones when fetchMore is called with a `before` cursor.
+          getMessages: {
+            keyArgs: ['phone'],
+            merge(existing, incoming) {
+              // incoming.messages are older (we prepend them)
+              const existingMsgs = existing?.messages ?? [];
+              const incomingMsgs = incoming?.messages ?? [];
+              return {
+                ...incoming,
+                messages: [...incomingMsgs, ...existingMsgs],
+              };
+            },
+          },
         },
       },
     },
