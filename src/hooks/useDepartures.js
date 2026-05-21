@@ -19,11 +19,20 @@ export function useDepartures(filters = {}) {
   // Real-time updates via Socket.IO
   useEffect(() => {
     const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
-    const socket = socketIO(socketUrl, { transports: ['websocket', 'polling'] });
+    const socket = socketIO(socketUrl, {
+      transports: ['websocket', 'polling'],
+      auth: { token: localStorage.getItem('trekops_token') },
+    });
 
     socket.on('departureUpdated', () => {
       console.log('Departure updated via socket, refetching...');
       refetch();
+    });
+
+    // Backend now requires a valid JWT on the socket; re-send a refreshed token.
+    socket.on('connect_error', (err) => {
+      console.warn('Socket connect_error:', err.message);
+      socket.auth = { token: localStorage.getItem('trekops_token') };
     });
 
     return () => socket.disconnect();

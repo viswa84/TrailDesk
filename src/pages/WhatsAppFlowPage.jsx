@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import {
   MessageCircle, Save, Loader2, RotateCcw, Info, Plus, Trash2,
-  ChevronDown, ChevronUp, Smartphone, Percent, Tag, AlertCircle,
+  ChevronDown, ChevronUp, Smartphone, Percent, Tag, AlertCircle, Bot,
 } from 'lucide-react';
 import { GET_FLOW_CONFIG } from '../graphql/queries';
-import { SAVE_FLOW_CONFIG, RESET_FLOW_CONFIG } from '../graphql/mutations';
+import { SAVE_FLOW_CONFIG, RESET_FLOW_CONFIG, SET_AI_ENABLED } from '../graphql/mutations';
 import { useToast } from '../context/ToastContext';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -348,6 +348,7 @@ export default function WhatsAppFlowPage() {
   const [resetFlowConfig] = useMutation(RESET_FLOW_CONFIG, {
     refetchQueries: [{ query: GET_FLOW_CONFIG }],
   });
+  const [setAiEnabled, { loading: aiToggling }] = useMutation(SET_AI_ENABLED);
 
   // Populate from server
   useEffect(() => {
@@ -393,6 +394,27 @@ export default function WhatsAppFlowPage() {
       toast.error(err.message || 'Failed to reset');
     } finally {
       setResetting(false);
+    }
+  };
+
+  // Company-wide AI auto-reply switch (default ON if not yet set)
+  const aiEnabled = cfg.aiEnabled !== false;
+
+  const handleToggleAi = async () => {
+    const next = !aiEnabled;
+    if (!next && !window.confirm(
+      'Turn off AI auto-replies for the whole company? The WhatsApp bot will stop replying to every conversation — all chats must be handled manually.'
+    )) return;
+    // Optimistic update
+    setCfg(prev => ({ ...prev, aiEnabled: next }));
+    try {
+      await setAiEnabled({ variables: { enabled: next } });
+      toast.success(next
+        ? 'AI auto-replies turned ON — the bot will now respond automatically.'
+        : 'AI auto-replies turned OFF — all chats must be handled manually.');
+    } catch (err) {
+      setCfg(prev => ({ ...prev, aiEnabled: !next }));
+      toast.error(err.message || 'Failed to update AI auto-replies');
     }
   };
 
@@ -454,6 +476,50 @@ export default function WhatsAppFlowPage() {
           as dynamic placeholders in message text. Use <code className="bg-blue-100 px-1 py-0.5 rounded text-xs font-mono">*bold*</code> for WhatsApp bold formatting.
         </span>
       </div>
+
+      {/* ── Company-wide AI auto-reply switch ──────────────────────────── */}
+      {!loading && (
+        <div className={`card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${
+          aiEnabled ? 'ring-1 ring-emerald-200' : 'ring-1 ring-amber-300 bg-amber-50/40'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+              aiEnabled ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+            }`}>
+              <Bot className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-800 text-sm">AI Auto-Replies</span>
+                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                  aiEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {aiEnabled ? 'On' : 'Off'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
+                When off, the WhatsApp bot stops replying automatically — every chat in the
+                company must be handled manually by a staff member.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleToggleAi}
+            disabled={aiToggling}
+            role="switch"
+            aria-checked={aiEnabled}
+            aria-label="Toggle AI auto-replies"
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
+              aiEnabled ? 'bg-emerald-500' : 'bg-slate-300'
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+              aiEnabled ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+      )}
 
       {loading && (
         <div className="card p-8 flex items-center justify-center gap-3 text-slate-500">

@@ -41,6 +41,7 @@ export const GET_FLOW_CONFIG = gql`
   query GetFlowConfig {
     getFlowConfig {
       _id
+      aiEnabled
       greetingKeywords
       cityStepMessage
       cityStepButtonLabel
@@ -663,13 +664,14 @@ export const ME = gql`
   query Me {
     me {
     _id
+    username
     name
     email
     phone
     role
     avatar
-    tenantId
-    tenantName
+    companyCode
+    companyName
       notificationPrefs {
       newBooking
       paymentReceived
@@ -687,8 +689,8 @@ export const MY_ORGANIZATION = gql`
   query MyOrganization {
     myOrganization {
     _id
+    code
     name
-    slug
     plan
     status
     gst
@@ -716,6 +718,7 @@ export const SUPER_ADMIN_DASHBOARD = gql`
     }
       recentSignups {
       _id
+      code
       name
       slug
       plan
@@ -735,18 +738,23 @@ export const SUPER_ADMIN_DASHBOARD = gql`
 }
 `;
 
-export const GET_ALL_TENANTS = gql`
-  query GetAllTenants($status: String, $plan: String, $search: String) {
-  getAllTenants(status: $status, plan: $plan, search: $search) {
+export const GET_ALL_COMPANIES = gql`
+  query GetAllCompanies($status: String, $plan: String, $search: String) {
+  getAllCompanies(status: $status, plan: $plan, search: $search) {
     _id
+    code
     name
     slug
     plan
     status
     licenseExpiry
     adminEmail
+    adminUsername
     userCount
     bookingCount
+    trekCount
+    hasWhatsappConfig
+    hasPaymentGateway
       settings {
       gst
       address
@@ -759,16 +767,18 @@ export const GET_ALL_TENANTS = gql`
 }
 `;
 
-export const GET_TENANT_BY_ID = gql`
-  query GetTenantById($id: ID!) {
-  getTenantById(id: $id) {
+export const GET_COMPANY_BY_CODE = gql`
+  query GetCompanyByCode($code: String!) {
+  getCompanyByCode(code: $code) {
     _id
+    code
     name
     slug
     plan
     status
     licenseExpiry
     adminEmail
+    adminUsername
     userCount
     bookingCount
       settings {
@@ -786,7 +796,6 @@ export const GET_COMPANY_PROFILE = gql`
   query GetCompanyProfile {
     getCompanyProfile {
       _id
-      tenantId
       companyName
       tagline
       logoUrl
@@ -828,12 +837,13 @@ export const GET_ALL_USERS_ADMIN = gql`
   query GetAllUsers($tenantId: ID, $role: String, $search: String) {
   getAllUsers(tenantId: $tenantId, role: $role, search: $search) {
     _id
+    username
     name
     email
     phone
     role
-    tenantId
-    tenantName
+    companyCode
+    companyName
     createdAt
   }
 }
@@ -851,6 +861,29 @@ export const GET_PLATFORM_ACTIVITY_LOG = gql`
     timestamp
   }
 }
+`;
+
+export const GET_COMPANY_DETAILS = gql`
+  query GetCompanyDetails($code: String!) {
+    getCompanyByCode(code: $code) {
+      _id code name slug plan status licenseExpiry
+      adminEmail adminUsername userCount bookingCount trekCount
+      hasWhatsappConfig hasPaymentGateway
+      adminUsers {
+        _id username name email phone role companyCode companyName createdAt
+      }
+      settings { gst address website logo }
+      createdAt updatedAt
+    }
+  }
+`;
+
+export const GET_COMPANY_USERS = gql`
+  query GetCompanyUsers($companyCode: String!) {
+    getCompanyUsers(companyCode: $companyCode) {
+      _id username name email phone role companyCode companyName createdAt
+    }
+  }
 `;
 
 export const GET_ALL_PARTICIPANTS = gql`
@@ -1022,6 +1055,65 @@ export const LIST_PAYMENT_GATEWAYS = gql`
       enabled
       isDefault
       env
+      maskedCredentials
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+// ─── Integrations ──────────────────────────────────────
+export const LIST_SUPPORTED_INTEGRATIONS = gql`
+  query ListSupportedIntegrations {
+    listSupportedIntegrations {
+      name
+      displayName
+      description
+      requiredFields {
+        key
+        label
+        type
+        required
+        secret
+        placeholder
+      }
+      metaFields {
+        key
+        label
+        type
+        required
+        secret
+        placeholder
+      }
+    }
+  }
+`;
+
+export const LIST_INTEGRATIONS = gql`
+  query ListIntegrations {
+    listIntegrations {
+      _id
+      tenantId
+      provider
+      enabled
+      meta
+      hasCredentials
+      maskedCredentials
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const GET_INTEGRATION = gql`
+  query GetIntegration($provider: String!) {
+    getIntegration(provider: $provider) {
+      _id
+      tenantId
+      provider
+      enabled
+      meta
+      hasCredentials
       maskedCredentials
       createdAt
       updatedAt

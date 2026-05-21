@@ -30,10 +30,20 @@ export const DELETE_FLOW_DEFINITION = gql`
 `;
 
 // ─── WhatsApp Flow Config Mutations ─────────────────
+export const SET_AI_ENABLED = gql`
+  mutation SetAiEnabled($enabled: Boolean!) {
+    setAiEnabled(enabled: $enabled) {
+      _id
+      aiEnabled
+    }
+  }
+`;
+
 export const SAVE_FLOW_CONFIG = gql`
   mutation SaveFlowConfig($input: FlowConfigInput!) {
     saveFlowConfig(input: $input) {
       _id
+      aiEnabled
       greetingKeywords
       cityStepMessage
       cityStepButtonLabel
@@ -77,6 +87,7 @@ export const RESET_FLOW_CONFIG = gql`
   mutation ResetFlowConfig {
     resetFlowConfig {
       _id
+      aiEnabled
       greetingKeywords
       cityStepMessage
       cityStepButtonLabel
@@ -118,18 +129,19 @@ export const RESET_FLOW_CONFIG = gql`
 
 // ─── Auth Mutations ──────────────────────────────────
 export const LOGIN = gql`
-  mutation Login($phone: String!, $password: String!) {
-    login(phone: $phone, password: $password) {
+  mutation Login($companyCode: String!, $username: String!, $password: String!) {
+    login(companyCode: $companyCode, username: $username, password: $password) {
       token
       user {
         _id
+        username
         name
         email
         phone
         role
         avatar
-        tenantId
-        tenantName
+        companyCode
+        companyName
         notificationPrefs {
           newBooking
           paymentReceived
@@ -138,6 +150,7 @@ export const LOGIN = gql`
           lowSeats
           marketing
         }
+        createdAt
       }
     }
   }
@@ -145,26 +158,6 @@ export const LOGIN = gql`
 
 // Keep the old name as alias for backward compatibility
 export const LOGIN_MUTATION = LOGIN;
-
-export const REGISTER = gql`
-  mutation Register($input: RegisterInput!) {
-    register(input: $input) {
-      token
-      user {
-        _id
-        name
-        email
-        phone
-        role
-        avatar
-        tenantId
-        tenantName
-      }
-    }
-  }
-`;
-
-export const REGISTER_MUTATION = REGISTER;
 
 export const UPDATE_PROFILE = gql`
   mutation UpdateProfile($input: UpdateProfileInput!) {
@@ -595,28 +588,21 @@ export const MARK_ALL_NOTIFICATIONS_READ = gql`
   }
 `;
 
-// ─── Super Admin Mutations ──────────────────────────────
-export const CREATE_TENANT = gql`
-  mutation CreateTenant($input: CreateTenantInput!) {
-    createTenant(input: $input) {
-      _id
-      name
-      slug
-      plan
-      status
-      adminEmail
-      userCount
-      createdAt
-    }
-  }
+// ─── Super Admin / Company Mutations ────────────────────
+export const COMPANY_DETAIL_FIELDS = `
+  _id code name plan status licenseExpiry
+  settings { gst address website logo }
+  userCount adminEmail adminUsername bookingCount trekCount
+  hasWhatsappConfig hasPaymentGateway
+  createdAt updatedAt slug
 `;
 
-export const UPDATE_TENANT = gql`
-  mutation UpdateTenant($id: ID!, $input: UpdateTenantInput!) {
-    updateTenant(id: $id, input: $input) {
+export const UPDATE_COMPANY = gql`
+  mutation UpdateCompany($code: String!, $input: UpdateCompanyInput!) {
+    updateCompany(code: $code, input: $input) {
       _id
+      code
       name
-      slug
       plan
       status
       licenseExpiry
@@ -626,67 +612,79 @@ export const UPDATE_TENANT = gql`
   }
 `;
 
-export const SUSPEND_TENANT = gql`
-  mutation SuspendTenant($id: ID!, $reason: String) {
-    suspendTenant(id: $id, reason: $reason) {
+export const SUSPEND_COMPANY = gql`
+  mutation SuspendCompany($code: String!, $reason: String) {
+    suspendCompany(code: $code, reason: $reason) {
       _id
+      code
       name
       status
     }
   }
 `;
 
-export const ACTIVATE_TENANT = gql`
-  mutation ActivateTenant($id: ID!) {
-    activateTenant(id: $id) {
+export const ACTIVATE_COMPANY = gql`
+  mutation ActivateCompany($code: String!) {
+    activateCompany(code: $code) {
       _id
+      code
       name
       status
     }
   }
 `;
 
-export const DELETE_TENANT = gql`
-  mutation DeleteTenant($id: ID!) {
-    deleteTenant(id: $id)
+export const DELETE_COMPANY = gql`
+  mutation DeleteCompany($code: String!) {
+    deleteCompany(code: $code)
   }
 `;
 
-export const UPDATE_TENANT_PLAN = gql`
-  mutation UpdateTenantPlan($id: ID!, $plan: String!, $licenseExpiry: String) {
-    updateTenantPlan(id: $id, plan: $plan, licenseExpiry: $licenseExpiry) {
-      _id
-      name
-      plan
-      status
-      licenseExpiry
+export const CREATE_COMPANY_WITH_ADMIN = gql`
+  mutation CreateCompanyWithAdmin($input: CreateCompanyWithAdminInput!) {
+    createCompanyWithAdmin(input: $input) {
+      company {
+        _id code name slug plan status
+        adminEmail adminUsername userCount bookingCount trekCount
+        hasWhatsappConfig hasPaymentGateway
+        createdAt
+      }
+      adminUser { _id username name email phone role companyCode companyName createdAt }
+      temporaryPassword
     }
   }
 `;
 
-export const CREATE_ADMIN_USER = gql`
-  mutation CreateAdminUser($tenantId: ID!, $input: CreateAdminUserInput!) {
-    createAdminUser(tenantId: $tenantId, input: $input) {
-      _id
-      name
-      email
-      phone
-      role
-      tenantName
-      createdAt
+// ─── Per-Company User Management ────────────────────────
+export const CREATE_COMPANY_USER = gql`
+  mutation CreateCompanyUser($companyCode: String!, $input: CreateUserInput!) {
+    createCompanyUser(companyCode: $companyCode, input: $input) {
+      user { _id username name email phone role companyCode companyName createdAt }
+      temporaryPassword
     }
   }
 `;
 
-export const DELETE_USER_ADMIN = gql`
-  mutation DeleteUser($id: ID!) {
-    deleteUser(id: $id)
+export const UPDATE_COMPANY_USER = gql`
+  mutation UpdateCompanyUser($companyCode: String!, $userId: ID!, $input: UpdateAdminUserInput!) {
+    updateCompanyUser(companyCode: $companyCode, userId: $userId, input: $input) {
+      _id username name email phone role companyCode companyName createdAt
+    }
   }
 `;
 
-export const RESET_USER_PASSWORD = gql`
-  mutation ResetUserPassword($userId: ID!, $newPassword: String!) {
-    resetUserPassword(userId: $userId, newPassword: $newPassword)
+export const DELETE_COMPANY_USER = gql`
+  mutation DeleteCompanyUser($companyCode: String!, $userId: ID!) {
+    deleteCompanyUser(companyCode: $companyCode, userId: $userId)
+  }
+`;
+
+export const RESET_COMPANY_USER_PASSWORD = gql`
+  mutation ResetCompanyUserPassword($companyCode: String!, $userId: ID!) {
+    resetCompanyUserPassword(companyCode: $companyCode, userId: $userId) {
+      user { _id username name email phone role companyCode companyName createdAt }
+      temporaryPassword
+    }
   }
 `;
 
@@ -956,5 +954,42 @@ export const DELETE_PAYMENT_GATEWAY = gql`
 export const SET_DEFAULT_PAYMENT_GATEWAY = gql`
   mutation SetDefaultPaymentGateway($provider: String!) {
     setDefaultPaymentGateway(provider: $provider)
+  }
+`;
+
+// ─── Integrations ──────────────────────────────────────
+export const UPSERT_INTEGRATION = gql`
+  mutation UpsertIntegration(
+    $provider: String!
+    $credentials: JSON
+    $meta: JSON
+    $enabled: Boolean
+  ) {
+    upsertIntegration(provider: $provider, credentials: $credentials, meta: $meta, enabled: $enabled) {
+      _id
+      tenantId
+      provider
+      enabled
+      meta
+      hasCredentials
+      maskedCredentials
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const DELETE_INTEGRATION = gql`
+  mutation DeleteIntegration($provider: String!) {
+    deleteIntegration(provider: $provider)
+  }
+`;
+
+export const TEST_INTEGRATION = gql`
+  mutation TestIntegration($provider: String!) {
+    testIntegration(provider: $provider) {
+      success
+      message
+    }
   }
 `;

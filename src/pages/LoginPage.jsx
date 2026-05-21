@@ -2,32 +2,26 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useMutation } from '@apollo/client/react';
-import { LOGIN, REGISTER } from '../graphql/mutations';
-import { v, validateForm, onlyDigits } from '../utils/validators';
-import { Mountain, Phone, KeyRound, ArrowRight, Loader2, UserPlus, LogIn } from 'lucide-react';
+import { LOGIN } from '../graphql/mutations';
+import { v, validateForm } from '../utils/validators';
+import { Mountain, Building2, User, KeyRound, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const toast = useToast();
-  const [mode, setMode] = useState('login'); // 'login' or 'register'
   const [form, setForm] = useState({
-    phone: '',
+    companyCode: '',
+    username: '',
     password: '',
-    name: '',
-    email: '',
-    companyName: '',
-    companySlug: '',
   });
-  
+
   const [errors, setErrors] = useState({});
 
-  const [loginMut, { loading: loginLoading }] = useMutation(LOGIN);
-  const [registerMut, { loading: registerLoading }] = useMutation(REGISTER);
-  const loading = loginLoading || registerLoading;
+  const [loginMut, { loading }] = useMutation(LOGIN);
 
   const handleChange = (field) => (e) => {
     let val = e.target.value;
-    if (field === 'phone') val = onlyDigits(val, 10);
+    if (field === 'companyCode') val = val.toLowerCase().replace(/[^a-z0-9-]/g, '');
     setForm({ ...form, [field]: val });
     if (errors[field]) setErrors({ ...errors, [field]: null });
   };
@@ -35,49 +29,23 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     const { valid, errors: errs } = validateForm({
-      phone: v.phone(form.phone),
+      companyCode: v.required(form.companyCode, 'Company code'),
+      username: v.required(form.username, 'Username'),
       password: v.required(form.password, 'Password'),
     });
     if (!valid) { setErrors(errs); toast.error('Please fix the errors below'); return; }
     try {
       const { data } = await loginMut({
-        variables: { phone: form.phone, password: form.password },
+        variables: {
+          companyCode: form.companyCode.trim(),
+          username: form.username.trim(),
+          password: form.password,
+        },
       });
       login(data.login.token, data.login.user);
       toast.success('Welcome back!');
     } catch (err) {
       toast.error(err.message || 'Login failed');
-    }
-  };
-
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    const { valid, errors: errs } = validateForm({
-      name: v.required(form.name, 'Full name'),
-      phone: v.phone(form.phone),
-      password: v.minLength(form.password, 6, 'Password'),
-      email: v.emailOptional(form.email),
-      companyName: v.required(form.companyName, 'Company name'),
-      companySlug: v.slug(form.companySlug.toLowerCase().replace(/[^a-z0-9-]/g, ''), 'Company slug'),
-    });
-    if (!valid) { setErrors(errs); toast.error('Please fix the errors below'); return; }
-    try {
-      const { data } = await registerMut({
-        variables: {
-          input: {
-            name: form.name,
-            email: form.email,
-            phone: form.phone,
-            password: form.password,
-            companyName: form.companyName,
-            companySlug: form.companySlug.toLowerCase().replace(/[^a-z0-9-]/g, ''),
-          },
-        },
-      });
-      login(data.register.token, data.register.user);
-      toast.success('Registration successful! Welcome aboard.');
-    } catch (err) {
-      toast.error(err.message || 'Registration failed');
     }
   };
 
@@ -121,7 +89,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right Panel - Forms */}
+      {/* Right Panel - Form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12 bg-white">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-3 mb-8">
@@ -131,87 +99,56 @@ export default function LoginPage() {
             <span className="text-xl font-bold text-slate-900">TrekOps</span>
           </div>
 
-          {/* Toggle */}
-          <div className="flex bg-slate-100 rounded-xl p-1 mb-8">
-            <button onClick={() => { setMode('login'); setErrors({}); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${mode === 'login' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
-              <LogIn className="w-4 h-4" /> Sign In
+          <form onSubmit={handleLogin} className="space-y-5 animate-fade-in">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">Welcome back</h2>
+              <p className="text-sm text-slate-500 mt-1">Sign in to your company workspace</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Company Code</label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={form.companyCode}
+                  onChange={handleChange('companyCode')}
+                  placeholder="your company code"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  className={`${fieldClass('companyCode')} pl-10`}
+                />
+              </div>
+              {errMsg('companyCode')}
+              <p className="text-xs text-slate-400 mt-1">Platform admins: use <code className="bg-slate-100 px-1 rounded">admin</code></p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={form.username}
+                  onChange={handleChange('username')}
+                  placeholder="your username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  className={`${fieldClass('username')} pl-10`}
+                />
+              </div>
+              {errMsg('username')}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+              <div className="relative">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input type="password" value={form.password} onChange={handleChange('password')} placeholder="Enter your password" className={`${fieldClass('password')} pl-10`} />
+              </div>
+              {errMsg('password')}
+            </div>
+            <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2 py-3">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><ArrowRight className="w-4 h-4" /> Sign In</>}
             </button>
-            <button onClick={() => { setMode('register'); setErrors({}); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${mode === 'register' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
-              <UserPlus className="w-4 h-4" /> Register
-            </button>
-          </div>
-
-          {mode === 'login' ? (
-            <form onSubmit={handleLogin} className="space-y-5 animate-fade-in">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">Welcome back</h2>
-                <p className="text-sm text-slate-500 mt-1">Sign in with your phone number</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Phone Number</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input type="tel" value={form.phone} onChange={handleChange('phone')} placeholder="10-digit mobile number" className={`${fieldClass('phone')} pl-10`} maxLength={10} />
-                </div>
-                {errMsg('phone')}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
-                <div className="relative">
-                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input type="password" value={form.password} onChange={handleChange('password')} placeholder="Enter your password" className={`${fieldClass('password')} pl-10`} />
-                </div>
-                {errMsg('password')}
-              </div>
-              <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2 py-3">
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><ArrowRight className="w-4 h-4" /> Sign In</>}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-4 animate-fade-in">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">Create your account</h2>
-                <p className="text-sm text-slate-500 mt-1">Start managing your treks in minutes</p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Full Name *</label>
-                  <input value={form.name} onChange={handleChange('name')} className={fieldClass('name')} placeholder="Your name" />
-                  {errMsg('name')}
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
-                  <input type="email" value={form.email} onChange={handleChange('email')} className={fieldClass('email')} placeholder="you@email.com" />
-                  {errMsg('email')}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Phone Number *</label>
-                <input type="tel" value={form.phone} onChange={handleChange('phone')} className={fieldClass('phone')} placeholder="10-digit mobile" maxLength={10} />
-                {errMsg('phone')}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Password *</label>
-                <input type="password" value={form.password} onChange={handleChange('password')} className={fieldClass('password')} placeholder="Min 6 characters" />
-                {errMsg('password')}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Company Name *</label>
-                  <input value={form.companyName} onChange={handleChange('companyName')} className={fieldClass('companyName')} placeholder="Your company" />
-                  {errMsg('companyName')}
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Company Slug *</label>
-                  <input value={form.companySlug} onChange={handleChange('companySlug')} className={fieldClass('companySlug')} placeholder="my-company" />
-                  {errMsg('companySlug')}
-                </div>
-              </div>
-              <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2 py-3">
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><UserPlus className="w-4 h-4" /> Create Account</>}
-              </button>
-            </form>
-          )}
+          </form>
         </div>
       </div>
     </div>

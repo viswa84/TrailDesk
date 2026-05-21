@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@apollo/client/react";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { Navigate } from "react-router-dom";
 import {
-  SUPER_ADMIN_DASHBOARD, GET_ALL_TENANTS, GET_ALL_USERS_ADMIN, GET_PLATFORM_ACTIVITY_LOG,
-  GET_CONTACT_INQUIRIES
+  SUPER_ADMIN_DASHBOARD, GET_ALL_COMPANIES, GET_ALL_USERS_ADMIN, GET_PLATFORM_ACTIVITY_LOG,
+  GET_CONTACT_INQUIRIES, GET_COMPANY_DETAILS
 } from '../graphql/queries';
 import {
-  CREATE_TENANT, SUSPEND_TENANT, ACTIVATE_TENANT, DELETE_TENANT,
-  UPDATE_TENANT_PLAN, CREATE_ADMIN_USER, DELETE_USER_ADMIN, RESET_USER_PASSWORD,
-  UPDATE_CONTACT_STATUS, DELETE_CONTACT_INQUIRY
+  SUSPEND_COMPANY, ACTIVATE_COMPANY, DELETE_COMPANY,
+  DELETE_COMPANY_USER, RESET_COMPANY_USER_PASSWORD,
+  UPDATE_CONTACT_STATUS, DELETE_CONTACT_INQUIRY,
+  CREATE_COMPANY_WITH_ADMIN, CREATE_COMPANY_USER
 } from '../graphql/mutations';
 import {
   Shield, Building2, Users, DollarSign, TrendingUp, Activity,
@@ -97,177 +99,349 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-// ── Create Tenant Form ────────────────────────────────────────────────────────
+// ── Create Tenant Modal (upgraded) ──────────────────────────────────────────
+function slugify(str) {
+  return str
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 40);
+}
+
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(text).catch(() => {});
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className="ml-2 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors flex-shrink-0"
+    >
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
+}
+
+function CredSuccessModal({ tenantName, companyCode, adminUsername, adminEmail, temporaryPassword, onClose }) {
+  const mailtoBody = `Welcome to TrekOps!\n\nYour company "${tenantName}" has been set up.\n\nLogin URL: ${window.location.origin}/login\nCompany Code: ${companyCode || ""}\nUsername: ${adminUsername || ""}\nTemporary Password: ${temporaryPassword || "(you set a custom password)"}\n\nPlease log in and change your password immediately.`;
+  const mailtoLink = adminEmail
+    ? `mailto:${adminEmail}?subject=Your TrekOps account is ready&body=${encodeURIComponent(mailtoBody)}`
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Company created</h3>
+              <p className="text-sm text-slate-500">Share these credentials with the admin</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 bg-slate-50 rounded-xl p-4">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Company</p>
+              <p className="text-sm font-medium text-slate-800">{tenantName}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Login URL</p>
+              <p className="text-sm font-mono text-slate-700">{window.location.origin}/login</p>
+            </div>
+            {companyCode && (
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Company Code</p>
+                <div className="flex items-center">
+                  <p className="text-sm font-mono text-slate-700 flex-1">{companyCode}</p>
+                  <CopyButton text={companyCode} />
+                </div>
+              </div>
+            )}
+            {adminUsername && (
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Username</p>
+                <div className="flex items-center">
+                  <p className="text-sm font-mono text-slate-700 flex-1">{adminUsername}</p>
+                  <CopyButton text={adminUsername} />
+                </div>
+              </div>
+            )}
+            {adminEmail && (
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Email</p>
+                <div className="flex items-center">
+                  <p className="text-sm font-mono text-slate-700 flex-1">{adminEmail}</p>
+                  <CopyButton text={adminEmail} />
+                </div>
+              </div>
+            )}
+            {temporaryPassword ? (
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Temporary Password</p>
+                <div className="flex items-center">
+                  <p className="text-sm font-mono font-bold text-violet-700 bg-violet-50 px-2 py-1 rounded-lg flex-1 break-all">{temporaryPassword}</p>
+                  <CopyButton text={temporaryPassword} />
+                </div>
+                <p className="text-xs text-red-600 font-medium mt-1.5 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                  This password will not be shown again. Copy it now.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Password</p>
+                <p className="text-sm text-slate-600 italic">Custom password was set (not displayed for security)</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3">
+            {mailtoLink && (
+              <a
+                href={mailtoLink}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                <Mail className="w-4 h-4" /> Send via Email
+              </a>
+            )}
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CreateTenantModal({ onClose, onCreated }) {
+  const toast = useToast();
   const [form, setForm] = useState({
-    name: "",
-    slug: "",
-    plan: "pro",
+    companyName: "",
+    companyCode: "",
+    plan: "free",
+    status: "trial",
     adminName: "",
+    adminUsername: "",
     adminEmail: "",
     adminPhone: "",
     adminPassword: "",
-    licenseExpiry: "",
-    gst: "",
-    address: "",
-    website: "",
   });
-  const [createTenant, { loading }] = useMutation(CREATE_TENANT, {
-    refetchQueries: [{ query: GET_ALL_TENANTS }],
-    onCompleted: () => {
+  const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
+  const [codeError, setCodeError] = useState("");
+  const [successData, setSuccessData] = useState(null);
+
+  const [createCompanyWithAdmin, { loading }] = useMutation(CREATE_COMPANY_WITH_ADMIN, {
+    refetchQueries: [{ query: GET_ALL_COMPANIES }],
+    onCompleted: (data) => {
+      const result = data.createCompanyWithAdmin;
       onCreated?.();
-      onClose();
+      setSuccessData({
+        tenantName: result.company.name,
+        companyCode: result.company.code,
+        adminUsername: result.adminUser.username,
+        adminEmail: result.adminUser.email,
+        temporaryPassword: result.temporaryPassword,
+      });
     },
-    onError: (e) => alert(e.message),
+    onError: (e) => {
+      toast.error(e.message);
+    },
   });
+
+  // Auto-suggest company code from company name
+  useEffect(() => {
+    if (!codeManuallyEdited && form.companyName) {
+      setForm((f) => ({ ...f, companyCode: slugify(form.companyName) }));
+    }
+  }, [form.companyName, codeManuallyEdited]);
+
+  const validateCode = (val) => {
+    if (!val) { setCodeError("Company code is required"); return false; }
+    if (!/^[a-z0-9-]{3,40}$/.test(val)) {
+      setCodeError("3–40 chars: lowercase letters, digits, hyphens only");
+      return false;
+    }
+    setCodeError("");
+    return true;
+  };
 
   const change = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = (e) => {
     e.preventDefault();
-    createTenant({ variables: { input: form } });
+    if (!validateCode(form.companyCode)) return;
+    const input = {
+      companyCode: form.companyCode,
+      companyName: form.companyName,
+      plan: form.plan,
+      status: form.status,
+      adminName: form.adminName,
+      adminUsername: form.adminUsername,
+      adminEmail: form.adminEmail || undefined,
+      adminPhone: form.adminPhone || undefined,
+      adminPassword: form.adminPassword || undefined,
+    };
+    createCompanyWithAdmin({ variables: { input } });
   };
+
+  if (successData) {
+    return (
+      <CredSuccessModal
+        tenantName={successData.tenantName}
+        companyCode={successData.companyCode}
+        adminUsername={successData.adminUsername}
+        adminEmail={successData.adminEmail}
+        temporaryPassword={successData.temporaryPassword}
+        onClose={onClose}
+      />
+    );
+  }
 
   return (
     <Modal title="Create New Company" onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Company Name *
-            </label>
-            <input
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={form.name}
-              onChange={change("name")}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Slug (URL key) *
-            </label>
-            <input
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={form.slug}
-              onChange={change("slug")}
-              placeholder="my-company"
-              required
-            />
+        {/* Company section */}
+        <div>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Company Details</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Company Name *</label>
+              <input
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                value={form.companyName}
+                onChange={change("companyName")}
+                placeholder="e.g. Summit Treks"
+                required
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Company Code *
+                <span className="ml-1 text-slate-400 font-normal">login identifier — auto-suggested from name</span>
+              </label>
+              <input
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono ${codeError ? "border-red-400" : "border-slate-200"}`}
+                value={form.companyCode}
+                onChange={(e) => {
+                  setCodeManuallyEdited(true);
+                  const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+                  setForm((f) => ({ ...f, companyCode: val }));
+                  validateCode(val);
+                }}
+                placeholder="summit-treks"
+                required
+              />
+              {codeError && <p className="text-xs text-red-500 mt-1">{codeError}</p>}
+              {!codeError && form.companyCode && (
+                <p className="text-xs text-slate-400 mt-1">Users log in with code: <code className="bg-slate-100 px-1 rounded">{form.companyCode}</code></p>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Plan</label>
+              <select
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                value={form.plan}
+                onChange={change("plan")}
+              >
+                <option value="free">Free</option>
+                <option value="pro">Pro</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+              <select
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                value={form.status}
+                onChange={change("status")}
+              >
+                <option value="trial">Trial</option>
+                <option value="active">Active</option>
+              </select>
+            </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Plan
-            </label>
-            <select
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-              value={form.plan}
-              onChange={change("plan")}
-            >
-              <option value="free">Free</option>
-              <option value="pro">Pro</option>
-              <option value="enterprise">Enterprise</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Licence Expiry
-            </label>
-            <DatePickerInput
-              selected={
-                form.licenseExpiry ? new Date(form.licenseExpiry) : null
-              }
-              onChange={(date) =>
-                setForm({
-                  ...form,
-                  licenseExpiry: date ? date.toISOString().split("T")[0] : "",
-                })
-              }
-            />
-          </div>
-        </div>
+
         <hr className="border-slate-100" />
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-          Admin User
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Admin Name *
-            </label>
-            <input
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-              value={form.adminName}
-              onChange={change("adminName")}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Admin Phone *
-            </label>
-            <input
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-              value={form.adminPhone}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  adminPhone: e.target.value.replace(/\D/g, "").slice(0, 10),
-                })
-              }
-              maxLength={10}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Admin Email
-            </label>
-            <input
-              type="email"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-              value={form.adminEmail}
-              onChange={change("adminEmail")}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Admin Password *
-            </label>
-            <input
-              type="password"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-              value={form.adminPassword}
-              onChange={change("adminPassword")}
-              required
-            />
-          </div>
-        </div>
-        <hr className="border-slate-100" />
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              GST
-            </label>
-            <input
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-              value={form.gst}
-              onChange={change("gst")}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Website
-            </label>
-            <input
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-              value={form.website}
-              onChange={change("website")}
-            />
+
+        {/* Admin user section */}
+        <div>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">First Admin User</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Admin Name *</label>
+              <input
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                value={form.adminName}
+                onChange={change("adminName")}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Admin Username *</label>
+              <input
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-mono"
+                value={form.adminUsername}
+                onChange={(e) => setForm((f) => ({ ...f, adminUsername: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, "") }))}
+                placeholder="login username"
+                autoCapitalize="none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Admin Phone</label>
+              <input
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                value={form.adminPhone}
+                onChange={(e) => setForm((f) => ({ ...f, adminPhone: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
+                maxLength={10}
+                placeholder="optional"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Admin Email <span className="text-slate-400 font-normal">— optional</span>
+              </label>
+              <input
+                type="email"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                value={form.adminEmail}
+                onChange={change("adminEmail")}
+                placeholder="optional"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Password
+                <span className="ml-1 text-slate-400 font-normal">— leave blank to auto-generate</span>
+              </label>
+              <input
+                type="text"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-mono"
+                value={form.adminPassword}
+                onChange={change("adminPassword")}
+                placeholder="auto-generate a secure password"
+                autoComplete="new-password"
+              />
+              {!form.adminPassword && (
+                <p className="text-xs text-emerald-600 mt-1">A secure 16-char password will be generated and shown once after creation.</p>
+              )}
+            </div>
           </div>
         </div>
+
         <div className="flex gap-3 pt-2">
           <button
             type="button"
@@ -304,18 +478,19 @@ function PlanBadge({ plan }) {
 
 // ── Tenant Row Actions ─────────────────────────────────────────────────────────
 function TenantActions({ tenant, refetch }) {
+  const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [suspendTenant] = useMutation(SUSPEND_TENANT, {
-    onCompleted: refetch,
-    onError: (e) => alert(e.message),
+  const [suspendCompany] = useMutation(SUSPEND_COMPANY, {
+    onCompleted: () => { toast.success("Company suspended"); refetch(); },
+    onError: (e) => toast.error(e.message),
   });
-  const [activateTenant] = useMutation(ACTIVATE_TENANT, {
-    onCompleted: refetch,
-    onError: (e) => alert(e.message),
+  const [activateCompany] = useMutation(ACTIVATE_COMPANY, {
+    onCompleted: () => { toast.success("Company reactivated"); refetch(); },
+    onError: (e) => toast.error(e.message),
   });
-  const [deleteTenant] = useMutation(DELETE_TENANT, {
-    onCompleted: refetch,
-    onError: (e) => alert(e.message),
+  const [deleteCompany] = useMutation(DELETE_COMPANY, {
+    onCompleted: () => { toast.success("Company deleted"); refetch(); },
+    onError: (e) => toast.error(e.message),
   });
 
   const actions = [
@@ -323,7 +498,7 @@ function TenantActions({ tenant, refetch }) {
       label: "Activate",
       icon: CheckCircle,
       color: "text-emerald-600",
-      onClick: () => activateTenant({ variables: { id: tenant._id } }),
+      onClick: () => activateCompany({ variables: { code: tenant.code } }),
     },
     tenant.status === "active" && {
       label: "Suspend",
@@ -332,7 +507,7 @@ function TenantActions({ tenant, refetch }) {
       onClick: () => {
         const reason = prompt("Reason for suspension?");
         if (reason !== null)
-          suspendTenant({ variables: { id: tenant._id, reason } });
+          suspendCompany({ variables: { code: tenant.code, reason } });
       },
     },
     {
@@ -341,7 +516,7 @@ function TenantActions({ tenant, refetch }) {
       color: "text-red-600",
       onClick: () => {
         if (window.confirm(`Delete "${tenant.name}"? This cannot be undone.`))
-          deleteTenant({ variables: { id: tenant._id } });
+          deleteCompany({ variables: { code: tenant.code } });
       },
     },
   ].filter(Boolean);
@@ -372,6 +547,399 @@ function TenantActions({ tenant, refetch }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Add Admin Modal ─────────────────────────────────────────────────────────────
+function AddAdminModal({ companyCode, tenantName, onClose, onCreated }) {
+  const toast = useToast();
+  const [form, setForm] = useState({ name: "", username: "", email: "", phone: "", password: "", role: "admin" });
+  const [successData, setSuccessData] = useState(null);
+
+  const [createCompanyUser, { loading }] = useMutation(CREATE_COMPANY_USER, {
+    onCompleted: (data) => {
+      const res = data.createCompanyUser;
+      onCreated?.();
+      setSuccessData({
+        username: res.user.username,
+        email: res.user.email,
+        temporaryPassword: res.temporaryPassword,
+      });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (successData) {
+    return (
+      <CredSuccessModal
+        tenantName={tenantName}
+        companyCode={companyCode}
+        adminUsername={successData.username}
+        adminEmail={successData.email}
+        temporaryPassword={successData.temporaryPassword}
+        onClose={onClose}
+      />
+    );
+  }
+
+  const change = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const submit = (e) => {
+    e.preventDefault();
+    createCompanyUser({
+      variables: {
+        companyCode,
+        input: {
+          name: form.name,
+          username: form.username,
+          email: form.email || undefined,
+          phone: form.phone || undefined,
+          password: form.password || undefined,
+          role: form.role,
+        },
+      },
+    });
+  };
+
+  return (
+    <Modal title={`Add User — ${tenantName}`} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Name *</label>
+            <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" value={form.name} onChange={change("name")} required />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Role</label>
+            <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none" value={form.role} onChange={change("role")}>
+              <option value="admin">Admin</option>
+              <option value="staff">Staff</option>
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Username *</label>
+            <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-mono" value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, "") }))} placeholder="login username" autoCapitalize="none" required />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Email <span className="text-slate-400 font-normal">— optional</span></label>
+            <input type="email" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none" value={form.email} onChange={change("email")} placeholder="optional" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
+            <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))} placeholder="optional" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Password <span className="text-slate-400 font-normal">— blank = auto</span>
+            </label>
+            <input type="text" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-mono" value={form.password} onChange={change("password")} placeholder="auto-generate" autoComplete="new-password" />
+          </div>
+        </div>
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 disabled:opacity-50">
+            {loading ? "Creating…" : "Add Admin"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ── Reset Password Result Modal ───────────────────────────────────────────────
+function ResetPasswordResultModal({ userName, email, temporaryPassword, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+            <Key className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Password reset</h3>
+            <p className="text-sm text-slate-500">{userName}</p>
+          </div>
+        </div>
+        <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">New Temporary Password</p>
+            <div className="flex items-center">
+              <p className="text-sm font-mono font-bold text-violet-700 bg-violet-50 px-2 py-1 rounded-lg flex-1 break-all">{temporaryPassword}</p>
+              <CopyButton text={temporaryPassword} />
+            </div>
+          </div>
+          {email && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Email</p>
+              <p className="text-sm font-mono text-slate-700">{email}</p>
+            </div>
+          )}
+          <p className="text-xs text-red-600 font-medium flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+            This password will not be shown again. Copy it now.
+          </p>
+        </div>
+        <button onClick={onClose} className="w-full px-4 py-2 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700">Done</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Tenant Detail Drawer ─────────────────────────────────────────────────────
+function TenantDetailDrawer({ companyCode, onClose, onRefetch }) {
+  const toast = useToast();
+  const [drawerTab, setDrawerTab] = useState("overview");
+  const [showAddAdmin, setShowAddAdmin] = useState(false);
+  const [resetResult, setResetResult] = useState(null);
+
+  const { data, loading, refetch } = useQuery(GET_COMPANY_DETAILS, {
+    variables: { code: companyCode },
+    skip: !companyCode,
+    errorPolicy: "all",
+    fetchPolicy: "network-only",
+  });
+
+  const [suspendCompany] = useMutation(SUSPEND_COMPANY, {
+    onCompleted: () => { toast.success("Company suspended"); refetch(); onRefetch?.(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [activateCompany] = useMutation(ACTIVATE_COMPANY, {
+    onCompleted: () => { toast.success("Company reactivated"); refetch(); onRefetch?.(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [deleteUser] = useMutation(DELETE_COMPANY_USER, {
+    onCompleted: () => { toast.success("User deleted"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [resetPassword] = useMutation(RESET_COMPANY_USER_PASSWORD, {
+    onCompleted: (data) => {
+      const res = data.resetCompanyUserPassword;
+      setResetResult({ userName: res.user.name, email: res.user.email, temporaryPassword: res.temporaryPassword });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const tenant = data?.getCompanyByCode;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+
+      {/* Drawer */}
+      <div className="fixed right-0 top-0 h-full w-full max-w-xl bg-white z-50 shadow-2xl flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-violet-700 to-indigo-600 text-white">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0 font-bold">
+              {tenant?.name?.[0]?.toUpperCase() || "?"}
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold truncate">{tenant?.name || "Loading…"}</p>
+              <p className="text-white/70 text-xs font-mono truncate">{tenant?.code}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {tenant?.status === "active" ? (
+              <button
+                onClick={() => {
+                  const reason = window.prompt("Reason for suspension?");
+                  if (reason !== null) suspendCompany({ variables: { code: companyCode, reason } });
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/40 text-white rounded-lg text-xs font-medium transition-colors"
+              >
+                <XCircle className="w-3.5 h-3.5" /> Suspend
+              </button>
+            ) : (
+              <button
+                onClick={() => activateCompany({ variables: { code: companyCode } })}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/40 text-white rounded-lg text-xs font-medium transition-colors"
+              >
+                <CheckCircle className="w-3.5 h-3.5" /> Reactivate
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-slate-100 px-4 bg-white">
+          {[
+            { id: "overview", label: "Overview" },
+            { id: "admins", label: "Admin Users" },
+            { id: "integrations", label: "Integrations" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setDrawerTab(t.id)}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                drawerTab === t.id
+                  ? "border-violet-600 text-violet-700"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {loading ? (
+            <div className="flex items-center justify-center h-40">
+              <RefreshCw className="w-5 h-5 text-slate-400 animate-spin" />
+            </div>
+          ) : !tenant ? (
+            <p className="text-sm text-slate-400 text-center py-12">Failed to load tenant data</p>
+          ) : (
+            <>
+              {/* Overview tab */}
+              {drawerTab === "overview" && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "Plan", value: <PlanBadge plan={tenant.plan} /> },
+                      { label: "Status", value: <Badge label={tenant.status} colorClass={STATUS_COLORS[tenant.status] || ""} /> },
+                      { label: "Users", value: tenant.userCount },
+                      { label: "Bookings", value: tenant.bookingCount },
+                      { label: "Treks", value: tenant.trekCount },
+                      { label: "Joined", value: tenant.createdAt ? safeDate(tenant.createdAt) : "—" },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="bg-slate-50 rounded-xl p-3">
+                        <p className="text-xs text-slate-500 mb-1">{label}</p>
+                        <div className="text-sm font-semibold text-slate-800">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {tenant.adminEmail && (
+                    <div className="bg-slate-50 rounded-xl p-3">
+                      <p className="text-xs text-slate-500 mb-1">Primary Admin Email</p>
+                      <p className="text-sm font-mono text-slate-800">{tenant.adminEmail}</p>
+                    </div>
+                  )}
+                  {tenant.licenseExpiry && (
+                    <div className="bg-slate-50 rounded-xl p-3">
+                      <p className="text-xs text-slate-500 mb-1">Licence Expiry</p>
+                      <p className={`text-sm font-semibold ${new Date(tenant.licenseExpiry) < new Date() ? "text-red-600" : "text-slate-800"}`}>
+                        {safeDate(tenant.licenseExpiry)}
+                        {new Date(tenant.licenseExpiry) < new Date() && " (expired)"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Admin Users tab */}
+              {drawerTab === "admins" && (
+                <div className="space-y-4">
+                  <button
+                    onClick={() => setShowAddAdmin(true)}
+                    className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors w-full justify-center"
+                  >
+                    <UserPlus className="w-4 h-4" /> Add Another Admin
+                  </button>
+
+                  <div className="space-y-2">
+                    {(tenant.adminUsers || []).length === 0 ? (
+                      <p className="text-sm text-slate-400 text-center py-8">No admin users found</p>
+                    ) : (
+                      (tenant.adminUsers || []).map((u) => (
+                        <div key={u._id} className="flex items-center gap-3 bg-slate-50 rounded-xl p-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                            {u.name?.[0]?.toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-900 truncate">{u.name}</p>
+                            <p className="text-xs text-slate-400 truncate">{u.username || u.email || u.phone || "—"}</p>
+                          </div>
+                          <Badge
+                            label={u.role}
+                            colorClass={u.role === "admin" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}
+                          />
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => resetPassword({ variables: { companyCode, userId: u._id } })}
+                              title="Reset password"
+                              className="p-1.5 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-colors"
+                            >
+                              <Key className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Delete user "${u.name}"?`)) {
+                                  deleteUser({ variables: { companyCode, userId: u._id } });
+                                }
+                              }}
+                              title="Delete user"
+                              className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Integrations tab */}
+              {drawerTab === "integrations" && (
+                <div className="space-y-3">
+                  {[
+                    {
+                      label: "WhatsApp Business API",
+                      connected: tenant.hasWhatsappConfig,
+                      desc: "Needed for the WhatsApp chatbot to send/receive messages",
+                    },
+                    {
+                      label: "Payment Gateway",
+                      connected: tenant.hasPaymentGateway,
+                      desc: "PayU or Easebuzz config needed to collect online payments",
+                    },
+                  ].map(({ label, connected, desc }) => (
+                    <div key={label} className="flex items-start gap-3 bg-slate-50 rounded-xl p-4">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${connected ? "bg-emerald-100" : "bg-red-50"}`}>
+                        {connected
+                          ? <CheckCircle className="w-4 h-4 text-emerald-600" />
+                          : <XCircle className="w-4 h-4 text-red-500" />
+                        }
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{label}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+                        <p className={`text-xs font-medium mt-1 ${connected ? "text-emerald-600" : "text-red-500"}`}>
+                          {connected ? "Connected" : "Not configured — tenant must set up in Settings"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {showAddAdmin && (
+        <AddAdminModal
+          companyCode={companyCode}
+          tenantName={tenant?.name || ""}
+          onClose={() => setShowAddAdmin(false)}
+          onCreated={() => { refetch(); }}
+        />
+      )}
+
+      {resetResult && (
+        <ResetPasswordResultModal
+          userName={resetResult.userName}
+          email={resetResult.email}
+          temporaryPassword={resetResult.temporaryPassword}
+          onClose={() => setResetResult(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -505,6 +1073,7 @@ export default function SuperAdminPage() {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterPlan, setFilterPlan] = useState("");
   const [showCreateTenant, setShowCreateTenant] = useState(false);
+  const [selectedCompanyCode, setSelectedCompanyCode] = useState(null);
   const [filterContactStatus, setFilterContactStatus] = useState('');
   const [searchContacts, setSearchContacts] = useState('');
 
@@ -520,7 +1089,7 @@ export default function SuperAdminPage() {
     data: tenantsData,
     loading: tenantsLoading,
     refetch: refetchTenants,
-  } = useQuery(GET_ALL_TENANTS, {
+  } = useQuery(GET_ALL_COMPANIES, {
     variables: {
       status: filterStatus || undefined,
       plan: filterPlan || undefined,
@@ -543,7 +1112,7 @@ export default function SuperAdminPage() {
   });
 
   const dash = dashData?.superAdminDashboard;
-  const tenants = tenantsData?.getAllTenants || [];
+  const tenants = tenantsData?.getAllCompanies || [];
   const allUsers = usersData?.getAllUsers || [];
   const activityLog = activityData?.getPlatformActivityLog || [];
 
@@ -749,7 +1318,7 @@ export default function SuperAdminPage() {
                             {t.name}
                           </div>
                           <div className="text-xs text-slate-400">
-                            {t.adminEmail || t.slug}
+                            {t.code || t.adminEmail || t.slug}
                           </div>
                         </div>
                         <PlanBadge plan={t.plan} />
@@ -821,27 +1390,15 @@ export default function SuperAdminPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100">
-                      <th className="text-left text-xs font-semibold text-slate-500 px-5 py-3">
-                        Company
-                      </th>
-                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">
-                        Plan
-                      </th>
-                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">
-                        Status
-                      </th>
-                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">
-                        Users
-                      </th>
-                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">
-                        Bookings
-                      </th>
-                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">
-                        Licence Expiry
-                      </th>
-                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">
-                        Joined
-                      </th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-5 py-3">Company</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Plan</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Status</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Users</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Bookings</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Treks</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">WA</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">PG</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 px-3 py-3">Joined</th>
                       <th className="px-3 py-3"></th>
                     </tr>
                   </thead>
@@ -849,7 +1406,8 @@ export default function SuperAdminPage() {
                     {tenants.map((t) => (
                       <tr
                         key={t._id}
-                        className="hover:bg-slate-50/60 transition-colors"
+                        onClick={() => setSelectedCompanyCode(t.code)}
+                        className="hover:bg-violet-50/40 transition-colors cursor-pointer"
                       >
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
@@ -857,59 +1415,39 @@ export default function SuperAdminPage() {
                               {t.name?.[0]?.toUpperCase()}
                             </div>
                             <div>
-                              <div className="text-sm font-semibold text-slate-900">
-                                {t.name}
-                              </div>
-                              <div className="text-xs text-slate-400">
-                                {t.adminEmail || t.slug}
-                              </div>
+                              <div className="text-sm font-semibold text-slate-900">{t.name}</div>
+                              <div className="text-xs text-slate-400">{t.code}</div>
                             </div>
                           </div>
                         </td>
+                        <td className="px-3 py-4"><PlanBadge plan={t.plan} /></td>
                         <td className="px-3 py-4">
-                          <PlanBadge plan={t.plan} />
+                          <Badge label={t.status} colorClass={STATUS_COLORS[t.status] || ""} />
                         </td>
+                        <td className="px-3 py-4 text-sm text-slate-600">{t.userCount}</td>
+                        <td className="px-3 py-4 text-sm text-slate-600">{t.bookingCount}</td>
+                        <td className="px-3 py-4 text-sm text-slate-600">{t.trekCount ?? "—"}</td>
                         <td className="px-3 py-4">
-                          <Badge
-                            label={t.status}
-                            colorClass={STATUS_COLORS[t.status] || ""}
-                          />
-                        </td>
-                        <td className="px-3 py-4 text-sm text-slate-600">
-                          {t.userCount}
-                        </td>
-                        <td className="px-3 py-4 text-sm text-slate-600">
-                          {t.bookingCount}
-                        </td>
-                        <td className="px-3 py-4 text-sm text-slate-500">
-                          {t.licenseExpiry ? (
-                            <span
-                              className={
-                                new Date(t.licenseExpiry) < new Date()
-                                  ? "text-red-500 font-medium"
-                                  : ""
-                              }
-                            >
-                              {safeDate(t.licenseExpiry)}
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className="px-3 py-4 text-xs text-slate-400">
-                          {safeDate(t.createdAt)}
+                          {t.hasWhatsappConfig
+                            ? <CheckCircle className="w-4 h-4 text-emerald-500" />
+                            : <XCircle className="w-4 h-4 text-slate-300" />
+                          }
                         </td>
                         <td className="px-3 py-4">
+                          {t.hasPaymentGateway
+                            ? <CheckCircle className="w-4 h-4 text-emerald-500" />
+                            : <XCircle className="w-4 h-4 text-slate-300" />
+                          }
+                        </td>
+                        <td className="px-3 py-4 text-xs text-slate-400">{safeDate(t.createdAt)}</td>
+                        <td className="px-3 py-4" onClick={(e) => e.stopPropagation()}>
                           <TenantActions tenant={t} refetch={refetchTenants} />
                         </td>
                       </tr>
                     ))}
                     {tenants.length === 0 && (
                       <tr>
-                        <td
-                          colSpan={8}
-                          className="text-center text-sm text-slate-400 py-12"
-                        >
+                        <td colSpan={10} className="text-center text-sm text-slate-400 py-12">
                           No companies found
                         </td>
                       </tr>
@@ -975,7 +1513,7 @@ export default function SuperAdminPage() {
                                 {u.name}
                               </div>
                               <div className="text-xs text-slate-400">
-                                {u.email || "—"}
+                                {u.username || u.email || "—"}
                               </div>
                             </div>
                           </div>
@@ -993,7 +1531,7 @@ export default function SuperAdminPage() {
                           />
                         </td>
                         <td className="px-3 py-3 text-sm text-slate-600">
-                          {u.tenantName || "—"}
+                          {u.companyName || u.companyCode || "—"}
                         </td>
                         <td className="px-3 py-3 text-sm text-slate-600">
                           {u.phone || "—"}
@@ -2047,6 +2585,15 @@ const docs = await Model.find({
         <CreateTenantModal
           onClose={() => setShowCreateTenant(false)}
           onCreated={refetchTenants}
+        />
+      )}
+
+      {/* Company detail drawer */}
+      {selectedCompanyCode && (
+        <TenantDetailDrawer
+          companyCode={selectedCompanyCode}
+          onClose={() => setSelectedCompanyCode(null)}
+          onRefetch={refetchTenants}
         />
       )}
     </div>

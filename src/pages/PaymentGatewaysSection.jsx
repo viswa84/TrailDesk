@@ -28,7 +28,7 @@ const ENV_OPTIONS = [
 ];
 
 function ProviderCard({ provider, existingConfig }) {
-  const { addToast } = useToast();
+  const toast = useToast();
   const [expanded, setExpanded] = useState(!!existingConfig?.enabled);
   const [enabled, setEnabled] = useState(existingConfig?.enabled ?? false);
   const [env, setEnv] = useState(existingConfig?.env ?? 'test');
@@ -56,7 +56,7 @@ function ProviderCard({ provider, existingConfig }) {
 
   const handleSave = async () => {
     if (enabled && !canSave) {
-      addToast({ type: 'error', message: 'Please fill in all required fields.' });
+      toast.error('Please fill in all required fields.');
       return;
     }
     setSaving(true);
@@ -65,10 +65,10 @@ function ProviderCard({ provider, existingConfig }) {
       await upsertGateway({
         variables: { input: { provider: provider.name, enabled, env, credentials: credsToSend } },
       });
-      addToast({ type: 'success', message: `${provider.displayName} settings saved.` });
+      toast.success(`${provider.displayName} settings saved.`);
       setCredValues({});
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Save failed.' });
+      toast.error(err.message || 'Save failed.');
     } finally {
       setSaving(false);
     }
@@ -79,9 +79,9 @@ function ProviderCard({ provider, existingConfig }) {
     setDeleting(true);
     try {
       await deleteGateway({ variables: { provider: provider.name } });
-      addToast({ type: 'success', message: `${provider.displayName} configuration removed.` });
+      toast.success(`${provider.displayName} configuration removed.`);
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Delete failed.' });
+      toast.error(err.message || 'Delete failed.');
     } finally {
       setDeleting(false);
     }
@@ -90,9 +90,9 @@ function ProviderCard({ provider, existingConfig }) {
   const handleSetDefault = async () => {
     try {
       await setDefault({ variables: { provider: provider.name } });
-      addToast({ type: 'success', message: `${provider.displayName} set as default payment gateway.` });
+      toast.success(`${provider.displayName} set as default payment gateway.`);
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Failed to set as default.' });
+      toast.error(err.message || 'Failed to set as default.');
     }
   };
 

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import ArchitectureDoc from './ArchitectureDoc';
 import PaymentGatewaysSection from './PaymentGatewaysSection';
+import IntegrationsSection from './IntegrationsSection';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -500,6 +501,9 @@ export default function SettingsPage() {
 
       {/* Payment Gateways */}
       <PaymentGatewaysSection />
+
+      {/* Integrations (WhatsApp, R2, etc.) */}
+      <IntegrationsSection />
 
     </div>
   );

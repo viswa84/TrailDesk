@@ -264,13 +264,22 @@ export default function SupportChatPage() {
 
   // ─── Socket.IO for real-time updates ───────────────
   useEffect(() => {
-    const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      auth: { token: localStorage.getItem('trekops_token') },
+    });
     socketRef.current = socket;
     // Expose to state so useWhatsAppCall can subscribe once connected
     setSocketInstance(socket);
 
     socket.on('connect', () => {
       console.log('Socket connected:', socket.id);
+    });
+
+    // Backend now requires a valid JWT on the socket; re-send a refreshed token.
+    socket.on('connect_error', (err) => {
+      console.warn('Socket connect_error:', err.message);
+      socket.auth = { token: localStorage.getItem('trekops_token') };
     });
 
     socket.on('newMessage', (msg) => {
