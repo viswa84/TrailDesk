@@ -40,9 +40,6 @@ export default function CompanyProfilePage() {
   const [form, setForm] = useState(EMPTY);
   const [toast, setToast] = useState(null);
 
-  const logoInputRef = useRef(null);
-  const sigInputRef = useRef(null);
-
   const { data, loading: queryLoading } = useQuery(GET_COMPANY_PROFILE, {
     fetchPolicy: 'cache-and-network',
   });
@@ -85,10 +82,8 @@ export default function CompanyProfilePage() {
         logoUrl:             p.logoUrl || '',
         signatureUrl:        p.signatureUrl || '',
         themeColor:          p.themeColor || DEFAULT_THEME_COLOR,
+      // R2 URLs are already absolute (https://...) — logoUrl and signatureUrl are set above
       });
-      // R2 URLs are already absolute (https://...) — no API_BASE prefix needed
-      if (p.logoUrl) setForm(prev => ({ ...prev, logoUrl: p.logoUrl }));
-      if (p.signatureUrl) setForm(prev => ({ ...prev, signatureUrl: p.signatureUrl }));
     }
   }, [data]);
 

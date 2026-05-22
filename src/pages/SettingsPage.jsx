@@ -115,8 +115,9 @@ export default function SettingsPage() {
       termsAndConditions: p.termsAndConditions || '', cancellationPolicy: p.cancellationPolicy || '',
       logoUrl: p.logoUrl || '', signatureUrl: p.signatureUrl || '',
     });
-    if (p.logoUrl) setLogoPreview(`${API_BASE}${p.logoUrl}`);
-    if (p.signatureUrl) setSigPreview(`${API_BASE}${p.signatureUrl}`);
+    // R2 URLs are already absolute (https://...) — do NOT prepend API_BASE
+    if (p.logoUrl) setLogoPreview(p.logoUrl);
+    if (p.signatureUrl) setSigPreview(p.signatureUrl);
   }, [companyData]);
 
   // ── Mutations ──
@@ -138,10 +139,11 @@ export default function SettingsPage() {
     try {
       const url = await uploadImage(file, 'logo');
       setCompany((prev) => ({ ...prev, logoUrl: url }));
-      setLogoPreview(`${API_BASE}${url}`);
+      // url is a full R2 URL (https://...) — use it directly
+      setLogoPreview(url);
     } catch (err) {
       toast.error(err.message);
-      setLogoPreview(company.logoUrl ? `${API_BASE}${company.logoUrl}` : null);
+      setLogoPreview(company.logoUrl || null);
     } finally { setLogoUploading(false); }
   };
 
@@ -153,10 +155,11 @@ export default function SettingsPage() {
     try {
       const url = await uploadImage(file, 'signature');
       setCompany((prev) => ({ ...prev, signatureUrl: url }));
-      setSigPreview(`${API_BASE}${url}`);
+      // url is a full R2 URL (https://...) — use it directly
+      setSigPreview(url);
     } catch (err) {
       toast.error(err.message);
-      setSigPreview(company.signatureUrl ? `${API_BASE}${company.signatureUrl}` : null);
+      setSigPreview(company.signatureUrl || null);
     } finally { setSigUploading(false); }
   };
 

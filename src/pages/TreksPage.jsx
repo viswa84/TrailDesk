@@ -317,7 +317,11 @@ export default function TreksPage() {
       {!loading && !error && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map(trek => (
-            <div key={trek._id} className="card overflow-hidden group cursor-pointer" onClick={() => setSelectedTrek(trek)}>
+            <div
+              key={trek._id}
+              className={`card overflow-hidden group cursor-pointer ${!trek.isActive ? 'grayscale opacity-75 hover:grayscale-0 hover:opacity-100 transition-all' : ''}`}
+              onClick={() => setSelectedTrek(trek)}
+            >
               <div className="relative h-44 overflow-hidden">
                 <img
                   src={getTrekImage(trek)}
@@ -329,14 +333,18 @@ export default function TreksPage() {
                   <span className={difficultyColors[trek.difficulty] || 'badge-slate'}>{trek.difficulty}</span>
                 </div>
                 <div className="absolute top-3 right-3 flex items-center gap-1">
-                  {trek.isActive && (
+                  {trek.isActive ? (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/90 text-white backdrop-blur-sm shadow-sm">
                       <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-500/90 text-white backdrop-blur-sm shadow-sm">
+                      OFFLINE
                     </span>
                   )}
                 </div>
                 {/* Action buttons on hover */}
-                <div className="absolute top-10 right-3 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-10 right-3 z-10 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={e => handleOpenEdit(trek, e)} className="p-1.5 bg-white/90 backdrop-blur rounded-lg hover:bg-white transition-colors shadow-sm" title="Edit">
                     <Edit className="w-3.5 h-3.5 text-slate-600" />
                   </button>
@@ -354,7 +362,7 @@ export default function TreksPage() {
                     <Trash2 className="w-3.5 h-3.5 text-red-500" />
                   </button>
                 </div>
-                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
                 <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
                   <span className="text-white text-xs font-medium flex items-center gap-1">
                     <MapPin className="w-3 h-3" /> {trek.startFrom || trek.location || '—'}
