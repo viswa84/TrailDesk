@@ -5,7 +5,7 @@ import { CREATE_TREK, UPDATE_TREK, DELETE_TREK, PUBLISH_TREK, UNPUBLISH_TREK } f
 import { useToast } from '../context/ToastContext';
 import { v, validateForm, onlyDigits } from '../utils/validators';
 import Modal from '../components/ui/Modal';
-import FileUpload from '../components/ui/FileUpload';
+import MultiImageUpload from '../components/ui/MultiImageUpload';
 import {
   Search, Plus, Clock, IndianRupee, MapPin, Mountain, Users, Calendar,
   Phone, Backpack, Edit, Trash2, Eye, RefreshCw, Rocket, X, EyeOff, Layers
@@ -514,12 +514,11 @@ export default function TreksPage() {
           {f('Altitude', 'altitude', 'text', 'e.g. 12,500 ft')}
           {f('Location', 'location', 'text', 'e.g. Uttarakhand')}
           {f('Best Season', 'bestSeason', 'text', 'e.g. Winter')}
-          <FileUpload
-            folder="departures"
-            accept="image"
-            label="Trek Image (Hero)"
-            value={formData.image || ''}
-            onChange={(url) => setFormData({ ...formData, image: url })}
+          <MultiImageUpload
+            folder="treks"
+            label="Trek Images"
+            value={formData.images || []}
+            onChange={(imgs) => setFormData({ ...formData, images: imgs, image: imgs[0] || '' })}
           />
           {f('Description', 'description', 'textarea', 'Describe the trek...', { full: true })}
         </div>
