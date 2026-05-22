@@ -442,6 +442,24 @@ export const REORDER_DEPARTURES = gql`
   }
 `;
 
+export const REORDER_CITIES = gql`
+  mutation ReorderCities($ids: [ID!]!) {
+    reorderCities(ids: $ids) {
+      _id
+      sortOrder
+    }
+  }
+`;
+
+export const REORDER_BOARDING_POINTS = gql`
+  mutation ReorderBoardingPoints($ids: [ID!]!) {
+    reorderBoardingPoints(ids: $ids) {
+      _id
+      sortOrder
+    }
+  }
+`;
+
 // ─── Chat Mutations ──────────────────────────────────
 export const SEND_MESSAGE = gql`
   mutation SendMessage($phone: String!, $text: String!) {

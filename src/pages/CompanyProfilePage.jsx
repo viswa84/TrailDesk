@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import {
   Building2, Save, Loader2, Image, FileSignature,
-  Phone, Mail, Globe, MapPin, Landmark, FileText, Info, X, CheckCircle
+  Phone, Mail, Globe, MapPin, Landmark, FileText, Info, X, CheckCircle, Palette
 } from 'lucide-react';
 import { GET_COMPANY_PROFILE } from '../graphql/queries';
 import { SAVE_COMPANY_PROFILE } from '../graphql/mutations';
@@ -15,7 +15,8 @@ const TABS = [
   { id: 'pdf',     label: 'PDF & Legal',        icon: FileText },
 ];
 
-const DEFAULT_THEME_COLOR = '#22c55e';
+const DEFAULT_PRIMARY_COLOR   = '#22c55e';
+const DEFAULT_SECONDARY_COLOR = '#1f2937';
 
 const EMPTY = {
   companyName: '', tagline: '', establishedYear: '', registrationNumber: '',
@@ -25,7 +26,8 @@ const EMPTY = {
   bankName: '', accountNumber: '', ifscCode: '', branchName: '', accountHolderName: '',
   pdfFooterText: '', termsAndConditions: '', cancellationPolicy: '',
   logoUrl: '', signatureUrl: '',
-  themeColor: DEFAULT_THEME_COLOR,
+  primaryColor:   DEFAULT_PRIMARY_COLOR,
+  secondaryColor: DEFAULT_SECONDARY_COLOR,
 };
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -81,8 +83,8 @@ export default function CompanyProfilePage() {
         cancellationPolicy:  p.cancellationPolicy || '',
         logoUrl:             p.logoUrl || '',
         signatureUrl:        p.signatureUrl || '',
-        themeColor:          p.themeColor || DEFAULT_THEME_COLOR,
-      // R2 URLs are already absolute (https://...) — logoUrl and signatureUrl are set above
+        primaryColor:        p.primaryColor   || DEFAULT_PRIMARY_COLOR,
+        secondaryColor:      p.secondaryColor || DEFAULT_SECONDARY_COLOR,
       });
     }
   }, [data]);
@@ -241,6 +243,93 @@ export default function CompanyProfilePage() {
                   <Field label="Registration Number" id="registrationNumber" value={form.registrationNumber} onChange={set('registrationNumber')} />
                   <Field label="GST Number" id="gstNumber" value={form.gstNumber} onChange={set('gstNumber')} />
                   <Field label="PAN Number" id="panNumber" value={form.panNumber} onChange={set('panNumber')} />
+                </div>
+
+                {/* Brand Colors */}
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Palette className="w-4 h-4" /> Brand Colors
+                  </h3>
+                  <p className="text-xs text-slate-400 mb-4">
+                    These colors are applied to your web booking page and participant form. Use 6-digit hex values (e.g. #22c55e).
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {/* Primary Color */}
+                    <div>
+                      <label htmlFor="primaryColor" className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Primary Color <span className="text-slate-400 font-normal">(buttons, accents)</span>
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          id="primaryColorPicker"
+                          value={form.primaryColor}
+                          onChange={(e) => setForm(prev => ({ ...prev, primaryColor: e.target.value }))}
+                          className="h-10 w-14 rounded-lg border border-slate-200 cursor-pointer p-0.5 bg-white"
+                        />
+                        <input
+                          id="primaryColor"
+                          type="text"
+                          value={form.primaryColor}
+                          onChange={(e) => setForm(prev => ({ ...prev, primaryColor: e.target.value }))}
+                          placeholder="#22c55e"
+                          className="input-field flex-1 font-mono text-sm"
+                          maxLength={7}
+                        />
+                        <div
+                          className="h-10 w-10 rounded-lg border border-slate-200 shrink-0"
+                          style={{ background: form.primaryColor }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Secondary Color */}
+                    <div>
+                      <label htmlFor="secondaryColor" className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Secondary Color <span className="text-slate-400 font-normal">(header, footer)</span>
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          id="secondaryColorPicker"
+                          value={form.secondaryColor}
+                          onChange={(e) => setForm(prev => ({ ...prev, secondaryColor: e.target.value }))}
+                          className="h-10 w-14 rounded-lg border border-slate-200 cursor-pointer p-0.5 bg-white"
+                        />
+                        <input
+                          id="secondaryColor"
+                          type="text"
+                          value={form.secondaryColor}
+                          onChange={(e) => setForm(prev => ({ ...prev, secondaryColor: e.target.value }))}
+                          placeholder="#1f2937"
+                          className="input-field flex-1 font-mono text-sm"
+                          maxLength={7}
+                        />
+                        <div
+                          className="h-10 w-10 rounded-lg border border-slate-200 shrink-0"
+                          style={{ background: form.secondaryColor }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live preview swatch */}
+                  <div className="mt-4 flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-xs text-slate-500 font-medium">Preview:</span>
+                    <button
+                      type="button"
+                      className="px-4 py-1.5 rounded-lg text-white text-xs font-semibold shadow-sm"
+                      style={{ background: form.primaryColor }}
+                    >
+                      Book Now
+                    </button>
+                    <div
+                      className="px-4 py-1.5 rounded-lg text-white text-xs font-semibold"
+                      style={{ background: form.secondaryColor }}
+                    >
+                      Header
+                    </div>
+                  </div>
                 </div>
 
                 <Textarea

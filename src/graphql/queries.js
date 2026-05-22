@@ -120,6 +120,7 @@ export const GET_CITIES = gql`
     name
     state
     isActive
+    sortOrder
     createdAt
     updatedAt
   }
@@ -564,6 +565,7 @@ export const GET_BOARDING_POINTS = gql`
     latitude
     longitude
     isActive
+    sortOrder
     createdAt
     updatedAt
   }
