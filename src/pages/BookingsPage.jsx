@@ -37,6 +37,7 @@ export default function BookingsPage() {
 
   const statusMap = {
     paid: { label: 'Paid', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    partial: { label: 'Partial', color: 'bg-blue-50 text-blue-700 border-blue-200' },
     pending: { label: 'Pending', color: 'bg-amber-50 text-amber-700 border-amber-200' },
     failed: { label: 'Failed', color: 'bg-red-50 text-red-700 border-red-200' },
   };
@@ -140,6 +141,7 @@ export default function BookingsPage() {
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="select-field sm:w-40">
             <option value="All">All Status</option>
             <option value="paid">Paid</option>
+            <option value="partial">Partial</option>
             <option value="pending">Pending</option>
             <option value="failed">Failed</option>
           </select>
@@ -304,6 +306,26 @@ export default function BookingsPage() {
                   <span className="font-bold text-slate-900">Total</span>
                   <span className="font-bold text-primary-700">₹{(selectedBooking.amount || 0).toLocaleString('en-IN')}</span>
                 </div>
+                {(selectedBooking.status === 'partial' || (selectedBooking.pendingAmount || 0) > 0) && (
+                  <>
+                    <div className="flex justify-between text-emerald-700">
+                      <span className="font-medium">
+                        Advance Paid
+                        {selectedBooking.paymentType === 'partial' && <span className="text-slate-400 text-xs"> (partial payment)</span>}
+                      </span>
+                      <span className="font-semibold">₹{(selectedBooking.paidAmount || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between text-amber-700">
+                      <span className="font-medium">Balance Due</span>
+                      <span className="font-semibold">₹{(selectedBooking.pendingAmount || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    {selectedBooking.balanceReminderSentAt && (
+                      <p className="text-[11px] text-slate-400">
+                        Balance payment link sent {format(new Date(selectedBooking.balanceReminderSentAt), 'dd/MM/yyyy')}
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 

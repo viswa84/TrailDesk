@@ -297,8 +297,13 @@ export const GET_BOOKINGS = gql`
     phone
     peopleCount
     amount
+    paidAmount
+    pendingAmount
     status
+    paymentType
     paymentLink
+    balanceReminderSentAt
+    balanceTxnid
     packageBreakdown {
       packageName
       pricePerPerson
@@ -324,8 +329,13 @@ export const GET_BOOKING = gql`
     phone
     peopleCount
     amount
+    paidAmount
+    pendingAmount
     status
+    paymentType
     paymentLink
+    balanceReminderSentAt
+    balanceTxnid
     packageBreakdown {
       packageName
       pricePerPerson
@@ -458,6 +468,9 @@ export const GET_DEPARTURES = gql`
     guideName
     status
     boardingPointIds
+    sortOrder
+    acceptPartialPayment
+    partialPaymentAmount
     cancellationReason
     createdAt
   }
@@ -502,6 +515,8 @@ export const GET_DEPARTURE = gql`
     guideName
     status
     boardingPointIds
+    acceptPartialPayment
+    partialPaymentAmount
     cancellationReason
     packages {
       name

@@ -13,7 +13,23 @@ import DatePickerInput from '../components/ui/DatePickerInput';
 import StatusBadge from '../components/ui/StatusBadge';
 import FileUpload from '../components/ui/FileUpload';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isSameDay, differenceInDays, addMonths, subMonths } from 'date-fns';
-import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, X, Eye, AlertTriangle, IndianRupee, Building2, Phone, FileText, Copy } from 'lucide-react';
+import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, X, Eye, AlertTriangle, IndianRupee, Building2, Phone, FileText, Copy, GripVertical } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const emptyDeparture = {
   trekId: '', trekName: '', cityId: '', startDate: '', endDate: '',
@@ -23,6 +39,7 @@ const emptyDeparture = {
   whatsappGroupInviteLink: '', whatsappGroupName: '', status: 'Open', boardingPointIds: [],
   cityPickups: [],   // [{ cityId, boardingPointIds: [] }]
   packages: [],
+  acceptPartialPayment: false, partialPaymentAmount: '',   // advance/partial payment per person
 };
 
 const trekColors = [
@@ -81,8 +98,33 @@ function CityBoardingSection({ cityName, cityId, selectedBpIds, onBpToggle }) {
   );
 }
 
+// ── SortableDepartureCard: wraps a departure card with drag-and-drop ────────
+function SortableDepartureCard({ id, children }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.85 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className={isDragging ? 'shadow-2xl rounded-2xl' : ''}>
+      {typeof children === 'function' ? children({ dragHandleProps: { ...attributes, ...listeners } }) : children}
+    </div>
+  );
+}
+
 export default function DeparturesPage() {
-  const { data: deps, treks: treksList, loading, error, add: addDep, update: updateDep, remove: removeDep, cancel: cancelDep } = useDepartures();
+  const { data: deps, treks: treksList, loading, error, add: addDep, update: updateDep, remove: removeDep, cancel: cancelDep, reorder: reorderDeps } = useDepartures();
   const { data: citiesList } = useCities();
   const { guides } = useGuides();
   const toast = useToast();
@@ -101,6 +143,40 @@ export default function DeparturesPage() {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isDuplicating, setIsDuplicating] = useState(false);
+
+  // Local ordered copy of departures so drag-and-drop reorders feel instant
+  // (optimistic UI). Kept in sync with the server-sorted `deps` from the hook.
+  const [orderedDeps, setOrderedDeps] = useState(deps);
+  useEffect(() => { setOrderedDeps(deps); }, [deps]);
+
+  const sensors = useSensors(
+    // 6px activation distance keeps card clicks/navigation working
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = orderedDeps.findIndex(d => (d.id || d._id) === active.id);
+    const newIndex = orderedDeps.findIndex(d => (d.id || d._id) === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const previous = orderedDeps;
+    const reordered = arrayMove(orderedDeps, oldIndex, newIndex);
+    // Optimistic UI: update local order immediately.
+    setOrderedDeps(reordered);
+
+    try {
+      // Persist the full displayed order; backend assigns sortOrder by index.
+      await reorderDeps(reordered.map(d => d.id || d._id));
+    } catch (err) {
+      // Roll back on failure.
+      setOrderedDeps(previous);
+      toast.error(err.message || 'Failed to save departure order');
+    }
+  };
 
   const trekColorMap = useMemo(() => {
     const uniqueTreks = [...new Set(deps.map(d => d.trekName))];
@@ -152,6 +228,8 @@ export default function DeparturesPage() {
         price: String(p.price ?? ''),
         inclusions: (p.inclusions || []).join('\n'),
       })),
+      acceptPartialPayment: dep.acceptPartialPayment || false,
+      partialPaymentAmount: dep.partialPaymentAmount != null ? String(dep.partialPaymentAmount) : '',
     });
     setErrors({});
     setShowForm(true);
@@ -196,6 +274,8 @@ export default function DeparturesPage() {
         price: String(p.price ?? ''),
         inclusions: (p.inclusions || []).join('\n'),
       })),
+      acceptPartialPayment: dep.acceptPartialPayment || false,
+      partialPaymentAmount: dep.partialPaymentAmount != null ? String(dep.partialPaymentAmount) : '',
     });
     setErrors({});
     setShowForm(true);
@@ -252,6 +332,10 @@ export default function DeparturesPage() {
           price: parseFloat(p.price),
           inclusions: p.inclusions.split('\n').map(s => s.trim()).filter(Boolean),
         })),
+      acceptPartialPayment: !!formData.acceptPartialPayment,
+      partialPaymentAmount: formData.acceptPartialPayment && formData.partialPaymentAmount !== ''
+        ? parseFloat(formData.partialPaymentAmount)
+        : null,
     };
 
     if (!editingDep) {
@@ -352,8 +436,10 @@ export default function DeparturesPage() {
 
       {/* ──────────────────── LIST VIEW ──────────────────── */}
       {view === 'list' ? (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={orderedDeps.map(d => d.id || d._id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-3">
-          {deps.map((dep, idx) => {
+          {orderedDeps.map((dep) => {
             let duration = dep.duration || '';
             if (dep.nights || dep.days) {
               duration = `${dep.nights || 0} Night${dep.nights !== 1 ? 's' : ''} / ${dep.days || 0} Day${dep.days !== 1 ? 's' : ''}`;
@@ -371,13 +457,24 @@ export default function DeparturesPage() {
             try { startDateFormatted = format(parseISO(dep.startDate), 'MMM dd'); } catch { }
 
             return (
+              <SortableDepartureCard key={dep.id || dep._id} id={dep.id || dep._id}>
+                {({ dragHandleProps }) => (
               <div
-                key={dep.id || dep._id}
                 className="card overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer group"
-                style={{ animationDelay: `${idx * 50}ms` }}
                 onClick={() => navigate(`/departures/${dep.id || dep._id}`)}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 sm:p-5">
+                  {/* Drag Handle */}
+                  <button
+                    {...dragHandleProps}
+                    onClick={(e) => e.stopPropagation()}
+                    className="self-center text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing touch-none shrink-0 -mr-1"
+                    title="Drag to reorder"
+                    aria-label="Drag to reorder departure"
+                  >
+                    <GripVertical className="w-5 h-5" />
+                  </button>
+
                   {/* Date Badge */}
                   <div className="flex items-center sm:block">
                     <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl bg-gradient-to-br from-primary-50 to-primary-100 border border-primary-200/60 flex flex-col items-center justify-center shrink-0 group-hover:from-primary-100 group-hover:to-primary-200 transition-all duration-300">
@@ -479,9 +576,11 @@ export default function DeparturesPage() {
                   </div>
                 </div>
               </div>
+                )}
+              </SortableDepartureCard>
             );
           })}
-          {deps.length === 0 && (
+          {orderedDeps.length === 0 && (
             <div className="card p-12 text-center">
               <CalendarDays className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500 text-sm">No departures scheduled yet</p>
@@ -489,6 +588,8 @@ export default function DeparturesPage() {
             </div>
           )}
         </div>
+          </SortableContext>
+        </DndContext>
 
       ) : (
         /* ──────────────────── CALENDAR VIEW ──────────────────── */
@@ -1021,6 +1122,40 @@ export default function DeparturesPage() {
                 />
               </div>
             ))}
+          </div>
+
+          {/* ── Partial / Advance Payment ── */}
+          <div className="sm:col-span-2">
+            <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!formData.acceptPartialPayment}
+                  onChange={(e) => setFormData({ ...formData, acceptPartialPayment: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm font-medium text-slate-700">Accept partial (advance) payment</span>
+              </label>
+              <p className="text-[11px] text-slate-400 mt-1 ml-6">
+                When enabled, customers can pay an advance instead of the full amount. The advance is charged per person.
+              </p>
+              {formData.acceptPartialPayment && (
+                <div className="mt-3 ml-6">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Advance amount per person (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.partialPaymentAmount}
+                    onChange={(e) => setFormData({ ...formData, partialPaymentAmount: e.target.value })}
+                    className="input-field max-w-[200px]"
+                    placeholder="e.g. 1000"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Charged as advance × number of participants. The remaining balance is collected later.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">

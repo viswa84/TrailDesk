@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { GET_DEPARTURES, GET_TREKS } from '../graphql/queries';
-import { CREATE_DEPARTURE, UPDATE_DEPARTURE, DELETE_DEPARTURE, CANCEL_DEPARTURE } from '../graphql/mutations';
+import { CREATE_DEPARTURE, UPDATE_DEPARTURE, DELETE_DEPARTURE, CANCEL_DEPARTURE, REORDER_DEPARTURES } from '../graphql/mutations';
 import { io as socketIO } from 'socket.io-client';
 
 /**
@@ -50,6 +50,9 @@ export function useDepartures(filters = {}) {
   const [cancelDep] = useMutation(CANCEL_DEPARTURE, {
     refetchQueries: [{ query: GET_DEPARTURES }],
   });
+  // No refetchQueries: the list is reordered optimistically in the page,
+  // and the server returns the persisted sortOrder for each departure.
+  const [reorderDeps] = useMutation(REORDER_DEPARTURES);
 
   // Fetch treks for selector dropdown
   const { data: treksData } = useQuery(GET_TREKS, { variables: { isActive: true } });
@@ -72,6 +75,9 @@ export function useDepartures(filters = {}) {
     },
     cancel: async (id, reason) => {
       await cancelDep({ variables: { id, reason } });
+    },
+    reorder: async (ids) => {
+      await reorderDeps({ variables: { ids } });
     },
   };
 }

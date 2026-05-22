@@ -359,6 +359,8 @@ export const CREATE_DEPARTURE = gql`
       guideName
       status
       boardingPointIds
+      acceptPartialPayment
+      partialPaymentAmount
     }
   }
 `;
@@ -403,6 +405,8 @@ export const UPDATE_DEPARTURE = gql`
       guideName
       status
       boardingPointIds
+      acceptPartialPayment
+      partialPaymentAmount
     }
   }
 `;
@@ -425,6 +429,15 @@ export const CANCEL_DEPARTURE = gql`
       _id
       status
       cancellationReason
+    }
+  }
+`;
+
+export const REORDER_DEPARTURES = gql`
+  mutation ReorderDepartures($ids: [ID!]!) {
+    reorderDepartures(ids: $ids) {
+      _id
+      sortOrder
     }
   }
 `;
