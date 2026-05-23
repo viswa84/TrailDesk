@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery as useApolloQuery } from '@apollo/client/react';
 import { GET_BOARDING_POINTS } from '../graphql/queries';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -145,9 +145,19 @@ export default function DeparturesPage() {
   const [isDuplicating, setIsDuplicating] = useState(false);
 
   // Local ordered copy of departures so drag-and-drop reorders feel instant
-  // (optimistic UI). Kept in sync with the server-sorted `deps` from the hook.
+  // (optimistic UI). We only reset from the server when the set of IDs changes
+  // (add/delete/initial load), NOT on every render — because useDepartures
+  // returns a new array reference on every Apollo cache read, which would
+  // otherwise overwrite the optimistic order immediately after a drag.
   const [orderedDeps, setOrderedDeps] = useState(deps);
-  useEffect(() => { setOrderedDeps(deps); }, [deps]);
+  const prevDepIdsRef = useRef(null);
+  useEffect(() => {
+    const incoming = deps.map(d => d.id || d._id).join(',');
+    if (incoming !== prevDepIdsRef.current) {
+      prevDepIdsRef.current = incoming;
+      setOrderedDeps(deps);
+    }
+  }, [deps]);
 
   const sensors = useSensors(
     // 6px activation distance keeps card clicks/navigation working

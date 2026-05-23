@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCities } from '../hooks/useCities';
 import { useBoardingPoints } from '../hooks/useBoardingPoints';
 import { useToast } from '../context/ToastContext';
@@ -82,9 +82,20 @@ function SortableBPRow({ id, children }) {
 function BoardingPointsSection({ cityId, onAddBP, onEditBP, onDeleteBP, toast }) {
   const { data: boardingPoints, reorder: reorderBPs } = useBoardingPoints(cityId);
 
-  // Local ordered copy for optimistic drag-and-drop UI
+  // Local ordered copy for optimistic drag-and-drop UI.
+  // We only reset from the server when the set of IDs changes (add/delete/initial
+  // load), NOT on every render — because useBoardingPoints returns a new array
+  // reference on every Apollo cache read, which would otherwise overwrite the
+  // optimistic order immediately after a drag.
   const [orderedBPs, setOrderedBPs] = useState(boardingPoints);
-  useEffect(() => { setOrderedBPs(boardingPoints); }, [boardingPoints]);
+  const prevBPIdsRef = useRef(null);
+  useEffect(() => {
+    const incoming = boardingPoints.map(bp => bp.id || bp._id).join(',');
+    if (incoming !== prevBPIdsRef.current) {
+      prevBPIdsRef.current = incoming;
+      setOrderedBPs(boardingPoints);
+    }
+  }, [boardingPoints]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -198,9 +209,20 @@ export default function CitiesPage() {
   // For deleting a BP we still need the boardingPoints hook at page level (delete-confirm modal)
   const { remove: removeBP, update: updateBP, add: addBP } = useBoardingPoints(bpCityId || expandedCity);
 
-  // Local ordered copy of cities for optimistic drag-and-drop UI
+  // Local ordered copy of cities for optimistic drag-and-drop UI.
+  // We only reset from the server when the set of IDs changes (add/delete/initial
+  // load), NOT on every render — because useCities returns a new array reference
+  // on every Apollo cache read, which would otherwise overwrite the optimistic
+  // order immediately after a drag drops and triggers a re-render.
   const [orderedCities, setOrderedCities] = useState(citiesList);
-  useEffect(() => { setOrderedCities(citiesList); }, [citiesList]);
+  const prevCityIdsRef = useRef(null);
+  useEffect(() => {
+    const incoming = citiesList.map(c => c.id || c._id).join(',');
+    if (incoming !== prevCityIdsRef.current) {
+      prevCityIdsRef.current = incoming;
+      setOrderedCities(citiesList);
+    }
+  }, [citiesList]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
