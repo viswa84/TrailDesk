@@ -1140,3 +1140,19 @@ export const GET_INTEGRATION = gql`
     }
   }
 `;
+
+// ─── Follow-up Rules ───────────────────────────────────
+export const GET_FOLLOW_UP_RULES = gql`
+  query GetFollowUpRules {
+    getFollowUpRules {
+      _id
+      name
+      condition
+      delayHours
+      message
+      enabled
+      createdAt
+      updatedAt
+    }
+  }
+`;

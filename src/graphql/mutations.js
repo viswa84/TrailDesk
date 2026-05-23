@@ -1024,3 +1024,34 @@ export const TEST_INTEGRATION = gql`
     }
   }
 `;
+
+// ─── Follow-up Rules ───────────────────────────────────
+export const SAVE_FOLLOW_UP_RULE = gql`
+  mutation SaveFollowUpRule($id: ID, $input: FollowUpRuleInput!) {
+    saveFollowUpRule(id: $id, input: $input) {
+      _id
+      name
+      condition
+      delayHours
+      message
+      enabled
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const DELETE_FOLLOW_UP_RULE = gql`
+  mutation DeleteFollowUpRule($id: ID!) {
+    deleteFollowUpRule(id: $id)
+  }
+`;
+
+export const SET_FOLLOW_UP_RULE_ENABLED = gql`
+  mutation SetFollowUpRuleEnabled($id: ID!, $enabled: Boolean!) {
+    setFollowUpRuleEnabled(id: $id, enabled: $enabled) {
+      _id
+      enabled
+    }
+  }
+`;

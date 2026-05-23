@@ -13,6 +13,7 @@ import {
 import ArchitectureDoc from './ArchitectureDoc';
 import PaymentGatewaysSection from './PaymentGatewaysSection';
 import IntegrationsSection from './IntegrationsSection';
+import FollowUpRulesSection from './FollowUpRulesSection';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -581,6 +582,9 @@ export default function SettingsPage() {
 
       {/* Integrations (WhatsApp, R2, etc.) */}
       <IntegrationsSection />
+
+      {/* Follow-up Messages (re-engagement before 24h window closes) */}
+      <FollowUpRulesSection />
 
     </div>
   );
