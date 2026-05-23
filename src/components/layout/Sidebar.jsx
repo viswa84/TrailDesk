@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Mountain, CalendarRange, BookOpen, Users, Navigation,
-  Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft, Building2, Shield, Bot, Workflow, Palette
+  Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft, Building2, Shield, Bot, Workflow
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -19,7 +19,6 @@ const navItems = [
   { path: '/support-chat', label: 'Support Chat', icon: MessageCircle },
   { path: '/whatsapp-flow', label: 'WhatsApp Flow', icon: Bot },
   { path: '/flow-builder',  label: 'Flow Builder',  icon: Workflow },
-  { path: '/company-profile', label: 'Company Profile', icon: Palette },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 

@@ -4,6 +4,7 @@ import { useToast } from '../context/ToastContext';
 import { v, validateForm, onlyDigits } from '../utils/validators';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { ME, MY_ORGANIZATION, GET_COMPANY_PROFILE } from '../graphql/queries';
+import { applyThemeColors } from '../utils/theme';
 import { UPDATE_PROFILE, UPDATE_ORGANIZATION, UPDATE_NOTIFICATION_PREFS, SAVE_COMPANY_PROFILE } from '../graphql/mutations';
 import {
   Settings, User, Bell, Building2, Shield, Save, Loader2,
@@ -40,6 +41,7 @@ const COMPANY_EMPTY = {
   bankName: '', accountNumber: '', ifscCode: '', branchName: '', accountHolderName: '',
   pdfFooterText: '', termsAndConditions: '', cancellationPolicy: '',
   logoUrl: '', signatureUrl: '',
+  primaryColor: '#22c55e', secondaryColor: '#1f2937',
 };
 
 export default function SettingsPage() {
@@ -114,6 +116,8 @@ export default function SettingsPage() {
       accountHolderName: p.accountHolderName || '', pdfFooterText: p.pdfFooterText || '',
       termsAndConditions: p.termsAndConditions || '', cancellationPolicy: p.cancellationPolicy || '',
       logoUrl: p.logoUrl || '', signatureUrl: p.signatureUrl || '',
+      primaryColor: p.primaryColor || p.themeColor || '#22c55e',
+      secondaryColor: p.secondaryColor || '#1f2937',
     });
     // R2 URLs are already absolute (https://...) — do NOT prepend API_BASE
     if (p.logoUrl) setLogoPreview(p.logoUrl);
@@ -450,6 +454,76 @@ export default function SettingsPage() {
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">About Us</label>
                 <textarea value={company.aboutUs} onChange={setC('aboutUs')} rows={3} className="input-field resize-none" placeholder="Brief description shown on documents…" />
+              </div>
+            </div>
+
+            {/* ── Theme Colors ─────────────────────────────────────────── */}
+            <div className="pt-2">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Theme Colors</p>
+              <p className="text-[11px] text-slate-500 mb-3">
+                Used for buttons, accents, and the booking + participant pages your customers see. Changes preview instantly in this admin UI.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Primary */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Primary Color <span className="text-slate-400 font-normal">(buttons, accents)</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={company.primaryColor || '#22c55e'}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCompany((prev) => ({ ...prev, primaryColor: v }));
+                        applyThemeColors(v, company.secondaryColor);
+                      }}
+                      className="h-10 w-14 rounded-lg border border-slate-200 cursor-pointer p-0.5 bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={company.primaryColor || ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCompany((prev) => ({ ...prev, primaryColor: v }));
+                        if (/^#[0-9a-fA-F]{6}$/.test(v)) applyThemeColors(v, company.secondaryColor);
+                      }}
+                      placeholder="#22c55e"
+                      className="input-field flex-1 font-mono text-sm"
+                      maxLength={7}
+                    />
+                  </div>
+                </div>
+                {/* Secondary */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Secondary Color <span className="text-slate-400 font-normal">(headers, footers)</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={company.secondaryColor || '#1f2937'}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCompany((prev) => ({ ...prev, secondaryColor: v }));
+                        applyThemeColors(company.primaryColor, v);
+                      }}
+                      className="h-10 w-14 rounded-lg border border-slate-200 cursor-pointer p-0.5 bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={company.secondaryColor || ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCompany((prev) => ({ ...prev, secondaryColor: v }));
+                        if (/^#[0-9a-fA-F]{6}$/.test(v)) applyThemeColors(company.primaryColor, v);
+                      }}
+                      placeholder="#1f2937"
+                      className="input-field flex-1 font-mono text-sm"
+                      maxLength={7}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </>)}
