@@ -25,34 +25,77 @@ function fileIcon(file) {
   return FileText;
 }
 
-function MediaMessage({ raw, message, isOutbound }) {
-  const type = raw?.type;
+function MediaMessage({ raw, message, mediaUrl, mediaType, fileName, isOutbound }) {
+  // Determine type from raw payload first, then fall back to mediaType MIME
+  const rawType = raw?.type;
+  const mimeType = mediaType || '';
+  let type = rawType;
+  if (!type) {
+    if (mimeType.startsWith('image/')) type = 'image';
+    else if (mimeType.startsWith('video/')) type = 'video';
+    else if (mimeType.startsWith('audio/')) type = 'audio';
+    else if (mimeType) type = 'document';
+  }
+
   if (type === 'image') {
-    const caption = raw.image?.caption || message || '';
+    const caption = raw?.image?.caption || message || '';
+    // Use R2 public URL if available for inline preview
+    const imgSrc = mediaUrl || raw?.image?.link || null;
     return (
       <div>
-        <div className={`flex items-center gap-2 px-1 py-2 rounded-lg ${isOutbound ? 'bg-white/10' : 'bg-slate-50'}`}>
-          <Image className="w-8 h-8 shrink-0 text-current opacity-70" />
-          <span className="text-xs opacity-80">Photo</span>
-        </div>
+        {imgSrc ? (
+          <a href={imgSrc} target="_blank" rel="noopener noreferrer" className="block">
+            <img
+              src={imgSrc}
+              alt={caption || 'Image'}
+              className="rounded-xl max-w-[220px] max-h-[180px] object-cover border border-white/20"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          </a>
+        ) : (
+          <div className={`flex items-center gap-2 px-1 py-2 rounded-lg ${isOutbound ? 'bg-white/10' : 'bg-slate-50'}`}>
+            <Image className="w-8 h-8 shrink-0 text-current opacity-70" />
+            <span className="text-xs opacity-80">Photo</span>
+          </div>
+        )}
         {caption && <p className="text-xs mt-1 opacity-90">{caption}</p>}
       </div>
     );
   }
   if (type === 'document') {
-    const name = raw.document?.filename || raw.document?.caption || message || 'Document';
+    const name = fileName || raw?.document?.filename || raw?.document?.caption || message || 'Document';
+    const docUrl = mediaUrl || raw?.document?.link || null;
     return (
       <div className={`flex items-center gap-2 px-2 py-2 rounded-lg ${isOutbound ? 'bg-white/10' : 'bg-slate-50'}`}>
         <FileText className="w-7 h-7 shrink-0 opacity-70" />
-        <span className="text-xs font-medium truncate max-w-[160px]">{name}</span>
+        {docUrl ? (
+          <a
+            href={docUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-medium truncate max-w-[160px] underline underline-offset-2"
+            onClick={e => e.stopPropagation()}
+          >
+            {name}
+          </a>
+        ) : (
+          <span className="text-xs font-medium truncate max-w-[160px]">{name}</span>
+        )}
       </div>
     );
   }
   if (type === 'video') {
+    const vidUrl = mediaUrl || raw?.video?.link || null;
     return (
       <div className={`flex items-center gap-2 px-2 py-2 rounded-lg ${isOutbound ? 'bg-white/10' : 'bg-slate-50'}`}>
         <Film className="w-7 h-7 shrink-0 opacity-70" />
-        <span className="text-xs opacity-80">Video</span>
+        {vidUrl ? (
+          <a href={vidUrl} target="_blank" rel="noopener noreferrer" className="text-xs opacity-80 underline underline-offset-2" onClick={e => e.stopPropagation()}>
+            Video
+          </a>
+        ) : (
+          <span className="text-xs opacity-80">Video</span>
+        )}
       </div>
     );
   }
@@ -169,6 +212,7 @@ export default function SupportChatPage() {
   const fileInputRef = useRef(null);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [sendingFiles, setSendingFiles] = useState(false);
+  const [filesSendError, setFilesSendError] = useState('');
 
   // ─── Pagination state ──────────────────────────────
   const [hasMore, setHasMore] = useState(false);
@@ -322,6 +366,7 @@ export default function SupportChatPage() {
     setLiveMessages([]);
     setAttachedFiles([]);
     setMessage('');
+    setFilesSendError('');
     setShowInfoPanel(false);
     setSelectedGuideId('');
     setHasMore(false);
@@ -492,15 +537,51 @@ export default function SupportChatPage() {
   const handleSendFiles = useCallback(async () => {
     if (!activePhone || (attachedFiles.length === 0 && !message.trim())) return;
     setSendingFiles(true);
+    setFilesSendError('');
     try {
       const form = new FormData();
       attachedFiles.forEach(f => form.append('files', f));
       if (message.trim()) form.append('text', message.trim());
-      await fetch(`${API_URL}/api/chat/${activePhone}/send-files`, { method: 'POST', body: form });
+      const token = localStorage.getItem('trekops_token');
+      if (!token) {
+        // No token in storage — don't fire an unauthenticated request that the
+        // server can only reject with 401. Surface a clear, actionable error.
+        setFilesSendError('Your session has expired. Please log out and log in again to send files.');
+        return;
+      }
+      const res = await fetch(`${API_URL}/api/chat/${activePhone}/send-files`, {
+        method: 'POST',
+        body: form,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // 401 here means the token was rejected by the server — almost always
+        // an expired JWT. Tell the user exactly that instead of a generic error.
+        const errMsg = res.status === 401 || res.status === 403
+          ? 'Your session has expired. Please log out and log in again to send files.'
+          : (data?.error || `Send failed (HTTP ${res.status})`);
+        setFilesSendError(errMsg);
+        // If the backend partially succeeded (some files failed), still clear attachments
+        // so the admin doesn't accidentally re-send. The failed messages are in the chat.
+        if (res.status !== 401 && res.status !== 403) {
+          setAttachedFiles([]);
+          setMessage('');
+        }
+        return;
+      }
+      // Partial failure: some files were sent, some failed.
+      // Backend already persisted failed ChatMessages with deliveryStatus:"failed".
+      // Socket will push them to the UI. Just clear the input.
       setAttachedFiles([]);
       setMessage('');
+      if (data.results?.some(r => r.status === 'failed')) {
+        const failCount = data.results.filter(r => r.status === 'failed').length;
+        setFilesSendError(`${failCount} file(s) failed to send — see the failed message(s) in the chat.`);
+      }
     } catch (err) {
       console.error('Failed to send files:', err);
+      setFilesSendError('Network error — could not reach server.');
     } finally {
       setSendingFiles(false);
     }
@@ -868,9 +949,16 @@ export default function SupportChatPage() {
                                   : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-md'
                                 }`}
                               >
-                                {/* Media messages */}
-                                {['image','document','video','audio'].includes(msg.raw?.type) ? (
-                                  <MediaMessage raw={msg.raw} message={msg.message} isOutbound={isOutbound} />
+                                {/* Media messages — detect by raw.type OR by mediaType field */}
+                                {(['image','document','video','audio'].includes(msg.raw?.type) || msg.mediaType) ? (
+                                  <MediaMessage
+                                    raw={msg.raw}
+                                    message={msg.message}
+                                    mediaUrl={msg.mediaUrl}
+                                    mediaType={msg.mediaType}
+                                    fileName={msg.fileName}
+                                    isOutbound={isOutbound}
+                                  />
                                 ) : (
                                   <div style={{ whiteSpace: 'pre-line' }}>
                                     {parseWhatsAppText(msg.message)}
@@ -985,6 +1073,22 @@ export default function SupportChatPage() {
                         );
                       })}
                     </div>
+                  </div>
+                )}
+
+                {/* File send error banner */}
+                {filesSendError && (
+                  <div className="px-3 sm:px-5 py-2 bg-red-50 border-t border-red-100 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                      <span className="text-xs text-red-600 truncate">{filesSendError}</span>
+                    </div>
+                    <button
+                      onClick={() => setFilesSendError('')}
+                      className="shrink-0 p-1 hover:bg-red-100 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <X className="w-3 h-3 text-red-400" />
+                    </button>
                   </div>
                 )}
 

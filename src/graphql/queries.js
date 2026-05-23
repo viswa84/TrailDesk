@@ -275,6 +275,9 @@ export const GET_MESSAGES = gql`
         waMessageId
         deliveryStatus
         deliveryFailureReason
+        mediaUrl
+        mediaType
+        fileName
         createdAt
         updatedAt
       }
