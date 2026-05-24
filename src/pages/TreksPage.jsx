@@ -490,7 +490,7 @@ export default function TreksPage() {
       </Modal>
 
       {/* ──────── Add / Edit Modal ──────── */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingTrek ? 'Edit Trek' : 'Add New Trek'} size="lg">
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingTrek ? 'Edit Trek' : 'Add New Trek'} size="lg" confirmOnClose>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {f('Trek Name', 'name', 'text', 'e.g. Kedarkantha Winter Trek', { full: true })}
           <div>

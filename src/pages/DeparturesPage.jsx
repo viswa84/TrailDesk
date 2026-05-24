@@ -882,7 +882,7 @@ export default function DeparturesPage() {
       </Modal>
 
       {/* ──────────────────── CRUD FORM MODAL ──────────────────── */}
-      <Modal isOpen={showForm} onClose={() => { setShowForm(false); setIsDuplicating(false); }} title={editingDep ? 'Edit Departure' : isDuplicating ? 'Duplicate Departure' : 'New Departure'} size="lg">
+      <Modal isOpen={showForm} onClose={() => { setShowForm(false); setIsDuplicating(false); }} title={editingDep ? 'Edit Departure' : isDuplicating ? 'Duplicate Departure' : 'New Departure'} size="lg" confirmOnClose>
         {isDuplicating && (
           <div className="flex items-center gap-2 mb-4 px-3 py-2.5 rounded-lg bg-primary-50 border border-primary-200 text-primary-700 text-sm">
             <Copy className="w-4 h-4 shrink-0" />
@@ -1186,7 +1186,7 @@ export default function DeparturesPage() {
       </Modal>
 
       {/* ──────────────────── CANCEL BATCH MODAL ──────────────────── */}
-      <Modal isOpen={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }} title={`Cancel Batch: ${cancelTarget?.trekName || ''}`} size="sm">
+      <Modal isOpen={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }} title={`Cancel Batch: ${cancelTarget?.trekName || ''}`} size="sm" confirmOnClose>
         <p className="text-sm text-slate-600 mb-3">Why are you canceling this batch? This will notify all relevant parties.</p>
         <div className="mb-4">
           <label className="block text-sm font-medium text-slate-700 mb-1">Reason *</label>

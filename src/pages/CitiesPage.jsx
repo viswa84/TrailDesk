@@ -442,7 +442,7 @@ export default function CitiesPage() {
       </Modal>
 
       {/* Add/Edit City Modal */}
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingCity ? 'Edit City' : 'Add New City'} size="sm">
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingCity ? 'Edit City' : 'Add New City'} size="sm" confirmOnClose>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">City Name</label>
@@ -460,7 +460,7 @@ export default function CitiesPage() {
       </Modal>
 
       {/* Add/Edit Boarding Point Modal */}
-      <Modal isOpen={showBPModal} onClose={() => setShowBPModal(false)} title={editingBP ? 'Edit Boarding Point' : 'Add Boarding Point'} size="sm">
+      <Modal isOpen={showBPModal} onClose={() => setShowBPModal(false)} title={editingBP ? 'Edit Boarding Point' : 'Add Boarding Point'} size="sm" confirmOnClose>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Boarding Point Name *</label>

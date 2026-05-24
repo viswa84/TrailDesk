@@ -148,7 +148,7 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingCustomer ? 'Edit Customer' : 'Add Customer'} size="md">
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingCustomer ? 'Edit Customer' : 'Add Customer'} size="md" confirmOnClose>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>

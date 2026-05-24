@@ -61,7 +61,9 @@ export default function MultiImageUpload({
   }
 
   function handleInputChange(e) {
-    const files = e.target.files;
+    // Snapshot the FileList FIRST — it's a live reference and resetting
+    // `value = ''` below would otherwise clear it before handleFiles reads it.
+    const files = Array.from(e.target.files || []);
     e.target.value = '';
     handleFiles(files);
   }
@@ -78,11 +80,12 @@ export default function MultiImageUpload({
     setError('');
     try {
       await deleteFile(url);
-    } catch {
-      /* even if the R2 delete fails, still remove it from the trek */
+      onChange?.(images.filter((u) => u !== url));
+    } catch (err) {
+      setError(err.message || 'Failed to delete image');
+    } finally {
+      setRemoving(null);
     }
-    onChange?.(images.filter((u) => u !== url));
-    setRemoving(null);
   }
 
   // ── Promote an image to first position (cover/hero) ───────────────────────
@@ -143,14 +146,14 @@ export default function MultiImageUpload({
           </div>
         ))}
 
-        {/* Add tile */}
-        <button
-          type="button"
-          onClick={() => { if (!busy) inputRef.current?.click(); }}
+        {/* Add tile — a <label> that DIRECTLY CONTAINS the file <input>.
+            This is the canonical HTML pattern; clicking anywhere on the label
+            triggers the input's file picker. No JS click(), no htmlFor lookup. */}
+        <label
           onDragOver={(e) => { e.preventDefault(); if (!busy) setDragging(true); }}
           onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
           onDrop={handleDrop}
-          disabled={busy}
+          aria-disabled={busy}
           className={`aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 text-center select-none transition-all w-full
             ${busy
               ? 'border-primary-300 bg-primary-50/40 cursor-not-allowed'
@@ -158,6 +161,15 @@ export default function MultiImageUpload({
                 ? 'border-primary-400 bg-primary-50 cursor-copy'
                 : 'border-slate-200 bg-slate-50 cursor-pointer hover:border-primary-400 hover:bg-primary-50/30'}`}
         >
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPT}
+            multiple
+            className="hidden"
+            onChange={handleInputChange}
+            disabled={busy}
+          />
           {uploading > 0 ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
@@ -166,10 +178,10 @@ export default function MultiImageUpload({
           ) : (
             <>
               <Upload className="w-5 h-5 text-slate-400" />
-              <p className="text-[10px] font-semibold text-slate-500">Add images</p>
+              <span className="text-[10px] font-semibold text-slate-500">Add images</span>
             </>
           )}
-        </button>
+        </label>
       </div>
 
       <p className="text-[11px] text-slate-400">
@@ -181,16 +193,6 @@ export default function MultiImageUpload({
           <X className="w-3 h-3 shrink-0" /> {error}
         </p>
       )}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ACCEPT}
-        multiple
-        className="hidden"
-        onChange={handleInputChange}
-        disabled={busy}
-      />
     </div>
   );
 }

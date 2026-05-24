@@ -7,6 +7,7 @@ import {
   SET_FOLLOW_UP_RULE_ENABLED,
 } from '../graphql/mutations';
 import { useToast } from '../context/ToastContext';
+import Modal from '../components/ui/Modal';
 import { Plus, Pencil, Trash2, Loader2, MessageSquare } from 'lucide-react';
 
 const CONDITION_LABELS = {
@@ -72,15 +73,14 @@ function RuleModal({ rule, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900 text-sm">
-            {isEdit ? 'Edit Follow-up Rule' : 'New Follow-up Rule'}
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">&times;</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={isEdit ? 'Edit Follow-up Rule' : 'New Follow-up Rule'}
+      size="md"
+      confirmOnClose
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Rule Name</label>
             <input
@@ -158,9 +158,8 @@ function RuleModal({ rule, onClose, onSaved }) {
               {isEdit ? 'Save Changes' : 'Create Rule'}
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 }
 

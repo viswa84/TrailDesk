@@ -120,7 +120,7 @@ export default function MarketingPage() {
         </div>
       </div>
 
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editing ? 'Edit Campaign' : 'Add Campaign'} size="md">
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editing ? 'Edit Campaign' : 'Add Campaign'} size="md" confirmOnClose>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>

@@ -231,7 +231,7 @@ export default function FinancePage() {
       )}
 
       {/* Invoice Form Modal */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingItem ? 'Edit Invoice' : 'New Invoice'} size="md">
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingItem ? 'Edit Invoice' : 'New Invoice'} size="md" confirmOnClose>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Customer Name *</label>

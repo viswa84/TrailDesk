@@ -310,7 +310,7 @@ function CreateTenantModal({ onClose, onCreated }) {
   }
 
   return (
-    <Modal title="Create New Company" onClose={onClose}>
+    <Modal title="Create New Company" onClose={onClose} confirmOnClose>
       <form onSubmit={submit} className="space-y-4">
         {/* Company section */}
         <div>
@@ -601,7 +601,7 @@ function AddAdminModal({ companyCode, tenantName, onClose, onCreated }) {
   };
 
   return (
-    <Modal title={`Add User — ${tenantName}`} onClose={onClose}>
+    <Modal title={`Add User — ${tenantName}`} onClose={onClose} confirmOnClose>
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>

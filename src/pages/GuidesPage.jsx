@@ -185,7 +185,7 @@ export default function GuidesPage() {
             </div>
 
             {/* CREATE/EDIT MODAL */}
-            <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingGuide ? "Edit Guide" : "New Guide"} size="md">
+            <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingGuide ? "Edit Guide" : "New Guide"} size="md" confirmOnClose>
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Name <span className="text-red-500">*</span></label>
