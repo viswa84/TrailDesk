@@ -17,6 +17,11 @@ import FollowUpRulesSection from './FollowUpRulesSection';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
+// Our system primary — used as the fallback in the theme-color pickers when a
+// company has not saved its own primary/secondary. Keeps the pickers from
+// showing a foreign default value (e.g. green) before the company chooses.
+const SYSTEM_PRIMARY_COLOR = '#22c55e';
+
 function getToken() {
   return localStorage.getItem('trekops_token') || '';
 }
@@ -42,7 +47,9 @@ const COMPANY_EMPTY = {
   bankName: '', accountNumber: '', ifscCode: '', branchName: '', accountHolderName: '',
   pdfFooterText: '', termsAndConditions: '', cancellationPolicy: '',
   logoUrl: '', signatureUrl: '',
-  primaryColor: '#22c55e', secondaryColor: '#1f2937',
+  // Defaults — used only when the company has not saved its own theme colors.
+  // Falls back to our system primary so the picker never shows a foreign default.
+  primaryColor: SYSTEM_PRIMARY_COLOR, secondaryColor: SYSTEM_PRIMARY_COLOR,
 };
 
 export default function SettingsPage() {
@@ -117,8 +124,10 @@ export default function SettingsPage() {
       accountHolderName: p.accountHolderName || '', pdfFooterText: p.pdfFooterText || '',
       termsAndConditions: p.termsAndConditions || '', cancellationPolicy: p.cancellationPolicy || '',
       logoUrl: p.logoUrl || '', signatureUrl: p.signatureUrl || '',
-      primaryColor: p.primaryColor || p.themeColor || '#22c55e',
-      secondaryColor: p.secondaryColor || '#1f2937',
+      // Show the company's saved colors when present; only fall back to our
+      // system primary if nothing is saved on the company record.
+      primaryColor: p.primaryColor || p.themeColor || SYSTEM_PRIMARY_COLOR,
+      secondaryColor: p.secondaryColor || SYSTEM_PRIMARY_COLOR,
     });
     // R2 URLs are already absolute (https://...) — do NOT prepend API_BASE
     if (p.logoUrl) setLogoPreview(p.logoUrl);
