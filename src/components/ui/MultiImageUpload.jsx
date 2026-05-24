@@ -104,26 +104,19 @@ export default function MultiImageUpload({
         {images.map((url, idx) => (
           <div
             key={url}
-            className="relative group aspect-square rounded-lg overflow-hidden border border-slate-200 bg-slate-50"
+            className="relative aspect-square rounded-lg overflow-hidden border-2 border-slate-200 bg-slate-50"
           >
-            <img src={url} alt={`Image ${idx + 1}`} className="w-full h-full object-cover" />
+            <img src={url} alt={`Image ${idx + 1}`} className="w-full h-full object-cover pointer-events-none" />
 
-            {/* Cover badge on the first image */}
-            {idx === 0 && (
-              <span className="absolute top-1 left-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-primary-600 text-white shadow-sm">
-                <Star className="w-2.5 h-2.5 fill-current" /> Cover
-              </span>
-            )}
-
-            {/* Hover actions */}
-            <div className="absolute inset-0 flex items-center justify-center gap-1 bg-black/0 group-hover:bg-black/40 transition-colors">
+            {/* Action buttons — always visible (top-right corner) */}
+            <div className="absolute top-1 right-1 flex gap-1 z-10">
               {idx !== 0 && (
                 <button
                   type="button"
                   title="Make cover image"
-                  onClick={() => makeCover(url)}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); makeCover(url); }}
                   disabled={busy || removing === url}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-white/90 text-slate-700 hover:bg-white transition shadow-sm disabled:opacity-40"
+                  className="p-1 rounded-md bg-white/95 text-slate-700 hover:bg-amber-50 hover:text-amber-600 shadow-sm border border-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Star className="w-3.5 h-3.5" />
                 </button>
@@ -131,25 +124,34 @@ export default function MultiImageUpload({
               <button
                 type="button"
                 title="Remove image"
-                onClick={() => handleRemove(url)}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(url); }}
                 disabled={busy || removing === url}
-                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-white/90 text-red-600 hover:bg-white transition shadow-sm disabled:opacity-40"
+                className="p-1 rounded-md bg-white/95 text-red-600 hover:bg-red-50 shadow-sm border border-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {removing === url
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   : <X className="w-3.5 h-3.5" />}
               </button>
             </div>
+
+            {/* Cover badge — bottom-left, doesn't overlap action buttons */}
+            {idx === 0 && (
+              <span className="absolute bottom-1 left-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-primary-600 text-white shadow-sm pointer-events-none">
+                <Star className="w-2.5 h-2.5 fill-current" /> Cover
+              </span>
+            )}
           </div>
         ))}
 
         {/* Add tile */}
-        <div
-          onClick={() => !busy && inputRef.current?.click()}
+        <button
+          type="button"
+          onClick={() => { if (!busy) inputRef.current?.click(); }}
           onDragOver={(e) => { e.preventDefault(); if (!busy) setDragging(true); }}
           onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
           onDrop={handleDrop}
-          className={`aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 text-center select-none transition-all
+          disabled={busy}
+          className={`aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 text-center select-none transition-all w-full
             ${busy
               ? 'border-primary-300 bg-primary-50/40 cursor-not-allowed'
               : dragging
@@ -167,11 +169,11 @@ export default function MultiImageUpload({
               <p className="text-[10px] font-semibold text-slate-500">Add images</p>
             </>
           )}
-        </div>
+        </button>
       </div>
 
       <p className="text-[11px] text-slate-400">
-        Upload as many images as you like. The first image is the cover — hover an image to make it the cover or remove it.
+        Upload as many images as you like. The first image is the cover. Use the star (★) button on any image to make it the cover, or × to remove it.
       </p>
 
       {error && (
