@@ -213,6 +213,10 @@ export default function BatchDetailPage() {
             partialPaymentAmount: editFormData.acceptPartialPayment && editFormData.partialPaymentAmount !== ''
                 ? parseFloat(editFormData.partialPaymentAmount)
                 : null,
+            acceptsCoupons: !!editFormData.acceptsCoupons,
+            maxDiscountPerPerson: editFormData.acceptsCoupons && editFormData.maxDiscountPerPerson !== ''
+                ? parseFloat(editFormData.maxDiscountPerPerson)
+                : null,
         };
 
         try {
@@ -1151,6 +1155,35 @@ export default function BatchDetailPage() {
                                         onChange={(e) => setEditFormData({ ...editFormData, partialPaymentAmount: e.target.value })}
                                         className="input-field max-w-[200px]"
                                         placeholder="e.g. 1000"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Coupon / Promo Code Settings */}
+                    <div className="sm:col-span-2">
+                        <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={!!editFormData.acceptsCoupons}
+                                    onChange={(e) => setEditFormData({ ...editFormData, acceptsCoupons: e.target.checked })}
+                                    className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                                />
+                                <span className="text-sm font-medium text-slate-700">Accept coupon / promo codes</span>
+                            </label>
+                            <p className="text-[11px] text-slate-400 mt-1 ml-6">When enabled, valid coupon codes can be applied at checkout for this departure.</p>
+                            {editFormData.acceptsCoupons && (
+                                <div className="mt-3 ml-6">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Max discount per person (₹)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={editFormData.maxDiscountPerPerson}
+                                        onChange={(e) => setEditFormData({ ...editFormData, maxDiscountPerPerson: e.target.value })}
+                                        className="input-field max-w-[200px]"
+                                        placeholder="Leave empty for no cap"
                                     />
                                 </div>
                             )}

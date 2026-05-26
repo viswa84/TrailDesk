@@ -362,6 +362,8 @@ export const CREATE_DEPARTURE = gql`
       boardingPointIds
       acceptPartialPayment
       partialPaymentAmount
+      acceptsCoupons
+      maxDiscountPerPerson
     }
   }
 `;
@@ -409,6 +411,8 @@ export const UPDATE_DEPARTURE = gql`
       boardingPointIds
       acceptPartialPayment
       partialPaymentAmount
+      acceptsCoupons
+      maxDiscountPerPerson
     }
   }
 `;
@@ -1054,6 +1058,61 @@ export const SET_FOLLOW_UP_RULE_ENABLED = gql`
     setFollowUpRuleEnabled(id: $id, enabled: $enabled) {
       _id
       enabled
+    }
+  }
+`;
+
+// ─── Coupon mutations ────────────────────────────────────────────────────────
+export const CREATE_COUPON = gql`
+  mutation CreateCoupon($input: CouponInput!) {
+    createCoupon(input: $input) {
+      _id
+      code
+      description
+      discountType
+      discountValue
+      minPeople
+      maxUses
+      usedCount
+      validFrom
+      validTo
+      isActive
+      createdAt
+    }
+  }
+`;
+
+export const UPDATE_COUPON = gql`
+  mutation UpdateCoupon($id: ID!, $input: CouponInput!) {
+    updateCoupon(id: $id, input: $input) {
+      _id
+      code
+      description
+      discountType
+      discountValue
+      minPeople
+      maxUses
+      usedCount
+      validFrom
+      validTo
+      isActive
+      updatedAt
+    }
+  }
+`;
+
+export const DELETE_COUPON = gql`
+  mutation DeleteCoupon($id: ID!) {
+    deleteCoupon(id: $id)
+  }
+`;
+
+export const TOGGLE_COUPON = gql`
+  mutation ToggleCoupon($id: ID!) {
+    toggleCoupon(id: $id) {
+      _id
+      code
+      isActive
     }
   }
 `;

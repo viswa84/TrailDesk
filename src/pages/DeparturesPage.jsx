@@ -40,6 +40,7 @@ const emptyDeparture = {
   cityPickups: [],   // [{ cityId, boardingPointIds: [] }]
   packages: [],
   acceptPartialPayment: false, partialPaymentAmount: '',   // advance/partial payment per person
+  acceptsCoupons: false, maxDiscountPerPerson: '',           // coupon/promo code settings
 };
 
 const trekColors = [
@@ -240,6 +241,8 @@ export default function DeparturesPage() {
       })),
       acceptPartialPayment: dep.acceptPartialPayment || false,
       partialPaymentAmount: dep.partialPaymentAmount != null ? String(dep.partialPaymentAmount) : '',
+      acceptsCoupons: dep.acceptsCoupons || false,
+      maxDiscountPerPerson: dep.maxDiscountPerPerson != null ? String(dep.maxDiscountPerPerson) : '',
     });
     setErrors({});
     setShowForm(true);
@@ -300,6 +303,8 @@ export default function DeparturesPage() {
       })),
       acceptPartialPayment: dep.acceptPartialPayment || false,
       partialPaymentAmount: dep.partialPaymentAmount != null ? String(dep.partialPaymentAmount) : '',
+      acceptsCoupons: dep.acceptsCoupons || false,
+      maxDiscountPerPerson: dep.maxDiscountPerPerson != null ? String(dep.maxDiscountPerPerson) : '',
     });
     setErrors({});
     setShowForm(true);
@@ -360,6 +365,10 @@ export default function DeparturesPage() {
       acceptPartialPayment: !!formData.acceptPartialPayment,
       partialPaymentAmount: formData.acceptPartialPayment && formData.partialPaymentAmount !== ''
         ? parseFloat(formData.partialPaymentAmount)
+        : null,
+      acceptsCoupons: !!formData.acceptsCoupons,
+      maxDiscountPerPerson: formData.acceptsCoupons && formData.maxDiscountPerPerson !== ''
+        ? parseFloat(formData.maxDiscountPerPerson)
         : null,
     };
 
@@ -1227,6 +1236,40 @@ export default function DeparturesPage() {
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
                     Charged as advance × number of participants. The remaining balance is collected later.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Coupon / Promo Code Settings ── */}
+          <div className="sm:col-span-2">
+            <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!formData.acceptsCoupons}
+                  onChange={(e) => setFormData({ ...formData, acceptsCoupons: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm font-medium text-slate-700">Accept coupon / promo codes</span>
+              </label>
+              <p className="text-[11px] text-slate-400 mt-1 ml-6">
+                When enabled, valid coupon codes can be applied at checkout for this departure.
+              </p>
+              {formData.acceptsCoupons && (
+                <div className="mt-3 ml-6">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Max discount per person (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.maxDiscountPerPerson}
+                    onChange={(e) => setFormData({ ...formData, maxDiscountPerPerson: e.target.value })}
+                    className="input-field max-w-[200px]"
+                    placeholder="Leave empty for no cap"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Optional per-person cap on the total coupon discount. Leave empty for no cap.
                   </p>
                 </div>
               )}

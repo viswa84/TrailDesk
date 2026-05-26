@@ -476,6 +476,8 @@ export const GET_DEPARTURES = gql`
     sortOrder
     acceptPartialPayment
     partialPaymentAmount
+    acceptsCoupons
+    maxDiscountPerPerson
     cancellationReason
     createdAt
   }
@@ -522,6 +524,8 @@ export const GET_DEPARTURE = gql`
     boardingPointIds
     acceptPartialPayment
     partialPaymentAmount
+    acceptsCoupons
+    maxDiscountPerPerson
     cancellationReason
     packages {
       name
@@ -1185,6 +1189,47 @@ export const GET_TRAFFIC_OVERVIEW = gql`
           totalVisits
         }
       }
+    }
+  }
+`;
+
+// ─── Coupon queries ──────────────────────────────────────────────────────────
+export const GET_COUPONS = gql`
+  query GetCoupons {
+    getCoupons {
+      _id
+      code
+      description
+      discountType
+      discountValue
+      minPeople
+      maxUses
+      usedCount
+      validFrom
+      validTo
+      isActive
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const GET_COUPON = gql`
+  query GetCoupon($id: ID!) {
+    getCoupon(id: $id) {
+      _id
+      code
+      description
+      discountType
+      discountValue
+      minPeople
+      maxUses
+      usedCount
+      validFrom
+      validTo
+      isActive
+      createdAt
+      updatedAt
     }
   }
 `;

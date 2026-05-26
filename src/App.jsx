@@ -22,6 +22,7 @@ import SupportChatPage from './pages/SupportChatPage';
 import WhatsAppFlowPage from './pages/WhatsAppFlowPage';
 import FlowBuilderPage from './pages/FlowBuilderPage';
 import SuperAdminPage  from './pages/SuperAdminPage';
+import CouponsPage from './pages/CouponsPage';
 
 function PrivacyPolicyPage() {
   useEffect(() => { window.location.replace('/privacy-policy/index.html'); }, []);
@@ -85,6 +86,7 @@ function App() {
               <Route path="/flow-builder" element={<FlowBuilderPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/traffic" element={<TrafficPage />} />
+              <Route path="/coupons" element={<CouponsPage />} />
             </Route>
 
             {/* Super Admin only route */}
