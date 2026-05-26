@@ -249,7 +249,7 @@ export default function FinancePage() {
               <DatePickerInput
                 selected={formData.dueDate ? new Date(formData.dueDate) : null}
                 onChange={(date) => {
-                  setFormData({ ...formData, dueDate: date ? date.toISOString().split('T')[0] : '' });
+                  setFormData({ ...formData, dueDate: date ? format(date, 'yyyy-MM-dd') : '' });
                   if (errors.dueDate) setErrors({ ...errors, dueDate: null });
                 }}
                 className={fieldClass('dueDate')}

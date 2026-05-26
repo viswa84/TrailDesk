@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery as useApolloQuery } from '@apollo/client/react';
 import { GET_BOARDING_POINTS } from '../graphql/queries';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -144,20 +144,19 @@ export default function DeparturesPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [isDuplicating, setIsDuplicating] = useState(false);
 
-  // Local ordered copy of departures so drag-and-drop reorders feel instant
-  // (optimistic UI). We only reset from the server when the set of IDs changes
-  // (add/delete/initial load), NOT on every render — because useDepartures
-  // returns a new array reference on every Apollo cache read, which would
-  // otherwise overwrite the optimistic order immediately after a drag.
-  const [orderedDeps, setOrderedDeps] = useState(deps);
-  const prevDepIdsRef = useRef(null);
-  useEffect(() => {
-    const incoming = deps.map(d => d.id || d._id).join(',');
-    if (incoming !== prevDepIdsRef.current) {
-      prevDepIdsRef.current = incoming;
-      setOrderedDeps(deps);
-    }
-  }, [deps]);
+  // User's preferred order of departure IDs (set by drag-and-drop). `null` =
+  // follow the server order. `orderedDeps` is derived from this + the latest
+  // server data on every render, so edits propagate immediately (same IDs,
+  // fresh fields) while the user's drag order is preserved.
+  const [localDepOrder, setLocalDepOrder] = useState(null);
+  const orderedDeps = useMemo(() => {
+    if (!localDepOrder) return deps;
+    const byId = new Map(deps.map(d => [d.id || d._id, d]));
+    const localSet = new Set(localDepOrder);
+    const kept = localDepOrder.map(id => byId.get(id)).filter(Boolean);
+    const added = deps.filter(d => !localSet.has(d.id || d._id));
+    return [...kept, ...added];
+  }, [deps, localDepOrder]);
 
   const sensors = useSensors(
     // 6px activation distance keeps card clicks/navigation working
@@ -173,17 +172,17 @@ export default function DeparturesPage() {
     const newIndex = orderedDeps.findIndex(d => (d.id || d._id) === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const previous = orderedDeps;
-    const reordered = arrayMove(orderedDeps, oldIndex, newIndex);
+    const previousOrder = localDepOrder;
+    const reorderedIds = arrayMove(orderedDeps.map(d => d.id || d._id), oldIndex, newIndex);
     // Optimistic UI: update local order immediately.
-    setOrderedDeps(reordered);
+    setLocalDepOrder(reorderedIds);
 
     try {
       // Persist the full displayed order; backend assigns sortOrder by index.
-      await reorderDeps(reordered.map(d => d.id || d._id));
+      await reorderDeps(reorderedIds);
     } catch (err) {
       // Roll back on failure.
-      setOrderedDeps(previous);
+      setLocalDepOrder(previousOrder);
       toast.error(err.message || 'Failed to save departure order');
     }
   };
@@ -237,12 +236,27 @@ export default function DeparturesPage() {
         name: p.name || '',
         price: String(p.price ?? ''),
         inclusions: (p.inclusions || []).join('\n'),
+        cityIds: (p.cityIds || []),
       })),
       acceptPartialPayment: dep.acceptPartialPayment || false,
       partialPaymentAmount: dep.partialPaymentAmount != null ? String(dep.partialPaymentAmount) : '',
     });
     setErrors({});
     setShowForm(true);
+  };
+
+  const handleToggleBookings = async (dep, e) => {
+    if (e) e.stopPropagation();
+    const isFull = dep.status === 'Full';
+    const newStatus = isFull ? 'Open' : 'Full';
+    const label = isFull ? 'resume bookings' : 'stop bookings and mark full';
+    if (!window.confirm(`${isFull ? 'Resume' : 'Stop'} bookings for "${dep.trekName}"?`)) return;
+    try {
+      await updateDep(dep.id || dep._id, { status: newStatus });
+      toast.success(isFull ? 'Bookings resumed' : 'Bookings stopped — departure marked Full');
+    } catch (err) {
+      toast.error('Failed to update booking status');
+    }
   };
 
   const handleDuplicate = (dep, e) => {
@@ -341,6 +355,7 @@ export default function DeparturesPage() {
           name: p.name.trim(),
           price: parseFloat(p.price),
           inclusions: p.inclusions.split('\n').map(s => s.trim()).filter(Boolean),
+          cityIds: (p.cityIds || []),
         })),
       acceptPartialPayment: !!formData.acceptPartialPayment,
       partialPaymentAmount: formData.acceptPartialPayment && formData.partialPaymentAmount !== ''
@@ -578,6 +593,20 @@ export default function DeparturesPage() {
                     <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(dep.id || dep._id); }} className="p-2 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                       <Trash2 className="w-4 h-4 text-red-400" />
                     </button>
+                    {dep.status !== 'Canceled' && dep.status !== 'Completed' && (
+                      <div
+                        onClick={(e) => handleToggleBookings(dep, e)}
+                        title={dep.status === 'Full' ? 'Resume Bookings' : 'Stop Bookings (Mark Full)'}
+                        className="flex flex-col items-center gap-0.5 px-1 cursor-pointer select-none"
+                      >
+                        <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${dep.status !== 'Full' ? 'bg-green-500' : 'bg-slate-300'}`}>
+                          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${dep.status !== 'Full' ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                        </div>
+                        <span className={`text-[9px] font-semibold leading-none ${dep.status !== 'Full' ? 'text-green-600' : 'text-slate-400'}`}>
+                          {dep.status !== 'Full' ? 'Open' : 'Full'}
+                        </span>
+                      </div>
+                    )}
                     {dep.status !== 'Canceled' && (
                       <button onClick={(e) => { e.stopPropagation(); setCancelTarget(dep); }} className="p-2 hover:bg-amber-50 rounded-lg transition-colors" title="Cancel Batch">
                         <X className="w-4 h-4 text-amber-500" />
@@ -966,7 +995,7 @@ export default function DeparturesPage() {
             <DatePickerInput
               selected={formData.startDate ? new Date(formData.startDate) : null}
               onChange={(date) => {
-                const dateStr = date ? date.toISOString().split('T')[0] : '';
+                const dateStr = date ? format(date, 'yyyy-MM-dd') : '';
                 let newFormData = { ...formData, startDate: dateStr };
                 if (dateStr && newFormData.endDate) {
                   const st = new Date(dateStr);
@@ -994,7 +1023,7 @@ export default function DeparturesPage() {
               selected={formData.endDate ? new Date(formData.endDate) : null}
               minDate={formData.startDate ? new Date(formData.startDate) : null}
               onChange={(date) => {
-                const dateStr = date ? date.toISOString().split('T')[0] : '';
+                const dateStr = date ? format(date, 'yyyy-MM-dd') : '';
                 let newFormData = { ...formData, endDate: dateStr };
                 if (dateStr && newFormData.startDate) {
                   const st = new Date(newFormData.startDate);
@@ -1068,7 +1097,7 @@ export default function DeparturesPage() {
               <label className="block text-sm font-medium text-slate-700">Pricing Packages</label>
               <button
                 type="button"
-                onClick={() => setFormData({ ...formData, packages: [...(formData.packages || []), { name: '', price: '', inclusions: '' }] })}
+                onClick={() => setFormData({ ...formData, packages: [...(formData.packages || []), { name: '', price: '', inclusions: '', cityIds: [] }] })}
                 className="text-xs px-2 py-1 rounded-md bg-primary-50 text-primary-700 hover:bg-primary-100 border border-primary-200 font-medium"
               >
                 + Add Package
@@ -1130,6 +1159,42 @@ export default function DeparturesPage() {
                   }}
                   className="input-field text-sm min-h-[72px] resize-none w-full"
                 />
+                {(formData.cityPickups || []).length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-[11px] text-slate-500 mb-1.5">Show this package for cities: <span className="text-slate-400">(leave all unselected = show for all cities)</span></p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(formData.cityPickups || []).map(cp => {
+                        const city = (citiesList || []).find(c => (c.id || c._id) === cp.cityId);
+                        const cityName = city?.name || cp.cityId;
+                        const isSelected = (pkg.cityIds || []).includes(cp.cityId);
+                        return (
+                          <button
+                            key={cp.cityId}
+                            type="button"
+                            onClick={() => {
+                              const pkgs = [...formData.packages];
+                              const cur = pkgs[idx].cityIds || [];
+                              pkgs[idx] = {
+                                ...pkgs[idx],
+                                cityIds: isSelected
+                                  ? cur.filter(id => id !== cp.cityId)
+                                  : [...cur, cp.cityId],
+                              };
+                              setFormData({ ...formData, packages: pkgs });
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                              isSelected
+                                ? 'bg-primary-600 text-white border-primary-600'
+                                : 'bg-white text-slate-600 border-slate-300 hover:border-primary-400'
+                            }`}
+                          >
+                            {cityName}{isSelected && ' ✓'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

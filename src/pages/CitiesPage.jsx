@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useCities } from '../hooks/useCities';
 import { useBoardingPoints } from '../hooks/useBoardingPoints';
 import { useToast } from '../context/ToastContext';
@@ -82,20 +82,18 @@ function SortableBPRow({ id, children }) {
 function BoardingPointsSection({ cityId, onAddBP, onEditBP, onDeleteBP, toast }) {
   const { data: boardingPoints, reorder: reorderBPs } = useBoardingPoints(cityId);
 
-  // Local ordered copy for optimistic drag-and-drop UI.
-  // We only reset from the server when the set of IDs changes (add/delete/initial
-  // load), NOT on every render — because useBoardingPoints returns a new array
-  // reference on every Apollo cache read, which would otherwise overwrite the
-  // optimistic order immediately after a drag.
-  const [orderedBPs, setOrderedBPs] = useState(boardingPoints);
-  const prevBPIdsRef = useRef(null);
-  useEffect(() => {
-    const incoming = boardingPoints.map(bp => bp.id || bp._id).join(',');
-    if (incoming !== prevBPIdsRef.current) {
-      prevBPIdsRef.current = incoming;
-      setOrderedBPs(boardingPoints);
-    }
-  }, [boardingPoints]);
+  // User's preferred order of IDs (set by drag-and-drop). `null` = follow the
+  // server order. We derive `orderedBPs` from this + the latest server data on
+  // every render, so edits propagate immediately while the drag order is kept.
+  const [localOrder, setLocalOrder] = useState(null);
+  const orderedBPs = useMemo(() => {
+    if (!localOrder) return boardingPoints;
+    const byId = new Map(boardingPoints.map(bp => [bp.id || bp._id, bp]));
+    const localSet = new Set(localOrder);
+    const kept = localOrder.map(id => byId.get(id)).filter(Boolean);
+    const added = boardingPoints.filter(bp => !localSet.has(bp.id || bp._id));
+    return [...kept, ...added];
+  }, [boardingPoints, localOrder]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -110,14 +108,14 @@ function BoardingPointsSection({ cityId, onAddBP, onEditBP, onDeleteBP, toast })
     const newIndex = orderedBPs.findIndex(bp => (bp.id || bp._id) === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const previous = orderedBPs;
-    const reordered = arrayMove(orderedBPs, oldIndex, newIndex);
-    setOrderedBPs(reordered);
+    const previousOrder = localOrder;
+    const reorderedIds = arrayMove(orderedBPs.map(bp => bp.id || bp._id), oldIndex, newIndex);
+    setLocalOrder(reorderedIds);
 
     try {
-      await reorderBPs(reordered.map(bp => bp.id || bp._id));
+      await reorderBPs(reorderedIds);
     } catch (err) {
-      setOrderedBPs(previous);
+      setLocalOrder(previousOrder);
       toast.error(err.message || 'Failed to save boarding point order');
     }
   };
@@ -209,20 +207,19 @@ export default function CitiesPage() {
   // For deleting a BP we still need the boardingPoints hook at page level (delete-confirm modal)
   const { remove: removeBP, update: updateBP, add: addBP } = useBoardingPoints(bpCityId || expandedCity);
 
-  // Local ordered copy of cities for optimistic drag-and-drop UI.
-  // We only reset from the server when the set of IDs changes (add/delete/initial
-  // load), NOT on every render — because useCities returns a new array reference
-  // on every Apollo cache read, which would otherwise overwrite the optimistic
-  // order immediately after a drag drops and triggers a re-render.
-  const [orderedCities, setOrderedCities] = useState(citiesList);
-  const prevCityIdsRef = useRef(null);
-  useEffect(() => {
-    const incoming = citiesList.map(c => c.id || c._id).join(',');
-    if (incoming !== prevCityIdsRef.current) {
-      prevCityIdsRef.current = incoming;
-      setOrderedCities(citiesList);
-    }
-  }, [citiesList]);
+  // User's preferred order of city IDs (set by drag-and-drop). `null` = follow
+  // the server order. `orderedCities` is derived from this + the latest server
+  // data on every render, so edits propagate immediately (same IDs, fresh
+  // fields) while the user's drag-and-drop order is preserved.
+  const [localCityOrder, setLocalCityOrder] = useState(null);
+  const orderedCities = useMemo(() => {
+    if (!localCityOrder) return citiesList;
+    const byId = new Map(citiesList.map(c => [c.id || c._id, c]));
+    const localSet = new Set(localCityOrder);
+    const kept = localCityOrder.map(id => byId.get(id)).filter(Boolean);
+    const added = citiesList.filter(c => !localSet.has(c.id || c._id));
+    return [...kept, ...added];
+  }, [citiesList, localCityOrder]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -237,14 +234,14 @@ export default function CitiesPage() {
     const newIndex = orderedCities.findIndex(c => (c.id || c._id) === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const previous = orderedCities;
-    const reordered = arrayMove(orderedCities, oldIndex, newIndex);
-    setOrderedCities(reordered);
+    const previousOrder = localCityOrder;
+    const reorderedIds = arrayMove(orderedCities.map(c => c.id || c._id), oldIndex, newIndex);
+    setLocalCityOrder(reorderedIds);
 
     try {
-      await reorderCities(reordered.map(c => c.id || c._id));
+      await reorderCities(reorderedIds);
     } catch (err) {
-      setOrderedCities(previous);
+      setLocalCityOrder(previousOrder);
       toast.error(err.message || 'Failed to save city order');
     }
   };

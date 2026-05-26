@@ -1,12 +1,72 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { useState } from 'react';
-import { GET_DEPARTURE, GET_PARTICIPANTS_BY_DEPARTURE, GET_BOARDING_POINTS } from '../graphql/queries';
-import { CREATE_PARTICIPANT, DELETE_PARTICIPANT, COLLECT_PENDING_PAYMENT, MARK_REFUNDED } from '../graphql/mutations';
+import { GET_DEPARTURE, GET_PARTICIPANTS_BY_DEPARTURE, GET_BOARDING_POINTS, GET_TREKS } from '../graphql/queries';
+import { CREATE_PARTICIPANT, DELETE_PARTICIPANT, COLLECT_PENDING_PAYMENT, MARK_REFUNDED, UPDATE_DEPARTURE } from '../graphql/mutations';
 import { format, parseISO, differenceInDays } from 'date-fns';
-import { ArrowLeft, MapPin, Clock, Users, IndianRupee, Phone, User, CalendarDays, FileText, Building2, AlertTriangle, Plus, Trash2, X, Download, Navigation, CreditCard, Copy, ExternalLink, Link2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Users, IndianRupee, Phone, User, CalendarDays, FileText, Building2, AlertTriangle, Plus, Trash2, X, Download, Navigation, CreditCard, Copy, ExternalLink, Link2, Edit } from 'lucide-react';
 import StatusBadge from '../components/ui/StatusBadge';
+import Modal from '../components/ui/Modal';
+import DatePickerInput from '../components/ui/DatePickerInput';
+import FileUpload from '../components/ui/FileUpload';
 import { useToast } from '../context/ToastContext';
+import { useCities } from '../hooks/useCities';
+import { useGuides } from '../hooks/useGuides';
+import { v, validateForm } from '../utils/validators';
+
+// ── CityBoardingSection: per-city boarding-point checkbox list ──────────────
+function CityBoardingSection({ cityName, cityId, selectedBpIds, onBpToggle }) {
+    const { data, loading } = useQuery(GET_BOARDING_POINTS, {
+        variables: { cityId },
+        skip: !cityId,
+    });
+    const bpOptions = (data?.getBoardingPoints || []).map(bp => ({ ...bp, id: bp._id }));
+
+    return (
+        <div className="mb-3 border border-slate-200 rounded-lg overflow-hidden">
+            <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-700">{cityName}</span>
+                {selectedBpIds.length > 0 && (
+                    <span className="text-[11px] text-primary-600 font-medium">{selectedBpIds.length} point{selectedBpIds.length !== 1 ? 's' : ''} selected</span>
+                )}
+            </div>
+            {loading ? (
+                <div className="px-3 py-2 text-xs text-slate-400">Loading boarding points...</div>
+            ) : bpOptions.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-slate-400 italic">No boarding points configured for this city.</div>
+            ) : (
+                <div className="p-2 space-y-1 max-h-36 overflow-y-auto">
+                    {bpOptions.map(bp => {
+                        const bpId = bp._id || bp.id;
+                        const checked = selectedBpIds.includes(bpId);
+                        return (
+                            <label key={bpId} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-50 cursor-pointer text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => onBpToggle(bpId, !checked)}
+                                    className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                                />
+                                <span className="text-slate-700">{bp.name}</span>
+                            </label>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
+const emptyEditForm = {
+    trekId: '', trekName: '', cityId: '', startDate: '', endDate: '',
+    nights: '', days: '', capacity: '', guideId: '', guideName: '', price: '',
+    meetingPoint: '', transport: '', itinerary: '', thingsToCarry: '', contact: '',
+    imageUrl: '', brochureUrl: '',
+    whatsappGroupInviteLink: '', whatsappGroupName: '', status: 'Open', boardingPointIds: [],
+    cityPickups: [],
+    packages: [],
+    acceptPartialPayment: false, partialPaymentAmount: '',
+};
 
 export default function BatchDetailPage() {
     const { id } = useParams();
@@ -25,10 +85,19 @@ export default function BatchDetailPage() {
         ? allBoardingPoints.filter(bp => departure.boardingPointIds.includes(bp._id))
         : allBoardingPoints;
 
+    // Edit departure dependencies
+    const { data: citiesList } = useCities();
+    const { guides } = useGuides();
+    const { data: treksData } = useQuery(GET_TREKS, { variables: { isActive: true } });
+    const treksList = (treksData?.getTreks || []).map(t => ({ ...t, id: t._id }));
+
     const [createParticipant, { loading: creating }] = useMutation(CREATE_PARTICIPANT);
     const [deleteParticipant] = useMutation(DELETE_PARTICIPANT);
     const [collectPendingPayment, { loading: collecting }] = useMutation(COLLECT_PENDING_PAYMENT);
     const [markRefunded] = useMutation(MARK_REFUNDED);
+    const [updateDeparture] = useMutation(UPDATE_DEPARTURE, {
+        refetchQueries: [{ query: GET_DEPARTURE, variables: { id } }],
+    });
 
     const [showForm, setShowForm] = useState(false);
     const [bookingMeta, setBookingMeta] = useState({ bookingId: 'new', amount: '', paidAmount: '' });
@@ -37,6 +106,128 @@ export default function BatchDetailPage() {
     const [collectAmount, setCollectAmount] = useState('');
     const [deleteModal, setDeleteModal] = useState(null); // { participantId, participantName }
     const toast = useToast();
+
+    // Edit departure modal state
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editFormData, setEditFormData] = useState(emptyEditForm);
+    const [editErrors, setEditErrors] = useState({});
+
+    const handleOpenEdit = () => {
+        if (!departure) return;
+        setEditFormData({
+            ...emptyEditForm,
+            trekId: departure.trekId || '',
+            trekName: departure.trekName || '',
+            cityId: departure.cityId || '',
+            cityName: departure.cityName || '',
+            startDate: departure.startDate || '',
+            endDate: departure.endDate || '',
+            nights: departure.nights != null ? String(departure.nights) : '',
+            days: departure.days != null ? String(departure.days) : '',
+            capacity: String(departure.capacity || ''),
+            price: String(departure.price || ''),
+            guideId: departure.guideId ? String(departure.guideId) : '',
+            guideName: departure.guideName || '',
+            itinerary: departure.itinerary || '',
+            thingsToCarry: departure.thingsToCarry || '',
+            contact: departure.contact || '',
+            transport: departure.transport || '',
+            meetingPoint: departure.meetingPoint || '',
+            imageUrl: departure.imageUrl || '',
+            brochureUrl: departure.brochureUrl || '',
+            whatsappGroupInviteLink: departure.whatsappGroupInviteLink || '',
+            whatsappGroupName: departure.whatsappGroupName || '',
+            status: departure.status || 'Open',
+            boardingPointIds: departure.boardingPointIds || [],
+            cityPickups: (departure.cityPickups && departure.cityPickups.length > 0)
+                ? departure.cityPickups.map(cp => ({
+                    cityId: cp.cityId,
+                    boardingPointIds: (cp.boardingPoints || []).map(bp => bp._id),
+                }))
+                : (departure.cityId ? [{ cityId: departure.cityId, boardingPointIds: departure.boardingPointIds || [] }] : []),
+            packages: (departure.packages || []).map(p => ({
+                name: p.name || '',
+                price: String(p.price ?? ''),
+                inclusions: (p.inclusions || []).join('\n'),
+                cityIds: (p.cityIds || []),
+            })),
+            acceptPartialPayment: departure.acceptPartialPayment || false,
+            partialPaymentAmount: departure.partialPaymentAmount != null ? String(departure.partialPaymentAmount) : '',
+        });
+        setEditErrors({});
+        setShowEditModal(true);
+    };
+
+    const handleSaveEdit = async () => {
+        let { valid, errors: errs } = validateForm({
+            trekName: v.required(editFormData.trekName || editFormData.trekId, 'Trek'),
+            startDate: v.dateRequired(editFormData.startDate, 'Start date'),
+            endDate: v.dateRequired(editFormData.endDate, 'End date'),
+        });
+        if (valid && editFormData.startDate && editFormData.endDate && new Date(editFormData.startDate) > new Date(editFormData.endDate)) {
+            errs.endDate = 'End date must be after or equal to start date';
+            valid = false;
+        }
+        if (!valid) { setEditErrors(errs); toast.error('Please fix the form errors'); return; }
+
+        const trek = treksList.find(t => String(t.id || t._id) === String(editFormData.trekId));
+        const city = citiesList?.find(c => String(c.id || c._id) === String(editFormData.cityId));
+        const nightsNum = parseInt(editFormData.nights, 10) || 0;
+        const daysNum = parseInt(editFormData.days, 10) || 0;
+        const saveData = {
+            trekName: trek?.name || editFormData.trekName || '',
+            cityId: editFormData.cityId || undefined,
+            cityName: city?.name || editFormData.cityName || '',
+            startDate: editFormData.startDate,
+            endDate: editFormData.endDate,
+            nights: nightsNum,
+            days: daysNum,
+            duration: `${nightsNum} Night${nightsNum !== 1 ? 's' : ''} / ${daysNum} Day${daysNum !== 1 ? 's' : ''}`,
+            capacity: parseInt(editFormData.capacity, 10),
+            price: parseFloat(editFormData.price),
+            itinerary: editFormData.itinerary || undefined,
+            thingsToCarry: editFormData.thingsToCarry || undefined,
+            contact: editFormData.contact || undefined,
+            meetingPoint: editFormData.meetingPoint || undefined,
+            transport: editFormData.transport?.trim() || undefined,
+            imageUrl: editFormData.imageUrl || undefined,
+            brochureUrl: editFormData.brochureUrl || undefined,
+            guideId: editFormData.guideId || undefined,
+            guideName: editFormData.guideName || undefined,
+            status: editFormData.status,
+            whatsappGroupInviteLink: editFormData.whatsappGroupInviteLink?.trim() || undefined,
+            whatsappGroupName: editFormData.whatsappGroupName?.trim() || undefined,
+            boardingPointIds: editFormData.boardingPointIds || [],
+            cityPickups: (editFormData.cityPickups || [])
+                .filter(cp => cp.cityId)
+                .map(cp => ({ cityId: cp.cityId, boardingPointIds: cp.boardingPointIds || [] })),
+            packages: (editFormData.packages || [])
+                .filter(p => p.name.trim() && p.price !== '')
+                .map(p => ({
+                    name: p.name.trim(),
+                    price: parseFloat(p.price),
+                    inclusions: p.inclusions.split('\n').map(s => s.trim()).filter(Boolean),
+                    cityIds: (p.cityIds || []),
+                })),
+            acceptPartialPayment: !!editFormData.acceptPartialPayment,
+            partialPaymentAmount: editFormData.acceptPartialPayment && editFormData.partialPaymentAmount !== ''
+                ? parseFloat(editFormData.partialPaymentAmount)
+                : null,
+        };
+
+        try {
+            await updateDeparture({ variables: { id, input: saveData } });
+            toast.success('Departure updated successfully');
+            setShowEditModal(false);
+            setEditErrors({});
+            refetchDeparture();
+        } catch (err) {
+            toast.error(err.message || 'Failed to update departure');
+        }
+    };
+
+    const editFieldClass = (name) => `input-field ${editErrors[name] ? 'input-error' : ''}`;
+    const editErrMsg = (name) => editErrors[name] ? <p className="text-xs text-red-500 mt-1">{editErrors[name]}</p> : null;
 
     const addParticipantRow = () => setParticipants(prev => [...prev, { name: '', phone: '', boardingPointId: '', bloodGroup: '', weight: '' }]);
     const removeParticipantRow = (idx) => setParticipants(prev => prev.filter((_, i) => i !== idx));
@@ -171,7 +362,9 @@ export default function BatchDetailPage() {
     };
 
     const bookingSlug = departure.uniqueId || departure._id;
-    const bookingUrl = `${(import.meta.env.VITE_API_URL || 'http://localhost:8080/').replace(/\/$/, '')}/book/${bookingSlug}`;
+    const PUBLIC_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8080/').replace(/\/$/, '');
+    const bookingUrl = `${PUBLIC_BASE}/book/${bookingSlug}`;
+    const trekBookingUrl = departure.trekId ? `${PUBLIC_BASE}/book/trek/${departure.trekId}` : null;
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -198,6 +391,14 @@ export default function BatchDetailPage() {
                         {startStr && <><span className="text-slate-300">•</span><CalendarDays className="w-3.5 h-3.5" /> {startStr} → {endStr}</>}
                     </p>
                 </div>
+                <button
+                    onClick={handleOpenEdit}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors text-sm font-medium cursor-pointer shrink-0"
+                    title="Edit this departure"
+                >
+                    <Edit className="w-4 h-4" />
+                    <span className="hidden sm:inline">Edit</span>
+                </button>
                 <button
                     onClick={() => navigate('/departures', { state: { duplicateFrom: departure } })}
                     className="flex items-center gap-2 px-3 py-2 rounded-xl border border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors text-sm font-medium cursor-pointer shrink-0"
@@ -264,8 +465,42 @@ export default function BatchDetailPage() {
                         <ExternalLink className="w-4 h-4 text-slate-400" />
                     </a>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1.5">Share this link with customers to let them book online.</p>
+                <p className="text-[11px] text-slate-400 mt-1.5">Share this link with customers to let them book online for <strong>this specific departure only</strong>.</p>
             </div>
+
+            {/* Trek-wide booking link — all departures, customer chooses the date */}
+            {trekBookingUrl && (
+              <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Link2 className="w-4 h-4 text-primary-500" />
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Share Entire Trek Page (All Dates)
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+                  <span className="flex-1 font-mono text-sm text-primary-700 truncate">{trekBookingUrl}</span>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(trekBookingUrl); toast.success('Link copied!'); }}
+                    className="p-1.5 hover:bg-white rounded-lg shrink-0 transition-colors"
+                    title="Copy link"
+                  >
+                    <Copy className="w-4 h-4 text-slate-400" />
+                  </button>
+                  <a
+                    href={trekBookingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 hover:bg-white rounded-lg shrink-0 transition-colors"
+                    title="Open in new tab"
+                  >
+                    <ExternalLink className="w-4 h-4 text-slate-400" />
+                  </a>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  Use this when you want the customer to <strong>choose any upcoming date</strong> for this trek — not just this single departure. The booking page lists every open departure and lets them pick.
+                </p>
+              </div>
+            )}
 
             {/* Details */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -647,6 +882,286 @@ export default function BatchDetailPage() {
                     </div>
                 )}
             </div>
+
+            {/* ──────────────────── EDIT DEPARTURE MODAL ──────────────────── */}
+            <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setEditErrors({}); }} title="Edit Departure" size="lg" confirmOnClose>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Trek *</label>
+                        <select value={editFormData.trekId} onChange={(e) => {
+                            const selected = treksList.find(t => (t.id || t._id) === e.target.value);
+                            setEditFormData({ ...editFormData, trekId: e.target.value, trekName: selected?.name || '' });
+                            if (editErrors.trekName) setEditErrors({ ...editErrors, trekName: null });
+                        }} className={editFieldClass('trekName')}>
+                            <option value="">Select Trek</option>
+                            {treksList.map(t => <option key={t.id || t._id} value={t.id || t._id}>{t.name}</option>)}
+                        </select>
+                        {editErrMsg('trekName')}
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Cities &amp; Boarding Points</label>
+                        <p className="text-[11px] text-slate-400 mb-3">Select one or more departure cities. For each city, check the boarding points that apply to this batch.</p>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            {(citiesList || []).map(c => {
+                                const cId = c.id || c._id;
+                                const isSelected = (editFormData.cityPickups || []).some(cp => cp.cityId === cId);
+                                return (
+                                    <button
+                                        key={cId}
+                                        type="button"
+                                        onClick={() => {
+                                            const picks = editFormData.cityPickups || [];
+                                            const already = picks.some(cp => cp.cityId === cId);
+                                            const updated = already
+                                                ? picks.filter(cp => cp.cityId !== cId)
+                                                : [...picks, { cityId: cId, boardingPointIds: [] }];
+                                            setEditFormData({ ...editFormData, cityPickups: updated, cityId: updated[0]?.cityId || '' });
+                                        }}
+                                        className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all cursor-pointer ${
+                                            isSelected
+                                                ? 'bg-primary-600 text-white border-primary-600'
+                                                : 'bg-white text-slate-600 border-slate-300 hover:border-primary-400'
+                                        }`}
+                                    >
+                                        {c.name}
+                                        {isSelected && <span className="ml-1 text-primary-200">✓</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {(editFormData.cityPickups || []).length === 0 && (
+                            <p className="text-[11px] text-amber-600 mb-2">Select at least one city above.</p>
+                        )}
+                        {(editFormData.cityPickups || []).map((cp, cpIdx) => {
+                            const city = (citiesList || []).find(c => (c.id || c._id) === cp.cityId);
+                            return (
+                                <CityBoardingSection
+                                    key={cp.cityId}
+                                    cityName={city?.name || cp.cityId}
+                                    cityId={cp.cityId}
+                                    selectedBpIds={cp.boardingPointIds || []}
+                                    onBpToggle={(bpId, checked) => {
+                                        const picks = [...(editFormData.cityPickups || [])];
+                                        const entry = picks[cpIdx];
+                                        picks[cpIdx] = {
+                                            ...entry,
+                                            boardingPointIds: checked
+                                                ? [...(entry.boardingPointIds || []), bpId]
+                                                : (entry.boardingPointIds || []).filter(bid => bid !== bpId),
+                                        };
+                                        setEditFormData({ ...editFormData, cityPickups: picks });
+                                    }}
+                                />
+                            );
+                        })}
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Start Date *</label>
+                        <DatePickerInput
+                            selected={editFormData.startDate ? new Date(editFormData.startDate) : null}
+                            onChange={(date) => {
+                                const dateStr = date ? format(date, 'yyyy-MM-dd') : '';
+                                let updated = { ...editFormData, startDate: dateStr };
+                                if (dateStr && updated.endDate) {
+                                    const st = new Date(dateStr);
+                                    const en = new Date(updated.endDate);
+                                    if (st > en) {
+                                        updated.endDate = dateStr;
+                                        updated.nights = '0';
+                                        updated.days = '1';
+                                    } else {
+                                        const n = differenceInDays(en, st);
+                                        updated.nights = String(n);
+                                        updated.days = String(n + 1);
+                                    }
+                                }
+                                setEditFormData(updated);
+                                if (editErrors.startDate) setEditErrors({ ...editErrors, startDate: null });
+                            }}
+                            className={editFieldClass('startDate')}
+                        />
+                        {editErrMsg('startDate')}
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">End Date *</label>
+                        <DatePickerInput
+                            selected={editFormData.endDate ? new Date(editFormData.endDate) : null}
+                            minDate={editFormData.startDate ? new Date(editFormData.startDate) : null}
+                            onChange={(date) => {
+                                const dateStr = date ? format(date, 'yyyy-MM-dd') : '';
+                                let updated = { ...editFormData, endDate: dateStr };
+                                if (dateStr && updated.startDate) {
+                                    const st = new Date(updated.startDate);
+                                    const en = new Date(dateStr);
+                                    if (en >= st) {
+                                        const n = differenceInDays(en, st);
+                                        updated.nights = String(n);
+                                        updated.days = String(n + 1);
+                                    }
+                                }
+                                setEditFormData(updated);
+                                if (editErrors.endDate) setEditErrors({ ...editErrors, endDate: null });
+                            }}
+                            className={editFieldClass('endDate')}
+                        />
+                        {editErrMsg('endDate')}
+                    </div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Nights</label><input type="number" min="0" value={editFormData.nights} onChange={(e) => setEditFormData({ ...editFormData, nights: e.target.value })} className="input-field" placeholder="e.g. 2" /></div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Days</label><input type="number" min="0" value={editFormData.days} onChange={(e) => setEditFormData({ ...editFormData, days: e.target.value })} className="input-field" placeholder="e.g. 3" /></div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Capacity</label><input type="number" value={editFormData.capacity} onChange={(e) => setEditFormData({ ...editFormData, capacity: e.target.value })} className="input-field" placeholder="e.g. 20" /></div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Price (₹)</label><input type="number" value={editFormData.price} onChange={(e) => setEditFormData({ ...editFormData, price: e.target.value })} className="input-field" placeholder="e.g. 8500" /></div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Guide</label>
+                        <select value={editFormData.guideId} onChange={(e) => {
+                            const selectedGuide = guides.find(g => (g.id || g._id) === e.target.value);
+                            setEditFormData({
+                                ...editFormData,
+                                guideId: e.target.value,
+                                guideName: selectedGuide ? selectedGuide.name : '',
+                                contact: (selectedGuide && selectedGuide.phone) ? selectedGuide.phone : editFormData.contact,
+                            });
+                        }} className="select-field">
+                            <option value="">Select Guide</option>
+                            {guides.map(g => <option key={g.id || g._id} value={g.id || g._id}>{g.name} - {g.phone}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                        <select value={editFormData.status} onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })} className="select-field">
+                            <option value="Open">Open</option>
+                            <option value="Almost Full">Almost Full</option>
+                            <option value="Full">Full</option>
+                            <option value="Closed">Closed</option>
+                        </select>
+                    </div>
+                    <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Meeting Point</label><input value={editFormData.meetingPoint} onChange={(e) => setEditFormData({ ...editFormData, meetingPoint: e.target.value })} className="input-field" placeholder="e.g. Pune Railway Station" /></div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Transport</label><input value={editFormData.transport || ''} onChange={(e) => setEditFormData({ ...editFormData, transport: e.target.value })} className="input-field" placeholder="e.g. Bus from Pune" /></div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Contact Phone</label><input value={editFormData.contact} onChange={(e) => setEditFormData({ ...editFormData, contact: e.target.value.replace(/\D/g, '').slice(0, 10) })} maxLength={10} className="input-field" placeholder="e.g. 9876543210" /></div>
+                    <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FileUpload
+                            folder="departures"
+                            accept="image"
+                            label="Departure Image"
+                            value={editFormData.imageUrl || ''}
+                            onChange={(url) => setEditFormData({ ...editFormData, imageUrl: url })}
+                        />
+                        <FileUpload
+                            folder="documents"
+                            accept="pdf"
+                            label="Departure Brochure"
+                            value={editFormData.brochureUrl || ''}
+                            onChange={(url) => setEditFormData({ ...editFormData, brochureUrl: url })}
+                        />
+                    </div>
+                    <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Group Invite Link</label><input value={editFormData.whatsappGroupInviteLink || ''} onChange={(e) => setEditFormData({ ...editFormData, whatsappGroupInviteLink: e.target.value })} className="input-field" placeholder="https://chat.whatsapp.com/xxxxxxxxxxxx" /></div>
+                    <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Group Name (optional)</label><input value={editFormData.whatsappGroupName || ''} onChange={(e) => setEditFormData({ ...editFormData, whatsappGroupName: e.target.value })} className="input-field" placeholder="e.g. Harishchandragad Batch 12 Apr" /></div>
+                    <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Itinerary</label><textarea value={editFormData.itinerary} onChange={(e) => setEditFormData({ ...editFormData, itinerary: e.target.value })} className="input-field min-h-[100px] resize-none" placeholder="Day 1: ...\nDay 2: ..." /></div>
+                    <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Things to Carry</label><textarea value={editFormData.thingsToCarry} onChange={(e) => setEditFormData({ ...editFormData, thingsToCarry: e.target.value })} className="input-field min-h-[60px] resize-none" placeholder="Torch, water, raincoat..." /></div>
+
+                    {/* Packages */}
+                    <div className="sm:col-span-2">
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-medium text-slate-700">Pricing Packages</label>
+                            <button
+                                type="button"
+                                onClick={() => setEditFormData({ ...editFormData, packages: [...(editFormData.packages || []), { name: '', price: '', inclusions: '' }] })}
+                                className="text-xs px-2 py-1 rounded-md bg-primary-50 text-primary-700 hover:bg-primary-100 border border-primary-200 font-medium"
+                            >
+                                + Add Package
+                            </button>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mb-2">Leave empty to use the single Price field above. Add packages for multi-tier pricing.</p>
+                        {(editFormData.packages || []).length === 0 && (
+                            <div className="text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg py-3 text-center">No packages added — using single price</div>
+                        )}
+                        {(editFormData.packages || []).map((pkg, idx) => (
+                            <div key={idx} className="border border-slate-200 rounded-lg p-3 mb-2 bg-slate-50 space-y-2">
+                                <div className="flex gap-2 items-start">
+                                    <div className="flex-1">
+                                        <input
+                                            placeholder="Package name (e.g. Standard, Premium)"
+                                            value={pkg.name}
+                                            onChange={(e) => {
+                                                const pkgs = [...editFormData.packages];
+                                                pkgs[idx] = { ...pkgs[idx], name: e.target.value };
+                                                setEditFormData({ ...editFormData, packages: pkgs });
+                                            }}
+                                            className="input-field text-sm"
+                                        />
+                                    </div>
+                                    <div className="w-28">
+                                        <input
+                                            type="number"
+                                            placeholder="Price ₹"
+                                            value={pkg.price}
+                                            onChange={(e) => {
+                                                const pkgs = [...editFormData.packages];
+                                                pkgs[idx] = { ...pkgs[idx], price: e.target.value };
+                                                setEditFormData({ ...editFormData, packages: pkgs });
+                                            }}
+                                            className="input-field text-sm"
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const pkgs = editFormData.packages.filter((_, i) => i !== idx);
+                                            setEditFormData({ ...editFormData, packages: pkgs });
+                                        }}
+                                        className="mt-1 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                        title="Remove package"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <textarea
+                                    placeholder={"Inclusions (one per line)\ne.g.\nTravel Pune to Pune\nBreakfast & Lunch\nCertified Guide"}
+                                    value={pkg.inclusions}
+                                    onChange={(e) => {
+                                        const pkgs = [...editFormData.packages];
+                                        pkgs[idx] = { ...pkgs[idx], inclusions: e.target.value };
+                                        setEditFormData({ ...editFormData, packages: pkgs });
+                                    }}
+                                    className="input-field text-sm min-h-[72px] resize-none w-full"
+                                />
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Partial / Advance Payment */}
+                    <div className="sm:col-span-2">
+                        <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={!!editFormData.acceptPartialPayment}
+                                    onChange={(e) => setEditFormData({ ...editFormData, acceptPartialPayment: e.target.checked })}
+                                    className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                                />
+                                <span className="text-sm font-medium text-slate-700">Accept partial (advance) payment</span>
+                            </label>
+                            <p className="text-[11px] text-slate-400 mt-1 ml-6">When enabled, customers can pay an advance instead of the full amount.</p>
+                            {editFormData.acceptPartialPayment && (
+                                <div className="mt-3 ml-6">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Advance amount per person (₹)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={editFormData.partialPaymentAmount}
+                                        onChange={(e) => setEditFormData({ ...editFormData, partialPaymentAmount: e.target.value })}
+                                        className="input-field max-w-[200px]"
+                                        placeholder="e.g. 1000"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+                    <button onClick={() => { setShowEditModal(false); setEditErrors({}); }} className="btn-secondary">Cancel</button>
+                    <button onClick={handleSaveEdit} className="btn-primary">Save Changes</button>
+                </div>
+            </Modal>
 
             {/* Delete Participant Confirmation Modal */}
             {deleteModal && (

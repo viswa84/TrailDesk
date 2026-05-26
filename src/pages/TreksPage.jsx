@@ -8,8 +8,13 @@ import Modal from '../components/ui/Modal';
 import MultiImageUpload from '../components/ui/MultiImageUpload';
 import {
   Search, Plus, Clock, IndianRupee, MapPin, Mountain, Users, Calendar,
-  Phone, Backpack, Edit, Trash2, Eye, RefreshCw, Rocket, X, EyeOff, Layers
+  Phone, Backpack, Edit, Trash2, Eye, RefreshCw, Rocket, X, EyeOff, Layers,
+  Link2, Copy, ExternalLink, Share2
 } from 'lucide-react';
+
+// Base URL the public booking pages live at (book.html). When in dev (no env
+// var) we fall back to the dev server so links remain copy-pasteable.
+const PUBLIC_BOOKING_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '');
 
 // Fallback images mapped by trek name keywords
 const trekImages = {
@@ -345,6 +350,18 @@ export default function TreksPage() {
                 </div>
                 {/* Action buttons on hover */}
                 <div className="absolute top-10 right-3 z-10 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const url = `${PUBLIC_BOOKING_BASE}/book/trek/${trek._id}`;
+                      navigator.clipboard.writeText(url);
+                      toast.success('Trek booking link copied');
+                    }}
+                    className="p-1.5 bg-white/90 backdrop-blur rounded-lg hover:bg-white transition-colors shadow-sm"
+                    title="Copy share link (all departures)"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-primary-600" />
+                  </button>
                   <button onClick={e => handleOpenEdit(trek, e)} className="p-1.5 bg-white/90 backdrop-blur rounded-lg hover:bg-white transition-colors shadow-sm" title="Edit">
                     <Edit className="w-3.5 h-3.5 text-slate-600" />
                   </button>
@@ -485,6 +502,42 @@ export default function TreksPage() {
                 <span className="text-sm font-medium text-primary-700">{selectedTrek.contact}</span>
               </div>
             )}
+
+            {/* ── Share Trek Booking Link (all departures) ───────────────── */}
+            {(() => {
+              const trekUrl = `${PUBLIC_BOOKING_BASE}/book/trek/${selectedTrek._id}`;
+              return (
+                <div className="rounded-xl border border-primary-100 bg-primary-50/40 p-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Link2 className="w-4 h-4 text-primary-600" />
+                    <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Share Trek Booking Page</p>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mb-2">
+                    Lets customers pick <strong>any upcoming date</strong> for this trek on one page. Share this when you want to give them a choice of departures.
+                  </p>
+                  <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                    <span className="flex-1 font-mono text-xs text-primary-700 truncate">{trekUrl}</span>
+                    <button
+                      type="button"
+                      onClick={() => { navigator.clipboard.writeText(trekUrl); toast.success('Link copied'); }}
+                      className="p-1.5 hover:bg-slate-100 rounded-md shrink-0"
+                      title="Copy link"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                    </button>
+                    <a
+                      href={trekUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 hover:bg-slate-100 rounded-md shrink-0"
+                      title="Open in new tab"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                    </a>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </Modal>

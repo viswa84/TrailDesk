@@ -17,6 +17,7 @@ import GuidesPage from './pages/GuidesPage';
 import FinancePage from './pages/FinancePage';
 import MarketingPage from './pages/MarketingPage';
 import SettingsPage from './pages/SettingsPage';
+import TrafficPage from './pages/TrafficPage';
 import SupportChatPage from './pages/SupportChatPage';
 import WhatsAppFlowPage from './pages/WhatsAppFlowPage';
 import FlowBuilderPage from './pages/FlowBuilderPage';
@@ -83,6 +84,7 @@ function App() {
               <Route path="/whatsapp-flow" element={<WhatsAppFlowPage />} />
               <Route path="/flow-builder" element={<FlowBuilderPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/traffic" element={<TrafficPage />} />
             </Route>
 
             {/* Super Admin only route */}

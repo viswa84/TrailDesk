@@ -456,6 +456,7 @@ export const GET_DEPARTURES = gql`
       name
       price
       inclusions
+      cityIds
     }
     capacity
     booked
@@ -526,6 +527,7 @@ export const GET_DEPARTURE = gql`
       name
       price
       inclusions
+      cityIds
     }
   }
 }
@@ -1153,6 +1155,36 @@ export const GET_FOLLOW_UP_RULES = gql`
       enabled
       createdAt
       updatedAt
+    }
+  }
+`;
+
+export const GET_TRAFFIC_OVERVIEW = gql`
+  query GetTrafficOverview($days: Int) {
+    getTrafficOverview(days: $days) {
+      totalVisits
+      trekPageVisits
+      depPageVisits
+      trend {
+        date
+        visits
+      }
+      treks {
+        trekId
+        trekName
+        totalVisits
+        trekPageVisits
+        depPageVisits
+        trend {
+          date
+          visits
+        }
+        departures {
+          depUniqueId
+          trekName
+          totalVisits
+        }
+      }
     }
   }
 `;

@@ -343,6 +343,7 @@ export const CREATE_DEPARTURE = gql`
         name
         price
         inclusions
+        cityIds
       }
       capacity
       booked
@@ -389,6 +390,7 @@ export const UPDATE_DEPARTURE = gql`
         name
         price
         inclusions
+        cityIds
       }
       capacity
       booked
