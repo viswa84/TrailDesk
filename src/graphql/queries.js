@@ -582,18 +582,18 @@ export const GET_BOARDING_POINTS = gql`
 `;
 // ─── Finance Queries ─────────────────────────────────
 export const GET_INVOICES = gql`
-  query GetInvoices($status: String) {
-  getInvoices(status: $status) {
-    _id
-    bookingId
-    customerName
-    date
-    amount
-    status
-    dueDate
-    createdAt
+  query GetInvoices {
+    getInvoices {
+      _id
+      bookingId
+      customerName
+      date
+      amount
+      status
+      dueDate
+      createdAt
+    }
   }
-}
 `;
 
 export const GET_PAYMENTS = gql`
