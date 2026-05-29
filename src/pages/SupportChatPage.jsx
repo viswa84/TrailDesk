@@ -1110,16 +1110,18 @@ export default function SupportChatPage() {
                     >
                       <Paperclip className="w-5 h-5" />
                     </button>
-                    <input
+                    <textarea
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
                           attachedFiles.length > 0 ? handleSendFiles() : handleSend();
                         }
                       }}
-                      placeholder={attachedFiles.length > 0 ? 'Add a caption (optional)…' : 'Type a message…'}
-                      className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                      placeholder={attachedFiles.length > 0 ? 'Add a caption (optional)…' : 'Type a message… (Shift+Enter for new line)'}
+                      rows={1}
+                      className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all resize-none max-h-32 overflow-y-auto leading-5"
                       disabled={sending || sendingFiles}
                     />
                     <button
