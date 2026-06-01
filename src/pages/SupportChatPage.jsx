@@ -803,7 +803,7 @@ export default function SupportChatPage() {
           <div className="px-4 py-4 border-b border-slate-100">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h1 className="text-lg font-bold text-slate-900">Support Chat</h1>
+                <h1 className="text-lg font-bold text-slate-900">WhatsApp Chat</h1>
                 <p className="text-xs text-slate-500">{contacts.length} conversation{contacts.length !== 1 ? 's' : ''}</p>
               </div>
               <div className="flex items-center gap-1">

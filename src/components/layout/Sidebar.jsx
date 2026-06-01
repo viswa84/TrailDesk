@@ -19,7 +19,7 @@ const navItems = [
   { path: '/marketing', label: 'Marketing', icon: Megaphone },
   { path: '/broadcast', label: 'Broadcast', icon: Send },
   { path: '/templates', label: 'Templates', icon: FileText },
-  { path: '/support-chat', label: 'Support Chat', icon: MessageCircle },
+  { path: '/support-chat', label: 'WhatsApp Chat', icon: MessageCircle },
   { path: '/whatsapp-flow', label: 'WhatsApp Flow', icon: Bot },
   { path: '/flow-builder',  label: 'Flow Builder',  icon: Workflow },
   { path: '/traffic',  label: 'Traffic',  icon: BarChart2 },
