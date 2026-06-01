@@ -271,6 +271,7 @@ export const GET_MESSAGES = gql`
         phone
         direction
         message
+        messageType
         raw
         waMessageId
         deliveryStatus

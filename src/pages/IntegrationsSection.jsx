@@ -23,13 +23,187 @@ import {
   CheckCircle2,
   XCircle,
   FlaskConical,
+  Contact,
+  Copy,
 } from 'lucide-react';
 
 // Map provider name to icon
 const PROVIDER_ICONS = {
   whatsapp: MessageSquare,
   r2: Cloud,
+  google: Contact,
 };
+
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '');
+const GOOGLE_REDIRECT_URI = `${API_BASE}/api/contacts/google/callback`;
+
+function GoogleContactsCard({ existingConfig }) {
+  const toast = useToast();
+  const [clientId, setClientId] = useState(existingConfig?.meta?.clientId || '');
+  const [clientSecret, setClientSecret] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [upsertIntegration] = useMutation(UPSERT_INTEGRATION, {
+    refetchQueries: [{ query: LIST_INTEGRATIONS }],
+  });
+
+  const maskedSecret = existingConfig?.maskedCredentials?.clientSecret;
+  const isConfigured = Boolean(existingConfig?.hasCredentials && existingConfig?.meta?.clientId);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(GOOGLE_REDIRECT_URI);
+      toast.success('Copied');
+    } catch (err) {
+      toast.error('Failed to copy');
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const credentials = {};
+      if (clientSecret) {
+        credentials.clientSecret = clientSecret;
+      }
+      await upsertIntegration({
+        variables: {
+          provider: 'google',
+          enabled: true,
+          meta: { clientId, redirectUri: GOOGLE_REDIRECT_URI },
+          credentials,
+        },
+      });
+      toast.success('Google Contacts settings saved.');
+      setClientSecret('');
+    } catch (err) {
+      toast.error(err.message || 'Save failed.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden">
+      {/* Card header */}
+      <div className="flex items-center justify-between px-5 py-4 bg-white">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-primary-50 flex items-center justify-center">
+            <Contact className="w-4.5 h-4.5 text-primary-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Google Contacts</p>
+            <p className="text-xs text-slate-500 mt-0.5 max-w-sm">
+              Connect a Google account to sync WhatsApp contacts into Google Contacts. Create an
+              OAuth Client ID in Google Cloud Console.
+            </p>
+          </div>
+        </div>
+        {isConfigured && (
+          <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">
+            Configured ✓
+          </span>
+        )}
+      </div>
+
+      {/* Form */}
+      <div className="border-t border-slate-100 px-5 py-4 bg-slate-50 space-y-5">
+        <div className="grid grid-cols-1 gap-3">
+          {/* Client ID */}
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Client ID</label>
+            <input
+              type="text"
+              placeholder="xxxxxxxx.apps.googleusercontent.com"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              className="input-field text-sm"
+            />
+          </div>
+
+          {/* Client Secret */}
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Client Secret</label>
+            <div className="relative">
+              <input
+                type={showSecret ? 'text' : 'password'}
+                placeholder={maskedSecret || 'GOCSPX-...'}
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                className="input-field pr-9 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSecret((prev) => !prev)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showSecret ? (
+                  <EyeOff className="w-3.5 h-3.5" />
+                ) : (
+                  <Eye className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+            {maskedSecret && (
+              <p className="text-xs text-slate-400 mt-0.5">Leave blank to keep current</p>
+            )}
+          </div>
+
+          {/* Redirect URI */}
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Redirect URI</label>
+            <div className="relative">
+              <input
+                type="text"
+                readOnly
+                value={GOOGLE_REDIRECT_URI}
+                className="input-field pr-9 text-sm bg-white"
+              />
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                title="Copy"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Add this exact URI to your Google Cloud OAuth client's Authorized redirect URIs.
+            </p>
+          </div>
+        </div>
+
+        {/* Help list */}
+        <ol className="list-decimal list-inside text-xs text-slate-500 space-y-1">
+          <li>Google Cloud Console → enable People API</li>
+          <li>Create OAuth Client ID (Web application)</li>
+          <li>Paste the Redirect URI above</li>
+          <li>Copy Client ID / Secret here</li>
+          <li>Go to Contacts → Connect Google</li>
+        </ol>
+
+        {/* Action button */}
+        <div className="flex items-center justify-end pt-1">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5"
+          >
+            {saving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function IntegrationCard({ integration, existingConfig }) {
   const toast = useToast();
@@ -385,6 +559,7 @@ export default function IntegrationsSection() {
             existingConfig={getExistingConfig(integration.name)}
           />
         ))}
+        <GoogleContactsCard existingConfig={getExistingConfig('google')} />
       </div>
     </div>
   );

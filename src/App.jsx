@@ -13,9 +13,11 @@ import BatchDetailPage from './pages/BatchDetailPage';
 import BookingsPage from './pages/BookingsPage';
 import ParticipantsPage from './pages/ParticipantsPage';
 import CustomersPage from './pages/CustomersPage';
+import ContactsPage from './pages/ContactsPage';
 import GuidesPage from './pages/GuidesPage';
 import FinancePage from './pages/FinancePage';
 import MarketingPage from './pages/MarketingPage';
+import BroadcastPage from './pages/BroadcastPage';
 import SettingsPage from './pages/SettingsPage';
 import TrafficPage from './pages/TrafficPage';
 import SupportChatPage from './pages/SupportChatPage';
@@ -23,6 +25,7 @@ import WhatsAppFlowPage from './pages/WhatsAppFlowPage';
 import FlowBuilderPage from './pages/FlowBuilderPage';
 import SuperAdminPage  from './pages/SuperAdminPage';
 import CouponsPage from './pages/CouponsPage';
+import TemplatesPage from './pages/TemplatesPage';
 
 function PrivacyPolicyPage() {
   useEffect(() => { window.location.replace('/privacy-policy/index.html'); }, []);
@@ -78,9 +81,12 @@ function App() {
               <Route path="/bookings" element={<BookingsPage />} />
               <Route path="/participants" element={<ParticipantsPage />} />
               <Route path="/customers" element={<CustomersPage />} />
+              <Route path="/contacts" element={<ContactsPage />} />
               <Route path="/guides" element={<GuidesPage />} />
               <Route path="/finance" element={<FinancePage />} />
               <Route path="/marketing" element={<MarketingPage />} />
+              <Route path="/broadcast" element={<BroadcastPage />} />
+              <Route path="/templates" element={<TemplatesPage />} />
               <Route path="/support-chat" element={<SupportChatPage />} />
               <Route path="/whatsapp-flow" element={<WhatsAppFlowPage />} />
               <Route path="/flow-builder" element={<FlowBuilderPage />} />
