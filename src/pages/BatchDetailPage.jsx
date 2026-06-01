@@ -10,6 +10,7 @@ import Modal from '../components/ui/Modal';
 import DatePickerInput from '../components/ui/DatePickerInput';
 import FileUpload from '../components/ui/FileUpload';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { useCities } from '../hooks/useCities';
 import { useGuides } from '../hooks/useGuides';
 import { v, validateForm } from '../utils/validators';
@@ -106,6 +107,7 @@ export default function BatchDetailPage() {
     const [collectAmount, setCollectAmount] = useState('');
     const [deleteModal, setDeleteModal] = useState(null); // { participantId, participantName }
     const toast = useToast();
+    const { user } = useAuth();
 
     // Edit departure modal state
     const [showEditModal, setShowEditModal] = useState(false);
@@ -367,8 +369,20 @@ export default function BatchDetailPage() {
 
     const bookingSlug = departure.uniqueId || departure._id;
     const PUBLIC_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8080/').replace(/\/$/, '');
-    const bookingUrl = `${PUBLIC_BASE}/book/${bookingSlug}`;
-    const trekBookingUrl = departure.trekId ? `${PUBLIC_BASE}/book/trek/${departure.trekId}` : null;
+    // Prefer clean slug URL when trek code and departure code are both set
+    const companyCodeForUrl = user?.companyCode || '';
+    const trekForUrl = treksList.find(t => String(t._id || t.id) === String(departure.trekId));
+    const trekCodeForUrl = trekForUrl?.trekCode || '';
+    const depCodeForUrl = departure.departureCode || departure.uniqueId || '';
+    const bookingUrl = (companyCodeForUrl && trekCodeForUrl && depCodeForUrl)
+      ? `${PUBLIC_BASE}/book/${companyCodeForUrl}/${trekCodeForUrl}/${depCodeForUrl}`
+      : `${PUBLIC_BASE}/book/${bookingSlug}`;
+    // Prefer clean slug URL for trek page; fall back to legacy /book/trek/:trekId
+    const trekBookingUrl = departure.trekId
+      ? (companyCodeForUrl && trekCodeForUrl)
+        ? `${PUBLIC_BASE}/book/${companyCodeForUrl}/${trekCodeForUrl}`
+        : `${PUBLIC_BASE}/book/trek/${departure.trekId}`
+      : null;
 
     return (
         <div className="space-y-6 animate-fade-in">

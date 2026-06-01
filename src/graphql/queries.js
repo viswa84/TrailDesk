@@ -153,6 +153,7 @@ export const GET_TREKS = gql`
     seatsAvailable
     departureCount
     totalDepartureSeats
+    trekCode
     createdAt
     updatedAt
   }
@@ -435,6 +436,7 @@ export const GET_DEPARTURES = gql`
   getDepartures(trekId: $trekId, cityId: $cityId, status: $status) {
     _id
     uniqueId
+    departureCode
     trekId
     trekName
     cityPickups {
@@ -490,6 +492,7 @@ export const GET_DEPARTURE = gql`
   getDeparture(id: $id) {
     _id
     uniqueId
+    departureCode
     trekId
     trekName
     cityPickups {
@@ -1172,6 +1175,14 @@ export const GET_TRAFFIC_OVERVIEW = gql`
       depPageVisits
       trend {
         date
+        visits
+      }
+      hourlyTrend {
+        hour
+        visits
+      }
+      whatsappVisitors {
+        phone
         visits
       }
       treks {

@@ -245,6 +245,7 @@ export const CREATE_TREK = gql`
       altitude
       bestSeason
       isActive
+      trekCode
       createdAt
     }
   }
@@ -264,6 +265,7 @@ export const UPDATE_TREK = gql`
       altitude
       bestSeason
       isActive
+      trekCode
     }
   }
 `;
@@ -364,6 +366,7 @@ export const CREATE_DEPARTURE = gql`
       partialPaymentAmount
       acceptsCoupons
       maxDiscountPerPerson
+      departureCode
     }
   }
 `;
@@ -413,6 +416,7 @@ export const UPDATE_DEPARTURE = gql`
       partialPaymentAmount
       acceptsCoupons
       maxDiscountPerPerson
+      departureCode
     }
   }
 `;

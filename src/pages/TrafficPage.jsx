@@ -5,7 +5,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { TrendingUp, Eye, Mountain, CalendarRange, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import { TrendingUp, Eye, Mountain, CalendarRange, ChevronDown, ChevronRight, ExternalLink, Smartphone } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 const PERIOD_OPTIONS = [
@@ -149,7 +149,7 @@ export default function TrafficPage() {
   const stats = data?.getTrafficOverview;
 
   // Base URL for external links (just the origin of the API)
-  const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:8080' : '';
+  const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '');
 
   const chartData = useMemo(() => {
     if (!stats?.trend) return [];
@@ -168,6 +168,18 @@ export default function TrafficPage() {
       'Trek page': t.trekPageVisits,
       'Dep page': t.depPageVisits,
     }));
+  }, [stats]);
+
+  const hourlyChartData = useMemo(() => {
+    if (!stats?.hourlyTrend) return [];
+    return stats.hourlyTrend.map(({ hour, visits }) => {
+      let label;
+      if (hour === 0)       label = '12am';
+      else if (hour < 12)   label = `${hour}am`;
+      else if (hour === 12) label = '12pm';
+      else                  label = `${hour - 12}pm`;
+      return { label, visits };
+    });
   }, [stats]);
 
   return (
@@ -229,6 +241,27 @@ export default function TrafficPage() {
             </div>
           </div>
 
+          {/* Hourly traffic chart */}
+          {stats.hourlyTrend && (
+            <div className="card p-5 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <TrendingUp className="w-4 h-4 text-primary-500" />
+                <h2 className="font-semibold text-slate-800">Today's Hourly Traffic</h2>
+              </div>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={hourlyChartData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={2} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                    <Bar dataKey="visits" name="Visits" fill="#22c55e" radius={[3, 3, 0, 0]} maxBarSize={32} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
           {/* Trek comparison bar chart */}
           {trekBarData.length > 0 && (
             <div className="card p-5 mb-6">
@@ -254,7 +287,7 @@ export default function TrafficPage() {
           )}
 
           {/* Per-trek breakdown */}
-          <div className="mb-2">
+          <div className="mb-6">
             <h2 className="font-semibold text-slate-800 mb-3">Trek-wise Detail</h2>
             {stats.treks.length === 0 ? (
               <div className="card p-10 text-center text-slate-400">
@@ -269,6 +302,31 @@ export default function TrafficPage() {
               </div>
             )}
           </div>
+
+          {/* WhatsApp Visitors */}
+          {stats.whatsappVisitors && (
+            <div className="card p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Smartphone className="w-4 h-4 text-green-500" />
+                <h2 className="font-semibold text-slate-800">WhatsApp Visitors</h2>
+              </div>
+              {stats.whatsappVisitors.length === 0 ? (
+                <p className="text-sm text-slate-400">No WhatsApp visitors yet.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {stats.whatsappVisitors.map(({ phone, visits }) => {
+                    const masked = `91XXXXX${phone.slice(-5)}`;
+                    return (
+                      <div key={phone} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+                        <span className="text-sm font-mono text-slate-700">{masked}</span>
+                        <span className="text-sm font-bold text-slate-700">{visits} {visits === 1 ? 'visit' : 'visits'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

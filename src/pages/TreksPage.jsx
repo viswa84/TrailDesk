@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@apollo/client/react';
 import { GET_TREKS } from '../graphql/queries';
 import { CREATE_TREK, UPDATE_TREK, DELETE_TREK, PUBLISH_TREK, UNPUBLISH_TREK } from '../graphql/mutations';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { v, validateForm, onlyDigits } from '../utils/validators';
 import Modal from '../components/ui/Modal';
 import MultiImageUpload from '../components/ui/MultiImageUpload';
@@ -15,6 +16,15 @@ import {
 // Base URL the public booking pages live at (book.html). When in dev (no env
 // var) we fall back to the dev server so links remain copy-pasteable.
 const PUBLIC_BOOKING_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '');
+
+// Build a trek booking URL: prefer the clean slug /book/<companyCode>/<trekCode>
+// when both are set, otherwise fall back to the legacy /book/trek/<trekId> form.
+function buildTrekBookingUrl(trek, companyCode) {
+  if (companyCode && trek?.trekCode) {
+    return `${PUBLIC_BOOKING_BASE}/book/${companyCode}/${trek.trekCode}`;
+  }
+  return `${PUBLIC_BOOKING_BASE}/book/trek/${trek?._id}`;
+}
 
 // Fallback images mapped by trek name keywords
 const trekImages = {
@@ -69,6 +79,7 @@ const emptyForm = {
   location: '',
   altitude: '',
   bestSeason: '',
+  trekCode: '',
 };
 
 
@@ -84,6 +95,8 @@ export default function TreksPage() {
   const [unpublishTrekMut] = useMutation(UNPUBLISH_TREK, { refetchQueries: [{ query: GET_TREKS }] });
 
   const toast = useToast();
+  const { user } = useAuth();
+  const companyCode = user?.companyCode || '';
 
   const [search, setSearch] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState('All');
@@ -142,6 +155,7 @@ export default function TreksPage() {
       location: trek.location || '',
       altitude: trek.altitude || '',
       bestSeason: trek.bestSeason || '',
+      trekCode: trek.trekCode || '',
     });
     setErrors({});
     setShowForm(true);
@@ -353,7 +367,7 @@ export default function TreksPage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const url = `${PUBLIC_BOOKING_BASE}/book/trek/${trek._id}`;
+                      const url = buildTrekBookingUrl(trek, companyCode);
                       navigator.clipboard.writeText(url);
                       toast.success('Trek booking link copied');
                     }}
@@ -394,6 +408,7 @@ export default function TreksPage() {
 
               <div className="p-4 space-y-3">
                 <h3 className="font-semibold text-slate-900 text-sm leading-tight line-clamp-2 min-h-[2.5rem]">{trek.name}</h3>
+                {trek.trekCode && <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-600 border border-primary-100 inline-block">{trek.trekCode}</span>}
                 <div className="flex items-center gap-4 text-xs text-slate-500">
                   <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {trek.duration}</span>
                   {trek.altitude && <span className="flex items-center gap-1"><Mountain className="w-3 h-3" /> {trek.altitude}</span>}
@@ -505,7 +520,7 @@ export default function TreksPage() {
 
             {/* ── Share Trek Booking Link (all departures) ───────────────── */}
             {(() => {
-              const trekUrl = `${PUBLIC_BOOKING_BASE}/book/trek/${selectedTrek._id}`;
+              const trekUrl = buildTrekBookingUrl(selectedTrek, companyCode);
               return (
                 <div className="rounded-xl border border-primary-100 bg-primary-50/40 p-4">
                   <div className="flex items-center gap-2 mb-1.5">
@@ -562,6 +577,17 @@ export default function TreksPage() {
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1">Max 24 characters. Used as the button/list label in WhatsApp chat — the full name is shown elsewhere. Leave blank to use the trek name (truncated).</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Trek URL Code</label>
+            <input
+              type="text"
+              value={formData.trekCode || ''}
+              onChange={e => setFormData({ ...formData, trekCode: e.target.value })}
+              className="input-field"
+              placeholder="e.g. kedarkantha-winter"
+            />
+            <p className="text-xs text-slate-400 mt-1">Used in the booking URL: /book/your-company/<strong>{formData.trekCode || 'code'}</strong>. Lowercase letters, numbers, and hyphens only. Leave blank to use the legacy ID-based URL.</p>
           </div>
           {f('Difficulty', 'difficulty', 'select', '', { options: ['Easy', 'Easy-Moderate', 'Moderate', 'Hard', 'Difficult'] })}
           {f('Altitude', 'altitude', 'text', 'e.g. 12,500 ft')}

@@ -41,6 +41,7 @@ const emptyDeparture = {
   packages: [],
   acceptPartialPayment: false, partialPaymentAmount: '',   // advance/partial payment per person
   acceptsCoupons: false, maxDiscountPerPerson: '',           // coupon/promo code settings
+  departureCode: '',
 };
 
 const trekColors = [
@@ -223,6 +224,7 @@ export default function DeparturesPage() {
       imageUrl: dep.imageUrl || '',
       brochureUrl: dep.brochureUrl || '',
       whatsappGroupInviteLink: dep.whatsappGroupInviteLink || '',
+      departureCode: dep.departureCode || '',
       whatsappGroupName: dep.whatsappGroupName || '',
       nights: dep.nights != null ? String(dep.nights) : '',
       days: dep.days != null ? String(dep.days) : '',
@@ -370,6 +372,7 @@ export default function DeparturesPage() {
       maxDiscountPerPerson: formData.acceptsCoupons && formData.maxDiscountPerPerson !== ''
         ? parseFloat(formData.maxDiscountPerPerson)
         : null,
+      departureCode: formData.departureCode?.trim() || undefined,
     };
 
     if (!editingDep) {
@@ -527,6 +530,7 @@ export default function DeparturesPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
                       {dep.uniqueId && <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{dep.uniqueId}</span>}
+                      {dep.departureCode && <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-600 border border-primary-100">{dep.departureCode}</span>}
                       <h3 className="text-base font-semibold text-slate-900 truncate">{dep.trekName}</h3>
                       <StatusBadge status={statusLabel} />
                       {dep.status === 'Canceled' && dep.cancellationReason && (
@@ -1097,6 +1101,16 @@ export default function DeparturesPage() {
           </div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Group Invite Link</label><input value={formData.whatsappGroupInviteLink || ''} onChange={(e) => setFormData({ ...formData, whatsappGroupInviteLink: e.target.value })} className="input-field" placeholder="https://chat.whatsapp.com/xxxxxxxxxxxx" /></div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Group Name (optional)</label><input value={formData.whatsappGroupName || ''} onChange={(e) => setFormData({ ...formData, whatsappGroupName: e.target.value })} className="input-field" placeholder="e.g. Harishchandragad Batch 12 Apr" /></div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-slate-700 mb-1">Departure URL Code</label>
+            <input
+              value={formData.departureCode || ''}
+              onChange={(e) => setFormData({ ...formData, departureCode: e.target.value })}
+              className="input-field"
+              placeholder="e.g. jun-2026 or batch-12"
+            />
+            <p className="text-xs text-slate-400 mt-1">Used in the booking URL: /book/company/trek/<strong>{formData.departureCode || 'code'}</strong>. Requires the trek to also have a URL code set. Lowercase, hyphens only. Optional.</p>
+          </div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Itinerary</label><textarea value={formData.itinerary} onChange={(e) => setFormData({ ...formData, itinerary: e.target.value })} className="input-field min-h-[100px] resize-none" placeholder="Day 1: ...\nDay 2: ..." /></div>
           <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Things to Carry</label><textarea value={formData.thingsToCarry} onChange={(e) => setFormData({ ...formData, thingsToCarry: e.target.value })} className="input-field min-h-[60px] resize-none" placeholder="Torch, water, raincoat..." /></div>
 
