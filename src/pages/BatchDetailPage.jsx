@@ -1,10 +1,10 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { useState } from 'react';
-import { GET_DEPARTURE, GET_PARTICIPANTS_BY_DEPARTURE, GET_BOARDING_POINTS, GET_TREKS } from '../graphql/queries';
-import { CREATE_PARTICIPANT, DELETE_PARTICIPANT, COLLECT_PENDING_PAYMENT, MARK_REFUNDED, UPDATE_DEPARTURE } from '../graphql/mutations';
+import { GET_DEPARTURE, GET_PARTICIPANTS_BY_DEPARTURE, GET_BOARDING_POINTS, GET_TREKS, GET_WAITLIST, GET_FILL_NUDGE_STATS } from '../graphql/queries';
+import { CREATE_PARTICIPANT, DELETE_PARTICIPANT, COLLECT_PENDING_PAYMENT, MARK_REFUNDED, UPDATE_DEPARTURE, REMOVE_FROM_WAITLIST, TRIGGER_FILL_NUDGE } from '../graphql/mutations';
 import { format, parseISO, differenceInDays } from 'date-fns';
-import { ArrowLeft, MapPin, Clock, Users, IndianRupee, Phone, User, CalendarDays, FileText, Building2, AlertTriangle, Plus, Trash2, X, Download, Navigation, CreditCard, Copy, ExternalLink, Link2, Edit } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Users, IndianRupee, Phone, User, CalendarDays, FileText, Building2, AlertTriangle, Plus, Trash2, X, Download, Navigation, CreditCard, Copy, ExternalLink, Link2, Edit, Zap, Send } from 'lucide-react';
 import StatusBadge from '../components/ui/StatusBadge';
 import Modal from '../components/ui/Modal';
 import DatePickerInput from '../components/ui/DatePickerInput';
@@ -14,6 +14,155 @@ import { useAuth } from '../context/AuthContext';
 import { useCities } from '../hooks/useCities';
 import { useGuides } from '../hooks/useGuides';
 import { v, validateForm } from '../utils/validators';
+
+// ── WaitlistSection: people waiting for a seat on a full/almost-full batch ──
+function WaitlistSection({ departureId, toast }) {
+    const { data, loading, refetch } = useQuery(GET_WAITLIST, {
+        variables: { departureId },
+        skip: !departureId,
+        fetchPolicy: 'cache-and-network',
+    });
+    const [removeFromWaitlist] = useMutation(REMOVE_FROM_WAITLIST);
+    const entries = data?.getWaitlist || [];
+
+    const handleRemove = async (phone) => {
+        try {
+            await removeFromWaitlist({ variables: { departureId, phone } });
+            toast?.success?.('Removed from waitlist');
+            refetch();
+        } catch (e) {
+            toast?.error?.(e.message || 'Failed to remove');
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+                <Users className="w-4 h-4 text-amber-500" />
+                <h3 className="font-semibold text-slate-800">Waitlist</h3>
+                <span className="text-xs text-slate-400">{entries.length} waiting</span>
+            </div>
+            {loading && entries.length === 0 ? (
+                <p className="text-sm text-slate-400">Loading…</p>
+            ) : entries.length === 0 ? (
+                <p className="text-sm text-slate-400">No one on the waitlist yet.</p>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
+                                <th className="py-2 pr-3 font-medium">Name</th>
+                                <th className="py-2 px-2 font-medium">Phone</th>
+                                <th className="py-2 px-2 font-medium text-center">People</th>
+                                <th className="py-2 px-2 font-medium">Joined</th>
+                                <th className="py-2 px-2 font-medium text-center">Notified</th>
+                                <th className="py-2 pl-2 font-medium text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {entries.map((e) => (
+                                <tr key={e._id} className="border-b border-slate-50 last:border-0">
+                                    <td className="py-2 pr-3 font-medium text-slate-700">{e.name || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-slate-600">{e.phone}</td>
+                                    <td className="py-2 px-2 text-center text-slate-600">{e.peopleCount || 1}</td>
+                                    <td className="py-2 px-2 text-slate-500">
+                                        {e.createdAt ? format(new Date(e.createdAt), 'dd MMM yyyy') : '—'}
+                                    </td>
+                                    <td className="py-2 px-2 text-center">
+                                        {e.notified
+                                            ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">Notified</span>
+                                            : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Waiting</span>}
+                                    </td>
+                                    <td className="py-2 pl-2 text-right">
+                                        <button onClick={() => handleRemove(e.phone)}
+                                            className="p-1.5 hover:bg-red-50 rounded-lg text-red-500" title="Remove from waitlist">
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── FillNudgeSection: "filling up" visitor nudge stats + manual trigger ──────
+// Auto-fires when a departure crosses 70% occupancy (backend, on payment). This
+// card surfaces how many page visitors were nudged, how many converted, and lets
+// an admin re-run the nudge manually.
+function FillNudgeSection({ departureId, toast }) {
+    const { data, loading, refetch } = useQuery(GET_FILL_NUDGE_STATS, {
+        variables: { departureId },
+        skip: !departureId,
+        fetchPolicy: 'cache-and-network',
+    });
+    const [triggerFillNudge, { loading: sending }] = useMutation(TRIGGER_FILL_NUDGE);
+
+    // Query returns an array (possibly empty); this card is for a single departure.
+    const stat = (data?.getFillNudgeStats || [])[0] || null;
+    const nudgesSent = stat?.nudgesSent || 0;
+    const converted = stat?.converted || 0;
+    const conversionPct = stat ? Math.round((stat.conversionRate || 0) * 100) : 0;
+
+    const handleSend = async () => {
+        try {
+            const res = await triggerFillNudge({ variables: { departureId } });
+            const count = res?.data?.triggerFillNudge ?? 0;
+            if (count > 0) {
+                toast?.success?.(`Nudge sent to ${count} visitor${count === 1 ? '' : 's'}`);
+            } else {
+                toast?.info?.('No new visitors to nudge right now');
+            }
+            refetch();
+        } catch (e) {
+            toast?.error?.(e.message || 'Failed to send nudge');
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-orange-500" />
+                    <h3 className="font-semibold text-slate-800">Fill Nudge</h3>
+                </div>
+                <button
+                    onClick={handleSend}
+                    disabled={sending}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50"
+                    title="Send the 'almost full' nudge to unconverted page visitors now"
+                >
+                    <Send className="w-3.5 h-3.5" />
+                    {sending ? 'Sending…' : 'Send Nudge Now'}
+                </button>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">
+                Visitors who opened this booking page but didn't book are nudged once when occupancy crosses 70%.
+            </p>
+            {loading && !stat ? (
+                <p className="text-sm text-slate-400">Loading…</p>
+            ) : (
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-xl bg-slate-50 p-3 text-center">
+                        <p className="text-2xl font-bold text-slate-800">{nudgesSent}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Nudged</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3 text-center">
+                        <p className="text-2xl font-bold text-emerald-600">{converted}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Converted</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3 text-center">
+                        <p className="text-2xl font-bold text-orange-500">{conversionPct}%</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Conversion</p>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 // ── CityBoardingSection: per-city boarding-point checkbox list ──────────────
 function CityBoardingSection({ cityName, cityId, selectedBpIds, onBpToggle }) {
@@ -61,7 +210,7 @@ function CityBoardingSection({ cityName, cityId, selectedBpIds, onBpToggle }) {
 const emptyEditForm = {
     trekId: '', trekName: '', cityId: '', startDate: '', endDate: '',
     nights: '', days: '', capacity: '', guideId: '', guideName: '', price: '',
-    meetingPoint: '', transport: '', itinerary: '', thingsToCarry: '', contact: '',
+    meetingPoint: '', pickupTime: '', transport: '', itinerary: '', thingsToCarry: '', contact: '',
     imageUrl: '', brochureUrl: '',
     whatsappGroupInviteLink: '', whatsappGroupName: '', status: 'Open', boardingPointIds: [],
     cityPickups: [],
@@ -135,6 +284,7 @@ export default function BatchDetailPage() {
             contact: departure.contact || '',
             transport: departure.transport || '',
             meetingPoint: departure.meetingPoint || '',
+            pickupTime: departure.pickupTime || '',
             imageUrl: departure.imageUrl || '',
             brochureUrl: departure.brochureUrl || '',
             whatsappGroupInviteLink: departure.whatsappGroupInviteLink || '',
@@ -191,6 +341,7 @@ export default function BatchDetailPage() {
             thingsToCarry: editFormData.thingsToCarry || undefined,
             contact: editFormData.contact || undefined,
             meetingPoint: editFormData.meetingPoint || undefined,
+            pickupTime: editFormData.pickupTime?.trim() || undefined,
             transport: editFormData.transport?.trim() || undefined,
             imageUrl: editFormData.imageUrl || undefined,
             brochureUrl: editFormData.brochureUrl || undefined,
@@ -901,6 +1052,16 @@ export default function BatchDetailPage() {
                 )}
             </div>
 
+            {/* ──────────────────── FILL NUDGE (occupancy >= 60% only) ──────────────────── */}
+            {occupancyRatio >= 0.6 && (
+                <FillNudgeSection departureId={id} toast={toast} />
+            )}
+
+            {/* ──────────────────── WAITLIST (Full / Almost Full only) ──────────────────── */}
+            {(departure.status === 'Full' || departure.status === 'Almost Full') && (
+                <WaitlistSection departureId={id} toast={toast} />
+            )}
+
             {/* ──────────────────── EDIT DEPARTURE MODAL ──────────────────── */}
             <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setEditErrors({}); }} title="Edit Departure" size="lg" confirmOnClose>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1053,6 +1214,7 @@ export default function BatchDetailPage() {
                         </select>
                     </div>
                     <div className="sm:col-span-2"><label className="block text-sm font-medium text-slate-700 mb-1">Meeting Point</label><input value={editFormData.meetingPoint} onChange={(e) => setEditFormData({ ...editFormData, meetingPoint: e.target.value })} className="input-field" placeholder="e.g. Pune Railway Station" /></div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Pickup Time</label><input value={editFormData.pickupTime || ''} onChange={(e) => setEditFormData({ ...editFormData, pickupTime: e.target.value })} className="input-field" placeholder="e.g. 6:00 AM" /></div>
                     <div><label className="block text-sm font-medium text-slate-700 mb-1">Transport</label><input value={editFormData.transport || ''} onChange={(e) => setEditFormData({ ...editFormData, transport: e.target.value })} className="input-field" placeholder="e.g. Bus from Pune" /></div>
                     <div><label className="block text-sm font-medium text-slate-700 mb-1">Contact Phone</label><input value={editFormData.contact} onChange={(e) => setEditFormData({ ...editFormData, contact: e.target.value.replace(/\D/g, '').slice(0, 10) })} maxLength={10} className="input-field" placeholder="e.g. 9876543210" /></div>
                     <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">

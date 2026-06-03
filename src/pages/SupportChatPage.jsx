@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client/react';
-import { GET_CHATS, GET_MESSAGES, GET_CONVERSATION_LOGS, GET_STAFF_USERS, ASSIGN_GUIDE, UNASSIGN_GUIDE, TOGGLE_AI } from '../graphql/queries';
+import { GET_CHATS, GET_MESSAGES, GET_CONVERSATION_LOGS, GET_STAFF_USERS, ASSIGN_GUIDE, UNASSIGN_GUIDE, TOGGLE_AI, GET_CITIES, GET_TREKS, GET_DEPARTURES } from '../graphql/queries';
 import { SEND_MESSAGE } from '../graphql/mutations';
 import { io } from 'socket.io-client';
 import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, PhoneOff, PhoneIncoming, Mic, MicOff, Check, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X, Image, Film, Music, File, AlertCircle, Bot, BotOff, UserPlus, UserMinus, UserCheck, Info, Clock, Lock } from 'lucide-react';
@@ -119,6 +119,89 @@ const quickReplies = [
   { label: 'Trek Itinerary', icon: FileText },
 ];
 
+// ─── Lead triage (human-reply based) ─────────────────────────────────────────
+// Visual config per leadStatus. Colors: needs_reply→red, contacted→green,
+// follow_up→amber, done→slate.
+const LEAD_CONFIG = {
+  needs_reply: { label: 'Needs Reply', dot: 'bg-red-500',    text: 'text-red-600',   bg: 'bg-red-50',   emoji: '🔴' },
+  contacted:   { label: 'Replied',     dot: 'bg-emerald-500', text: 'text-emerald-600', bg: 'bg-emerald-50', emoji: '🟢' },
+  follow_up:   { label: 'Follow-up',   dot: 'bg-amber-500',  text: 'text-amber-600', bg: 'bg-amber-50', emoji: '🟡' },
+  done:        { label: 'Done',        dot: 'bg-slate-400',  text: 'text-slate-500', bg: 'bg-slate-100', emoji: '⚪' },
+};
+
+// Tabs shown above the contact list (in display order). "all" has no status filter.
+// "window" is a special, computed tab (not a stored leadStatus): chats whose 24h
+// WhatsApp free-messaging window is still open, sorted by least time remaining.
+const LEAD_TABS = [
+  { key: 'all',         label: 'All',         emoji: null },
+  { key: 'needs_reply', label: 'Needs Reply', emoji: '🔴' },
+  { key: 'window',      label: '24h Window',  emoji: '⏳' },
+  { key: 'contacted',   label: 'Replied',     emoji: '🟢' },
+  { key: 'follow_up',   label: 'Follow-up',   emoji: '🟡' },
+  { key: 'done',        label: 'Done',        emoji: '⚪' },
+];
+
+// Resolve a contact's effective lead status (default needs_reply for chat contacts).
+function leadStatusOf(contact) {
+  return contact?.leadStatus || (contact?.source === 'chat' ? 'needs_reply' : null);
+}
+
+// ─── 24h service-window helpers (contact-list level) ─────────────────────────
+const WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Milliseconds left in the free-messaging window for a contact, given `now` (ms).
+// Returns 0 when there's no inbound on record or the window has closed.
+function windowMsRemaining(contact, now) {
+  if (!contact?.lastInboundAt) return 0;
+  const inbound = new Date(Number(contact.lastInboundAt) || contact.lastInboundAt).getTime();
+  if (Number.isNaN(inbound)) return 0;
+  return Math.max(0, inbound + WINDOW_MS - now);
+}
+
+// Whether a contact still has an open (free-messaging) window.
+function windowIsOpen(contact, now) {
+  return windowMsRemaining(contact, now) > 0;
+}
+
+// Decision: a chat is "replied" only if the business's last reply came AFTER the
+// customer's most recent inbound. Otherwise the latest customer message is still
+// unanswered → needs a reply. This is the unambiguous signal the admin acts on
+// inside the window so they free-message the right people before it closes.
+function windowReplied(contact) {
+  if (!contact?.lastInboundAt) return true;
+  if (!contact?.lastRepliedAt) return false;
+  const inbound = new Date(Number(contact.lastInboundAt) || contact.lastInboundAt).getTime();
+  const replied = new Date(Number(contact.lastRepliedAt) || contact.lastRepliedAt).getTime();
+  if (Number.isNaN(inbound) || Number.isNaN(replied)) return false;
+  return replied >= inbound;
+}
+
+// Format remaining window time compactly, e.g. "3h 12m" / "47m" / "Closing".
+function fmtWindowLeft(ms) {
+  if (ms <= 0) return 'Closed';
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h >= 1) return `${h}h ${m}m`;
+  if (m >= 1) return `${m}m`;
+  return 'Closing';
+}
+
+// Urgency colour for the time-left badge: <1h red, <3h amber, else green.
+function windowUrgencyClass(ms) {
+  if (ms <= 60 * 60 * 1000) return 'text-red-600 bg-red-50';
+  if (ms <= 3 * 60 * 60 * 1000) return 'text-amber-600 bg-amber-50';
+  return 'text-emerald-600 bg-emerald-50';
+}
+
+function fmtFollowUpDate(value) {
+  if (!value) return '';
+  try {
+    const d = new Date(Number(value) || value);
+    return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch { return ''; }
+}
+
 // Parse WhatsApp-style bold (*text*) and URLs, render as <strong> / <a>
 function parseWhatsAppText(text) {
   if (!text) return null;
@@ -198,6 +281,282 @@ function InteractiveButtons({ raw, isOutbound }) {
 
 const PAGE_SIZE = 30;
 
+// Bot action definitions for the "Send Bot Message" panel.
+const BOT_ACTIONS = [
+  { value: 'city_list', label: 'Show City List' },
+  { value: 'trek_list', label: 'Show Treks for City' },
+  { value: 'trek_dates', label: 'Show Dates for Trek' },
+  { value: 'booking_link', label: 'Send Booking Link' },
+];
+
+// Manually trigger a bot interactive message (city list, trek list, dates, booking link)
+// from the chat UI. Reuses the same backend handlers the WhatsApp bot uses, so sending
+// these also advances the customer's session step.
+function BotActionPanel({ phone, windowOpen, onSent, onClose, toast }) {
+  const [action, setAction] = useState('city_list');
+  const [cityId, setCityId] = useState('');
+  const [trekId, setTrekId] = useState('');
+  const [departureId, setDepartureId] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const { data: citiesData } = useQuery(GET_CITIES, {
+    variables: { isActive: true },
+    fetchPolicy: 'cache-first',
+  });
+  const { data: treksData } = useQuery(GET_TREKS, {
+    variables: { isActive: true },
+    fetchPolicy: 'cache-first',
+  });
+  // Departures only needed for the booking_link action, once a trek is chosen.
+  const { data: departuresData, loading: departuresLoading } = useQuery(GET_DEPARTURES, {
+    variables: { trekId: trekId || null },
+    skip: action !== 'booking_link' || !trekId,
+    fetchPolicy: 'cache-first',
+  });
+
+  const cities = citiesData?.getCities || [];
+  const treks = treksData?.getTreks || [];
+  const departures = departuresData?.getDepartures || [];
+
+  const needsCity = action === 'trek_list' || action === 'trek_dates';
+  const needsTrek = action === 'trek_dates' || action === 'booking_link';
+  const needsDeparture = action === 'booking_link';
+
+  const canSend =
+    windowOpen &&
+    !sending &&
+    (!needsCity || cityId) &&
+    (!needsTrek || trekId) &&
+    (!needsDeparture || departureId);
+
+  const fmtDate = (d) => {
+    if (!d) return '';
+    try { return new Date(Number(d) || d).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }); }
+    catch { return ''; }
+  };
+
+  const handleSend = async () => {
+    if (!canSend) return;
+    setSending(true);
+    try {
+      const body = { action };
+      if (cityId) body.cityId = cityId;
+      if (trekId) body.trekId = trekId;
+      if (departureId) body.departureId = departureId;
+      const token = localStorage.getItem('trekops_token');
+      const res = await fetch(`${API_URL}/api/chat/${phone}/bot-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      toast.success('Bot message sent');
+      onSent();
+    } catch (e) {
+      toast.error(e.message || 'Failed to send bot message');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="px-3 sm:px-5 pt-3 pb-2 bg-white border-t border-slate-100">
+      <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-50 border-b border-slate-100">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Bot className="w-4 h-4 text-primary-600" /> Send Bot Message
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer">
+            <X className="w-3.5 h-3.5 text-slate-500" />
+          </button>
+        </div>
+
+        <div className="px-3.5 py-3 space-y-3">
+          {!windowOpen && (
+            <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+              <span className="text-xs text-amber-700">24h window is closed — bot messages require an active conversation.</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Action</label>
+            <select
+              value={action}
+              onChange={(e) => { setAction(e.target.value); setDepartureId(''); }}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+            >
+              {BOT_ACTIONS.map((a) => (
+                <option key={a.value} value={a.value}>{a.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {needsCity && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">City</label>
+              <select
+                value={cityId}
+                onChange={(e) => setCityId(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              >
+                <option value="">Select a city…</option>
+                {cities.map((c) => (
+                  <option key={c._id} value={c._id}>{c.name}{c.state ? `, ${c.state}` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {needsTrek && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Trek</label>
+              <select
+                value={trekId}
+                onChange={(e) => { setTrekId(e.target.value); setDepartureId(''); }}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+              >
+                <option value="">Select a trek…</option>
+                {treks.map((t) => (
+                  <option key={t._id} value={t._id}>{t.name}{t.location ? ` — ${t.location}` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {needsDeparture && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Departure</label>
+              {!trekId ? (
+                <p className="text-xs text-slate-400">Select a trek first to load its departures.</p>
+              ) : (
+                <select
+                  value={departureId}
+                  onChange={(e) => setDepartureId(e.target.value)}
+                  disabled={departuresLoading}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 disabled:opacity-60"
+                >
+                  <option value="">{departuresLoading ? 'Loading…' : `Select a departure (${departures.length})`}</option>
+                  {departures.map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {fmtDate(d.startDate)}{d.endDate ? ` → ${fmtDate(d.endDate)}` : ''}{d.status ? ` · ${d.status}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={handleSend}
+            disabled={!canSend}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+          >
+            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+            Send Bot Message
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Lead-status control rendered in the conversation header ──────────────────
+// Self-contained: manages its own dropdown / follow-up-date / note draft state.
+// Calls onUpdate({ status?, followUpAt?, note? }) which hits POST /:phone/lead.
+function LeadStatusControl({ status, followUpAt, note, onUpdate, busy }) {
+  const [open, setOpen] = useState(false);
+  const [dateDraft, setDateDraft] = useState('');
+  const [noteDraft, setNoteDraft] = useState(note || '');
+  const cur = LEAD_CONFIG[status] || LEAD_CONFIG.needs_reply;
+
+  const apply = async (body) => {
+    await onUpdate(body);
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => { setNoteDraft(note || ''); setDateDraft(''); setOpen(o => !o); }}
+        disabled={busy}
+        className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full cursor-pointer ${cur.bg} ${cur.text}`}
+        title="Lead status"
+      >
+        <span className={`w-2 h-2 rounded-full ${cur.dot}`} />
+        {cur.label}
+        {followUpAt && status === 'follow_up' && (
+          <span className="opacity-70">· {new Date(followUpAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-1 w-60 bg-white border border-slate-200 rounded-xl shadow-lg z-50 p-2 space-y-1">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-1.5 pb-0.5">Set status</p>
+            {[
+              { key: 'needs_reply', label: 'Needs Reply' },
+              { key: 'contacted',   label: 'Replied' },
+              { key: 'done',        label: 'Done' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => apply({ status: opt.key })}
+                disabled={busy}
+                className={`w-full flex items-center gap-2 text-left text-sm px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer ${status === opt.key ? 'bg-slate-50 font-medium' : ''}`}
+              >
+                <span className={`w-2 h-2 rounded-full ${LEAD_CONFIG[opt.key].dot}`} />
+                {opt.label}
+                {status === opt.key && <Check className="w-3.5 h-3.5 text-emerald-500 ml-auto" />}
+              </button>
+            ))}
+
+            <div className="border-t border-slate-100 pt-1.5 mt-1">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-1.5 pb-1">Follow up later</p>
+              <div className="flex items-center gap-1.5 px-1.5">
+                <input
+                  type="datetime-local"
+                  value={dateDraft}
+                  onChange={(e) => setDateDraft(e.target.value)}
+                  className="flex-1 min-w-0 text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-amber-400"
+                />
+                <button
+                  onClick={() => apply({ status: 'follow_up', followUpAt: dateDraft ? new Date(dateDraft).toISOString() : null })}
+                  disabled={busy}
+                  className="text-xs font-medium px-2 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 cursor-pointer whitespace-nowrap"
+                  title="Park this lead; leave date blank to park indefinitely"
+                >
+                  <Clock className="w-3.5 h-3.5 inline mr-0.5" /> Park
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-1.5 mt-1">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-1.5 pb-1">Note</p>
+              <textarea
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                rows={2}
+                placeholder="e.g. wants July dates, budget 3k"
+                className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:border-primary-400 resize-none"
+              />
+              <button
+                onClick={() => apply({ note: noteDraft.trim() })}
+                disabled={busy}
+                className="w-full mt-1 text-xs font-medium px-2 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
+              >
+                Save note
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function SupportChatPage() {
   const [activePhone, setActivePhone] = useState(null);
   // Mirror of activePhone for use inside socket handlers (which capture state at
@@ -206,7 +565,18 @@ export default function SupportChatPage() {
   useEffect(() => { activePhoneRef.current = activePhone; }, [activePhone]);
   const [message, setMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  // Lead-triage filter tab. Default to the work queue: Needs Reply.
+  const [leadTab, setLeadTab] = useState('needs_reply');
+  // Ticking clock (ms) so the 24h-window countdowns + sort refresh on their own.
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const [showMobileChat, setShowMobileChat] = useState(false);
+  // Lead-action menu / inline editors in the conversation header.
+  const [showLeadMenu, setShowLeadMenu] = useState(false);
+  const [leadUpdating, setLeadUpdating] = useState(false);
+  const [showFollowUpInput, setShowFollowUpInput] = useState(false);
+  const [followUpDate, setFollowUpDate] = useState('');
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
   const [liveMessages, setLiveMessages] = useState([]);
   const [statusUpdates, setStatusUpdates] = useState({}); // waMessageId → deliveryStatus
   const messagesEndRef = useRef(null);
@@ -274,6 +644,31 @@ export default function SupportChatPage() {
   // ─── Guide Oversight State ─────────────────────────
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [selectedGuideId, setSelectedGuideId] = useState('');
+
+  // ─── Manual Bot Actions panel ──────────────────────
+  const [showBotActions, setShowBotActions] = useState(false);
+  // Lightweight transient toast (no toast lib in this project) — { type, text }
+  const [toastMsg, setToastMsg] = useState(null);
+  const toast = useMemo(() => ({
+    success: (text) => setToastMsg({ type: 'success', text }),
+    error: (text) => setToastMsg({ type: 'error', text }),
+  }), []);
+  useEffect(() => {
+    if (!toastMsg) return;
+    const id = setTimeout(() => setToastMsg(null), 3500);
+    return () => clearTimeout(id);
+  }, [toastMsg]);
+
+  // Re-tick once a minute so the 24h-window time-left badges + ordering stay live.
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ─── GraphQL: Contacts (initial load only) ─────────
+  // Declared early so the callbacks below can reference refetchChats without a
+  // temporal-dead-zone ReferenceError.
+  const { data: chatsData, loading: chatsLoading, refetch: refetchChats } = useQuery(GET_CHATS);
 
   // ─── New Message Modal ─────────────────────────────
   const [showNewMsg, setShowNewMsg] = useState(false);
@@ -360,16 +755,15 @@ export default function SupportChatPage() {
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setShowTemplatePicker(false);
       setPickedTemplate('');
+      // Backend marked the lead "contacted" — refetch so it flips to Replied.
+      refetchChats();
       // Optimistic: socket will push the saved ChatMessage shortly.
     } catch (e) {
       alert(`Failed to send template: ${e.message}`);
     } finally {
       setSendingTemplate(false);
     }
-  }, [activePhone, pickedTemplateObj, templateSpec, paramValues]);
-
-  // ─── GraphQL: Contacts (initial load only) ─────────
-  const { data: chatsData, loading: chatsLoading, refetch: refetchChats } = useQuery(GET_CHATS);
+  }, [activePhone, pickedTemplateObj, templateSpec, paramValues, refetchChats]);
 
   // ─── GraphQL: Messages for active phone (initial load, paginated) ─
   const { data: messagesData, loading: messagesLoading, refetch: refetchMessages, fetchMore } = useQuery(GET_MESSAGES, {
@@ -459,6 +853,23 @@ export default function SupportChatPage() {
     };
   }, [refetchChats]);
 
+  // ─── Polling fallback for live updates ─────────────────────────────────────
+  // The Socket.IO push is the primary realtime path, but it only delivers events
+  // from the server the dashboard is connected to. When that differs from the
+  // server processing WhatsApp webhooks (e.g. a dev dashboard pointed at localhost
+  // while Meta delivers to production), or when a reverse proxy drops the WS
+  // upgrade, socket events never arrive. Since all servers share the same Mongo,
+  // a short REST re-poll surfaces new inbound messages within a few seconds
+  // regardless. Skipped while the tab is hidden to avoid wasted requests.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (activePhoneRef.current) refetchMessages();
+      refetchChats();
+    }, 8000);
+    return () => clearInterval(id);
+  }, [refetchMessages, refetchChats]);
+
   // Reset live messages, attachments, pagination state, and panel state when switching chats
   useEffect(() => {
     setLiveMessages([]);
@@ -466,6 +877,11 @@ export default function SupportChatPage() {
     setMessage('');
     setFilesSendError('');
     setShowInfoPanel(false);
+    setShowBotActions(false);
+    setShowLeadMenu(false);
+    setShowFollowUpInput(false);
+    setShowNoteInput(false);
+    setFollowUpDate('');
     setSelectedGuideId('');
     setHasMore(false);
     setLoadingOlder(false);
@@ -519,12 +935,42 @@ export default function SupportChatPage() {
     return contact?.name || null;
   }, [incomingCall, contacts]);
 
-  const filteredContacts = useMemo(() =>
-    contacts.filter(c =>
-      (c.phone || '').toLowerCase().includes(searchTerm.toLowerCase())
-    ),
-    [contacts, searchTerm]
-  );
+  // Live counts per lead-status tab, computed from the loaded contact list.
+  const leadCounts = useMemo(() => {
+    const counts = { all: contacts.length, needs_reply: 0, window: 0, contacted: 0, follow_up: 0, done: 0 };
+    contacts.forEach((c) => {
+      const s = leadStatusOf(c);
+      if (s && counts[s] !== undefined) counts[s] += 1;
+      // "window" is computed (open 24h window), independent of stored lead status.
+      if (windowIsOpen(c, nowTick)) counts.window += 1;
+    });
+    return counts;
+  }, [contacts, nowTick]);
+
+  const filteredContacts = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    const list = contacts.filter((c) => {
+      if (!(c.phone || '').toLowerCase().includes(term) &&
+          !(c.name || '').toLowerCase().includes(term)) return false;
+      if (leadTab === 'all') return true;
+      if (leadTab === 'window') return windowIsOpen(c, nowTick);
+      return leadStatusOf(c) === leadTab;
+    });
+    // 24h Window tab: least time remaining first — the chat about to close sits on top.
+    if (leadTab === 'window') {
+      return [...list].sort(
+        (a, b) => windowMsRemaining(a, nowTick) - windowMsRemaining(b, nowTick)
+      );
+    }
+    // Needs Reply tab: oldest unanswered first so the longest-waiting lead is on top.
+    if (leadTab === 'needs_reply') {
+      return [...list].sort(
+        (a, b) => new Date(Number(a.lastMessageTime) || a.lastMessageTime) - new Date(Number(b.lastMessageTime) || b.lastMessageTime)
+      );
+    }
+    // Other tabs keep the backend newest-first ordering.
+    return list;
+  }, [contacts, searchTerm, leadTab, nowTick]);
 
   // ─── Derive guide oversight values from active contact ─
   const logs = logsData?.getConversationLogs || [];
@@ -609,18 +1055,45 @@ export default function SupportChatPage() {
     } catch (e) { console.error(e); }
   }, [activePhone, unassignGuide, refetchChats, refetchLogs]);
 
+  // ─── Lead triage: update status / follow-up / note via REST, then refetch ──
+  const updateLead = useCallback(async (body) => {
+    if (!activePhone) return;
+    setLeadUpdating(true);
+    try {
+      const token = localStorage.getItem('trekops_token');
+      const res = await fetch(`${API_URL}/api/chat/${activePhone}/lead`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      // Refetch the contact list so tabs / counts / row indicators update.
+      await refetchChats();
+      toast.success('Lead updated');
+      return data;
+    } catch (e) {
+      toast.error(e.message || 'Failed to update lead');
+    } finally {
+      setLeadUpdating(false);
+    }
+  }, [activePhone, refetchChats, toast]);
+
   const handleSend = useCallback(async () => {
     if (!message.trim() || !activePhone) return;
     const text = message.trim();
     setMessage('');
     try {
       await sendMessageMutation({ variables: { phone: activePhone, text } });
-      // Socket will handle the update via newMessage event
+      // Backend marks the lead "contacted" on send — refetch so it moves
+      // Needs Reply → Replied and the tab counts update.
+      refetchChats();
+      // Socket will handle the message update via the newMessage event.
     } catch (err) {
       console.error('Failed to send message:', err);
       setMessage(text);
     }
-  }, [message, activePhone, sendMessageMutation]);
+  }, [message, activePhone, sendMessageMutation, refetchChats]);
 
   const handleRetry = useCallback(async (msg) => {
     const text = msg.message;
@@ -681,6 +1154,8 @@ export default function SupportChatPage() {
       // Socket will push them to the UI. Just clear the input.
       setAttachedFiles([]);
       setMessage('');
+      // Backend marked the lead "contacted" — refetch so it flips to Replied.
+      refetchChats();
       if (data.results?.some(r => r.status === 'failed')) {
         const failCount = data.results.filter(r => r.status === 'failed').length;
         setFilesSendError(`${failCount} file(s) failed to send — see the failed message(s) in the chat.`);
@@ -691,7 +1166,7 @@ export default function SupportChatPage() {
     } finally {
       setSendingFiles(false);
     }
-  }, [activePhone, attachedFiles, message]);
+  }, [activePhone, attachedFiles, message, refetchChats]);
 
   // ─── Load older messages (scroll-up pagination) ────
   const loadOlderMessages = useCallback(async () => {
@@ -821,8 +1296,29 @@ export default function SupportChatPage() {
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by phone..." className="input-field pl-9 !py-2 text-sm" />
+              <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by name or phone..." className="input-field pl-9 !py-2 text-sm" />
             </div>
+          </div>
+
+          {/* ─── Lead-triage filter tabs ─── */}
+          <div className="flex items-center gap-1 px-2 py-2 border-b border-slate-100 overflow-x-auto scrollbar-hide">
+            {LEAD_TABS.map((tab) => {
+              const active = leadTab === tab.key;
+              const count = leadCounts[tab.key] ?? 0;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setLeadTab(tab.key)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors cursor-pointer shrink-0
+                    ${active ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  title={tab.label}
+                >
+                  {tab.emoji && <span className="text-[11px] leading-none">{tab.emoji}</span>}
+                  <span>{tab.label}</span>
+                  <span className={`text-[10px] font-bold px-1 rounded ${active ? 'bg-white/25' : 'bg-white text-slate-500'}`}>{count}</span>
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex-1 overflow-y-auto">
@@ -855,8 +1351,44 @@ export default function SupportChatPage() {
                       <p className="text-xs text-slate-500 truncate">{contact.lastMessage || (contact.source === 'session' ? `Bot step: ${contact.step}` : 'No messages')}</p>
                       {contact.messageCount > 0 && <span className="ml-2 shrink-0 text-[10px] text-slate-400">{contact.messageCount}</span>}
                     </div>
-                    {/* AI status badge + assigned guide chip */}
-                    <div className="flex items-center gap-1.5 mt-0.5">
+                    {/* Lead status chip + AI status badge + assigned guide chip */}
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      {/* 24h Window tab: time-left + replied/needs-reply so the admin
+                          can free-message the right people before the window closes. */}
+                      {leadTab === 'window' && (() => {
+                        const ms = windowMsRemaining(contact, nowTick);
+                        const replied = windowReplied(contact);
+                        return (
+                          <>
+                            <span className={`flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${windowUrgencyClass(ms)}`} title="Free-messaging window time left">
+                              <Clock className="w-2.5 h-2.5" />
+                              {fmtWindowLeft(ms)} left
+                            </span>
+                            <span
+                              className={`flex items-center gap-0.5 text-[10px] font-medium ${replied ? 'text-emerald-600' : 'text-red-600'}`}
+                              title={replied ? 'You have replied to their latest message' : 'Customer is waiting — free reply allowed now'}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full inline-block ${replied ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                              {replied ? 'Replied' : 'Needs reply'}
+                            </span>
+                          </>
+                        );
+                      })()}
+                      {(() => {
+                        const ls = leadStatusOf(contact);
+                        if (leadTab === 'window') return null;
+                        if (!ls) return null;
+                        const lc = LEAD_CONFIG[ls];
+                        return (
+                          <span className={`flex items-center gap-0.5 text-[10px] font-medium ${lc.text}`} title={lc.label}>
+                            <span className={`w-1.5 h-1.5 rounded-full inline-block ${lc.dot}`} />
+                            {lc.label}
+                            {ls === 'follow_up' && contact.followUpAt && (
+                              <span className="opacity-70">· {new Date(contact.followUpAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                            )}
+                          </span>
+                        );
+                      })()}
                       {contact.aiEnabled === false ? (
                         <span className="flex items-center gap-0.5 text-[10px] text-amber-600 font-medium">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
@@ -930,6 +1462,22 @@ export default function SupportChatPage() {
                         <UserCheck className="w-3.5 h-3.5" /> Manual
                       </span>
                     )}
+                    {/* Lead-status control (Needs Reply / Replied / Follow-up / Done + note) */}
+                    <LeadStatusControl
+                      status={activeContact?.leadStatus || 'needs_reply'}
+                      followUpAt={activeContact?.followUpAt || null}
+                      note={activeContact?.leadNote || ''}
+                      onUpdate={updateLead}
+                      busy={leadUpdating}
+                    />
+                    {/* Manual bot actions toggle */}
+                    <button
+                      onClick={() => setShowBotActions(p => !p)}
+                      className={`p-2 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors ${showBotActions ? 'bg-slate-100 text-primary-600' : 'text-slate-400'}`}
+                      title="Send bot message (city list, treks, dates, booking link)"
+                    >
+                      <Bot className="w-4 h-4" />
+                    </button>
                     {/* Info panel toggle */}
                     <button
                       onClick={() => setShowInfoPanel(p => !p)}
@@ -1294,6 +1842,17 @@ export default function SupportChatPage() {
                       <X className="w-3 h-3 text-red-400" />
                     </button>
                   </div>
+                )}
+
+                {/* Manual Bot Actions Panel */}
+                {showBotActions && (
+                  <BotActionPanel
+                    phone={activePhone}
+                    windowOpen={!windowState || windowState.open}
+                    toast={toast}
+                    onClose={() => setShowBotActions(false)}
+                    onSent={() => { setShowBotActions(false); refetchMessages(); refetchChats(); }}
+                  />
                 )}
 
                 {/* Message Input */}
@@ -1771,6 +2330,14 @@ export default function SupportChatPage() {
         <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 bg-red-600 text-white text-sm px-4 py-3 rounded-xl shadow-lg">
           <PhoneOff className="w-4 h-4 shrink-0" />
           <span>Call failed: {callError}</span>
+        </div>
+      )}
+
+      {/* Transient toast (bot actions + general feedback) */}
+      {toastMsg && (
+        <div className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 text-white text-sm px-4 py-3 rounded-xl shadow-lg ${toastMsg.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
+          {toastMsg.type === 'error' ? <AlertCircle className="w-4 h-4 shrink-0" /> : <Check className="w-4 h-4 shrink-0" />}
+          <span>{toastMsg.text}</span>
         </div>
       )}
     </div>

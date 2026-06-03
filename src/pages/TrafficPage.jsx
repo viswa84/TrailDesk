@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@apollo/client/react';
-import { GET_TRAFFIC_OVERVIEW } from '../graphql/queries';
+import { GET_TRAFFIC_OVERVIEW, GET_CONVERSION_FUNNEL, GET_FILL_NUDGE_STATS } from '../graphql/queries';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { TrendingUp, Eye, Mountain, CalendarRange, ChevronDown, ChevronRight, ExternalLink, Smartphone } from 'lucide-react';
+import { TrendingUp, Eye, Mountain, CalendarRange, ChevronDown, ChevronRight, ExternalLink, Smartphone, Zap } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 const PERIOD_OPTIONS = [
@@ -139,6 +139,119 @@ function TrekRow({ trek, baseUrl }) {
   );
 }
 
+const FUNNEL_META = {
+  page_open:    { label: 'Page Open',          color: '#64748b', bg: 'bg-slate-500' },
+  form_start:   { label: 'Form Started',       color: '#6366f1', bg: 'bg-indigo-500' },
+  payment_init: { label: 'Payment Initiated',  color: '#3b82f6', bg: 'bg-blue-500' },
+  paid:         { label: 'Paid',               color: '#22c55e', bg: 'bg-green-500' },
+};
+const FUNNEL_ORDER = ['page_open', 'form_start', 'payment_init', 'paid'];
+
+function countFor(stages, stage) {
+  return stages?.find((s) => s.stage === stage)?.count || 0;
+}
+
+function ConversionFunnel({ funnel }) {
+  if (!funnel) return null;
+
+  const overallMap = {};
+  funnel.overall.forEach((s) => { overallMap[s.stage] = s.count; });
+  const maxCount = Math.max(1, ...FUNNEL_ORDER.map((s) => overallMap[s] || 0));
+
+  // Top 5 departures by page_open
+  const topDeps = [...(funnel.byDeparture || [])]
+    .map((d) => ({ ...d, pageOpen: countFor(d.stages, 'page_open') }))
+    .sort((a, b) => b.pageOpen - a.pageOpen)
+    .slice(0, 5);
+
+  return (
+    <div className="card p-5 mb-6">
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp className="w-4 h-4 text-primary-500" />
+        <h2 className="font-semibold text-slate-800">Conversion Funnel</h2>
+        <span className="text-xs text-slate-400">· last {/* days passed by parent label */}period</span>
+      </div>
+
+      {/* Horizontal funnel */}
+      <div className="space-y-2.5 mb-6">
+        {FUNNEL_ORDER.map((stage, i) => {
+          const count = overallMap[stage] || 0;
+          const prev = i === 0 ? null : (overallMap[FUNNEL_ORDER[i - 1]] || 0);
+          const rate = prev != null && prev > 0 ? Math.round((count / prev) * 100) : null;
+          const widthPct = Math.max(4, Math.round((count / maxCount) * 100));
+          const meta = FUNNEL_META[stage];
+          return (
+            <div key={stage} className="flex items-center gap-3">
+              <div className="w-28 shrink-0 text-sm font-medium text-slate-600 text-right">{meta.label}</div>
+              <div className="flex-1 flex items-center gap-2">
+                <div className="flex-1 h-8 bg-slate-100 rounded-lg overflow-hidden">
+                  <div className={`h-full ${meta.bg} rounded-lg flex items-center justify-end px-2 transition-all`}
+                    style={{ width: `${widthPct}%` }}>
+                    <span className="text-xs font-bold text-white">{count.toLocaleString()}</span>
+                  </div>
+                </div>
+                {rate != null && (
+                  <span className="w-24 shrink-0 text-xs text-slate-400">{rate}% from prev</span>
+                )}
+                {rate == null && <span className="w-24 shrink-0" />}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Top departures table */}
+      {topDeps.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            Top Departures by Page Opens
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
+                  <th className="py-2 pr-3 font-medium">Departure</th>
+                  <th className="py-2 px-2 font-medium text-right">Opens</th>
+                  <th className="py-2 px-2 font-medium text-right">Form</th>
+                  <th className="py-2 px-2 font-medium text-right">Pay Init</th>
+                  <th className="py-2 px-2 font-medium text-right">Paid</th>
+                  <th className="py-2 pl-2 font-medium text-right">Conv.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topDeps.map((d) => {
+                  const open = d.pageOpen;
+                  const form = countFor(d.stages, 'form_start');
+                  const init = countFor(d.stages, 'payment_init');
+                  const paid = countFor(d.stages, 'paid');
+                  const conv = open > 0 ? Math.round((paid / open) * 100) : 0;
+                  return (
+                    <tr key={d.depUniqueId} className="border-b border-slate-50 last:border-0">
+                      <td className="py-2 pr-3">
+                        <span className="font-medium text-slate-700">{d.trekName || '—'}</span>
+                        <span className="block text-xs font-mono text-slate-400">{d.depUniqueId}</span>
+                      </td>
+                      <td className="py-2 px-2 text-right text-slate-600">{open}</td>
+                      <td className="py-2 px-2 text-right text-slate-600">{form}</td>
+                      <td className="py-2 px-2 text-right text-slate-600">{init}</td>
+                      <td className="py-2 px-2 text-right font-semibold text-green-600">{paid}</td>
+                      <td className="py-2 pl-2 text-right">
+                        <span className={`font-bold ${conv >= 20 ? 'text-green-600' : conv > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                          {conv}%
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TrafficPage() {
   const [days, setDays] = useState(30);
   const { data, loading, error } = useQuery(GET_TRAFFIC_OVERVIEW, {
@@ -146,7 +259,22 @@ export default function TrafficPage() {
     fetchPolicy: 'cache-and-network',
   });
 
+  const { data: funnelData } = useQuery(GET_CONVERSION_FUNNEL, {
+    variables: { days },
+    fetchPolicy: 'cache-and-network',
+  });
+
+  // All-departure fill-nudge stats (no departureId arg). Top performers shown below.
+  const { data: nudgeData } = useQuery(GET_FILL_NUDGE_STATS, {
+    fetchPolicy: 'cache-and-network',
+  });
+
   const stats = data?.getTrafficOverview;
+  const funnel = funnelData?.getConversionFunnel;
+  const topNudges = useMemo(() => {
+    const all = nudgeData?.getFillNudgeStats || [];
+    return [...all].sort((a, b) => b.nudgesSent - a.nudgesSent).slice(0, 5);
+  }, [nudgeData]);
 
   // Base URL for external links (just the origin of the API)
   const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '');
@@ -262,6 +390,9 @@ export default function TrafficPage() {
             </div>
           )}
 
+          {/* Conversion funnel */}
+          {funnel && <ConversionFunnel funnel={funnel} />}
+
           {/* Trek comparison bar chart */}
           {trekBarData.length > 0 && (
             <div className="card p-5 mb-6">
@@ -325,6 +456,34 @@ export default function TrafficPage() {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Nudge Performance (top 5 departures by nudges sent) */}
+          {topNudges.length > 0 && (
+            <div className="card p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Zap className="w-4 h-4 text-orange-500" />
+                <h2 className="font-semibold text-slate-800">Nudge Performance</h2>
+                <span className="text-xs text-slate-400">Top {topNudges.length} by nudges sent</span>
+              </div>
+              <div className="space-y-1.5">
+                {topNudges.map((n) => {
+                  const pct = Math.round((n.conversionRate || 0) * 100);
+                  return (
+                    <div key={n.departureId} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-700 truncate">{n.trekName || n.depUniqueId || '—'}</p>
+                        <p className="text-xs text-slate-400">{n.depUniqueId}</p>
+                      </div>
+                      <div className="flex items-center gap-4 shrink-0">
+                        <span className="text-sm text-slate-600">{n.nudgesSent} sent</span>
+                        <span className="text-sm font-bold text-orange-500">{pct}%</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </>

@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Mountain, CalendarRange, BookOpen, Users, Navigation,
-  Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft, Building2, Shield, Bot, Workflow, BarChart2, Tag, Send, FileText, Contact
+  Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft, Building2, Shield, Bot, Workflow, BarChart2, Tag, Send, FileText, Contact, Gift, Database
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -21,9 +21,11 @@ const navItems = [
   { path: '/templates', label: 'Templates', icon: FileText },
   { path: '/support-chat', label: 'WhatsApp Chat', icon: MessageCircle },
   { path: '/whatsapp-flow', label: 'WhatsApp Flow', icon: Bot },
+  { path: '/ai-logs', label: 'AI Logs', icon: Database },
   { path: '/flow-builder',  label: 'Flow Builder',  icon: Workflow },
   { path: '/traffic',  label: 'Traffic',  icon: BarChart2 },
   { path: '/coupons', label: 'Coupons', icon: Tag },
+  { path: '/referrals', label: 'Referrals', icon: Gift },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 

@@ -3,7 +3,7 @@ import { useQuery } from '@apollo/client/react';
 import { GET_CITIES, GET_TREKS } from '../graphql/queries';
 import { useToast } from '../context/ToastContext';
 import { parseTemplateSpec, buildTemplateComponents, totalParamCount } from '../utils/whatsappTemplate';
-import { Send, Users, AlertTriangle, Loader2, Megaphone, RefreshCcw, ChevronDown, ChevronRight, History } from 'lucide-react';
+import { Send, Users, AlertTriangle, Loader2, Megaphone, RefreshCcw, ChevronDown, ChevronRight, History, IndianRupee, Search } from 'lucide-react';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080/').replace(/\/$/, '');
 const getToken = () => localStorage.getItem('trekops_token') || '';
@@ -44,6 +44,14 @@ export default function BroadcastPage() {
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState('');
+
+  // Per-recipient selection table — [{ phone, name, checked }]
+  const [recipientList, setRecipientList] = useState([]);
+  const [recipientSearch, setRecipientSearch] = useState('');
+
+  // Marketing settings (cost-per-message + daily limit) and today's usage
+  const [marketingSettings, setMarketingSettings] = useState({ costPerMessage: 0.58, dailyLimit: 1000 });
+  const [dailySentToday, setDailySentToday] = useState(0);
 
   const [templates, setTemplates] = useState([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -146,6 +154,22 @@ export default function BroadcastPage() {
   };
   useEffect(() => { loadTemplates(); }, []);
 
+  // ── Load marketing settings on mount (cost-per-message, daily limit) ────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await api('/api/marketing/settings');
+        setMarketingSettings({
+          costPerMessage: typeof s.costPerMessage === 'number' ? s.costPerMessage : 0.58,
+          dailyLimit: typeof s.dailyLimit === 'number' ? s.dailyLimit : 1000,
+        });
+      } catch (e) {
+        // Soft-fail: fall back to defaults
+        console.error('[broadcast] settings load failed', e);
+      }
+    })();
+  }, []);
+
   // ── Live preview (debounced) ───────────────────────────────────────────────
   const debounceRef = useRef(null);
   const buildFilterPayload = () => {
@@ -178,6 +202,8 @@ export default function BroadcastPage() {
     if (!hasAnyFilter) {
       setPreview(null);
       setPreviewError('');
+      setRecipientList([]);
+      setDailySentToday(0);
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -190,8 +216,23 @@ export default function BroadcastPage() {
           body: JSON.stringify({ filters: buildFilterPayload() }),
         });
         setPreview(r);
+        // Seed the selection table — all recipients checked by default.
+        setRecipientList((r.recipients || []).map((rec) => ({
+          phone: rec.phone,
+          name: rec.name || null,
+          checked: true,
+        })));
+        if (typeof r.dailySentToday === 'number') setDailySentToday(r.dailySentToday);
+        // Preview also returns live settings — keep local copy fresh.
+        if (typeof r.costPerMessage === 'number' || typeof r.dailyLimit === 'number') {
+          setMarketingSettings((prev) => ({
+            costPerMessage: typeof r.costPerMessage === 'number' ? r.costPerMessage : prev.costPerMessage,
+            dailyLimit: typeof r.dailyLimit === 'number' ? r.dailyLimit : prev.dailyLimit,
+          }));
+        }
       } catch (e) {
         setPreview(null);
+        setRecipientList([]);
         setPreviewError(e.message);
       } finally {
         setPreviewing(false);
@@ -200,6 +241,43 @@ export default function BroadcastPage() {
     return () => debounceRef.current && clearTimeout(debounceRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
+
+  // ── Recipient selection derived values ──────────────────────────────────────
+  const checkedCount = useMemo(
+    () => recipientList.filter((r) => r.checked).length,
+    [recipientList]
+  );
+
+  const filteredRecipients = useMemo(() => {
+    const q = recipientSearch.trim().toLowerCase();
+    if (!q) return recipientList;
+    return recipientList.filter(
+      (r) => r.phone.toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q)
+    );
+  }, [recipientList, recipientSearch]);
+
+  const allChecked = recipientList.length > 0 && recipientList.every((r) => r.checked);
+
+  const toggleAll = (checked) => {
+    setRecipientList((prev) => prev.map((r) => ({ ...r, checked })));
+  };
+  const toggleOne = (phone) => {
+    setRecipientList((prev) => prev.map((r) => (r.phone === phone ? { ...r, checked: !r.checked } : r)));
+  };
+
+  const maskPhone = (phone) => `91XXXXX${String(phone).slice(-5)}`;
+
+  // ── Cost + daily-limit math ─────────────────────────────────────────────────
+  const { costPerMessage, dailyLimit } = marketingSettings;
+  const estimatedCost = useMemo(
+    () => Math.round(checkedCount * costPerMessage * 100) / 100,
+    [checkedCount, costPerMessage]
+  );
+
+  const projectedTotal = dailySentToday + checkedCount;
+  const overLimit = projectedTotal > dailyLimit;
+  const nearLimit = !overLimit && projectedTotal > dailyLimit * 0.8;
+  const projectedPct = dailyLimit > 0 ? Math.round((projectedTotal / dailyLimit) * 100) : 0;
 
   // ── Send broadcast ─────────────────────────────────────────────────────────
   const handleSend = async () => {
@@ -211,8 +289,17 @@ export default function BroadcastPage() {
       toast.error('No recipients match these filters.');
       return;
     }
+    if (checkedCount === 0) {
+      toast.error('Select at least one recipient.');
+      return;
+    }
+    if (overLimit) {
+      toast.error(`This send would exceed your daily limit of ${dailyLimit} messages.`);
+      return;
+    }
     if (!window.confirm(
-      `Send the "${selectedTemplateObj.name}" template to ${preview.totalCount} recipient(s)?\n\n` +
+      `Send the "${selectedTemplateObj.name}" template to ${checkedCount} recipient(s)?\n\n` +
+      `Estimated cost: ₹${estimatedCost}\n` +
       `Opted-out: ${preview.breakdown.skippedOptedOut} excluded\n` +
       `Invalid: ${preview.breakdown.skippedInvalidManual} excluded\n\n` +
       `This action cannot be undone.`
@@ -230,12 +317,16 @@ export default function BroadcastPage() {
         ? buildTemplateComponents(templateSpec, paramValues)
         : [];
 
+      // Phones the user explicitly unchecked in the recipient table.
+      const excludePhones = recipientList.filter((r) => !r.checked).map((r) => r.phone);
+
       const body = {
         filters: buildFilterPayload(),
         templateName: selectedTemplateObj.name,
         templateLanguage: selectedTemplateObj.language,
         templateComponents,
         name: campaignName.trim() || null,
+        excludePhones,
       };
 
       if (scheduledFor) {
@@ -279,6 +370,9 @@ export default function BroadcastPage() {
     setPreviewError('');
     setScheduledFor('');
     setCampaignName('');
+    setRecipientList([]);
+    setRecipientSearch('');
+    setDailySentToday(0);
   };
 
   return (
@@ -396,29 +490,103 @@ export default function BroadcastPage() {
               <div className="flex items-center gap-3 p-4 bg-primary-50 rounded-xl">
                 <Users className="w-8 h-8 text-primary-600" />
                 <div>
-                  <p className="text-3xl font-bold text-primary-700">{preview.totalCount}</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider">will receive</p>
+                  <p className="text-3xl font-bold text-primary-700">{checkedCount}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">
+                    selected of {preview.totalCount} matched
+                  </p>
                 </div>
               </div>
 
               <ul className="text-xs text-slate-500 space-y-1">
                 <li>From session filters: <span className="font-semibold text-slate-700">{preview.breakdown.fromSessionFilter}</span></li>
                 <li>From booking filters: <span className="font-semibold text-slate-700">{preview.breakdown.fromBookingFilter}</span></li>
-                <li>Manual list (unique): <span className="font-semibold text-slate-700">{preview.breakdown.fromManual}</span></li>
+                <li>Manual phones added: <span className="font-semibold text-slate-700">{preview.breakdown.fromManual}</span> <span className="text-slate-400">(already-matched phones count once)</span></li>
                 <li>Opted-out (excluded): <span className="font-semibold text-amber-600">{preview.breakdown.skippedOptedOut}</span></li>
                 <li>Invalid phones (excluded): <span className="font-semibold text-amber-600">{preview.breakdown.skippedInvalidManual}</span></li>
               </ul>
 
-              {preview.sample.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-slate-500 mb-2">Sample (first {preview.sample.length}):</p>
-                  <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg">
-                    {preview.sample.map((s) => (
-                      <div key={s.phone} className="px-3 py-1.5 border-b border-slate-100 last:border-b-0 text-xs">
-                        <span className="font-mono">{s.phone}</span>
-                        {s.name && <span className="text-slate-500"> — {s.name}</span>}
-                      </div>
-                    ))}
+              {/* ── Cost estimate card ── */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 uppercase tracking-wider">
+                  <IndianRupee className="w-3.5 h-3.5" /> Estimated Cost
+                </div>
+                <p className="text-sm text-amber-800">
+                  {checkedCount} messages × ₹{costPerMessage}/message ={' '}
+                  <span className="font-bold">₹{estimatedCost}</span>
+                </p>
+                <p className="text-[11px] text-amber-600">
+                  WhatsApp charges per marketing conversation opened.
+                </p>
+              </div>
+
+              {/* ── Daily limit banners ── */}
+              {overLimit && (
+                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                  <span className="text-base leading-none">🚫</span>
+                  <span className="text-xs text-red-700">
+                    This send would exceed your daily limit of <span className="font-semibold">{dailyLimit}</span> messages.
+                    Already sent: <span className="font-semibold">{dailySentToday}</span>. Reduce recipients or wait until tomorrow.
+                  </span>
+                </div>
+              )}
+              {nearLimit && (
+                <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                  <span className="text-base leading-none">⚠️</span>
+                  <span className="text-xs text-amber-700">
+                    You&apos;ve sent <span className="font-semibold">{dailySentToday}</span> messages today.
+                    Your daily limit is <span className="font-semibold">{dailyLimit}</span>.
+                    Sending <span className="font-semibold">{checkedCount}</span> more will use{' '}
+                    <span className="font-semibold">{projectedPct}%</span> of your daily allowance.
+                  </span>
+                </div>
+              )}
+
+              {/* ── Recipient selection table ── */}
+              {recipientList.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => toggleAll(!allChecked)}
+                      className="text-xs text-primary-600 hover:underline"
+                    >
+                      {allChecked ? 'Deselect all' : 'Select all'}
+                    </button>
+                    <span className="text-[11px] text-slate-500">
+                      {checkedCount} of {recipientList.length} selected
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      value={recipientSearch}
+                      onChange={(e) => setRecipientSearch(e.target.value)}
+                      placeholder="Filter by name or phone…"
+                      className="input-field text-xs pl-8"
+                    />
+                  </div>
+
+                  <div className="border border-slate-200 rounded-lg overflow-y-auto" style={{ maxHeight: 320 }}>
+                    {filteredRecipients.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-slate-400">No matches.</p>
+                    ) : (
+                      filteredRecipients.map((r) => (
+                        <label
+                          key={r.phone}
+                          className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 last:border-b-0 text-xs cursor-pointer hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={r.checked}
+                            onChange={() => toggleOne(r.phone)}
+                            className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          <span className="font-mono">{maskPhone(r.phone)}</span>
+                          <span className="text-slate-500 truncate">{r.name || '—'}</span>
+                        </label>
+                      ))
+                    )}
                   </div>
                 </div>
               )}
@@ -633,15 +801,15 @@ export default function BroadcastPage() {
         <div className="flex justify-end">
           <button
             onClick={handleSend}
-            disabled={sending || !selectedTemplateObj || !preview || preview.totalCount === 0}
+            disabled={sending || !selectedTemplateObj || !preview || checkedCount === 0 || overLimit}
             className="btn-primary flex items-center gap-2"
           >
             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             {sending
               ? `Submitting…`
               : scheduledFor
-                ? `Schedule for ${preview?.totalCount || 0} recipient(s)`
-                : `Send now to ${preview?.totalCount || 0} recipient(s)`}
+                ? `Schedule for ${checkedCount} recipient(s)`
+                : `Send now to ${checkedCount} recipient(s)`}
           </button>
         </div>
       </div>

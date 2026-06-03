@@ -1,14 +1,62 @@
 import { useState, useMemo } from 'react';
+import { useQuery } from '@apollo/client/react';
 import { useBookings } from '../hooks/useBookings';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { GET_SCHEDULED_MESSAGES } from '../graphql/queries';
 import Modal from '../components/ui/Modal';
 import Drawer from '../components/ui/Drawer';
 import StatusBadge from '../components/ui/StatusBadge';
 import { format } from 'date-fns';
-import { Search, Eye, BookOpen, Phone, Users, Copy, ExternalLink, FileDown, Loader2 } from 'lucide-react';
+import { Search, Eye, BookOpen, Phone, Users, Copy, ExternalLink, FileDown, Loader2, Gift, Clock } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
+const SCHED_LABELS = {
+  packing_list: 'Packing checklist (T-7)',
+  pre_trek_reminder: 'Pre-trek reminder (T-1)',
+  day_of: 'Day-of message',
+};
+const SCHED_BADGE = {
+  pending:   'bg-amber-50 text-amber-700',
+  sent:      'bg-green-50 text-green-700',
+  failed:    'bg-red-50 text-red-700',
+  cancelled: 'bg-slate-100 text-slate-500',
+};
+
+function ScheduledMessages({ bookingId }) {
+  const { data, loading } = useQuery(GET_SCHEDULED_MESSAGES, {
+    variables: { bookingId },
+    skip: !bookingId,
+    fetchPolicy: 'cache-and-network',
+  });
+  const msgs = data?.getScheduledMessages || [];
+  if (loading && msgs.length === 0) return null;
+  if (msgs.length === 0) return null;
+
+  return (
+    <div className="bg-slate-50 rounded-xl p-4">
+      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+        <Clock className="w-3.5 h-3.5" /> Scheduled Messages
+      </h4>
+      <div className="space-y-2">
+        {msgs.map((m) => (
+          <div key={m._id} className="flex items-center justify-between gap-2 text-sm">
+            <div className="min-w-0">
+              <p className="font-medium text-slate-700 truncate">{SCHED_LABELS[m.type] || m.type}</p>
+              <p className="text-xs text-slate-400">
+                {m.sendAt ? format(new Date(m.sendAt), 'dd MMM yyyy, HH:mm') : '—'}
+              </p>
+            </div>
+            <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${SCHED_BADGE[m.status] || 'bg-slate-100 text-slate-500'}`}>
+              {m.status}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function BookingsPage() {
   const { data: bookingsList, loading, error } = useBookings();
@@ -328,6 +376,24 @@ export default function BookingsPage() {
                 )}
               </div>
             </div>
+
+            {/* Referral discount applied */}
+            {selectedBooking.referralCode && (
+              <div className="bg-violet-50 rounded-xl p-4">
+                <h4 className="text-xs font-semibold text-violet-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Gift className="w-3.5 h-3.5" /> Referral Applied
+                </h4>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-mono font-medium text-violet-700">{selectedBooking.referralCode}</span>
+                  <span className="font-semibold text-violet-700">
+                    −₹{(selectedBooking.referralDiscount || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Scheduled post-payment messages */}
+            <ScheduledMessages bookingId={selectedBooking._id} />
 
             {/* Download Invoice Button */}
             <button onClick={() => handleDownloadInvoice(selectedBooking)} disabled={downloadingPdf === selectedBooking._id} className="w-full btn-primary flex items-center justify-center gap-2 py-3 disabled:opacity-50">

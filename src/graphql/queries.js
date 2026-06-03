@@ -260,6 +260,11 @@ export const GET_CHATS = gql`
       aiEnabled
       assignedGuideId
       assignedGuideName
+      leadStatus
+      followUpAt
+      lastRepliedAt
+      lastInboundAt
+      leadNote
     }
   }
 `;
@@ -310,6 +315,10 @@ export const GET_BOOKINGS = gql`
     paymentLink
     balanceReminderSentAt
     balanceTxnid
+    couponCode
+    couponDiscount
+    referralCode
+    referralDiscount
     packageBreakdown {
       packageName
       pricePerPerson
@@ -342,6 +351,10 @@ export const GET_BOOKING = gql`
     paymentLink
     balanceReminderSentAt
     balanceTxnid
+    couponCode
+    couponDiscount
+    referralCode
+    referralDiscount
     packageBreakdown {
       packageName
       pricePerPerson
@@ -351,6 +364,74 @@ export const GET_BOOKING = gql`
     createdAt
   }
 }
+`;
+
+// ─── Conversion Funnel Query ─────────────────────────
+export const GET_CONVERSION_FUNNEL = gql`
+  query GetConversionFunnel($days: Int) {
+    getConversionFunnel(days: $days) {
+      overall { stage count }
+      byDeparture { depUniqueId trekName stages { stage count } }
+    }
+  }
+`;
+
+// ─── Scheduled Messages Query ────────────────────────
+export const GET_SCHEDULED_MESSAGES = gql`
+  query GetScheduledMessages($bookingId: ID!) {
+    getScheduledMessages(bookingId: $bookingId) {
+      _id
+      type
+      sendAt
+      status
+      sentAt
+    }
+  }
+`;
+
+// ─── Waitlist Query ──────────────────────────────────
+export const GET_WAITLIST = gql`
+  query GetWaitlist($departureId: ID!) {
+    getWaitlist(departureId: $departureId) {
+      _id
+      departureId
+      depUniqueId
+      trekName
+      phone
+      name
+      peopleCount
+      notified
+      notifiedAt
+      createdAt
+    }
+  }
+`;
+
+// ─── Referrals Query ─────────────────────────────────
+export const GET_REFERRALS = gql`
+  query GetReferrals {
+    getReferrals {
+      _id
+      referrerPhone
+      code
+      discountAmount
+      totalUses
+      maxUses
+      active
+      usedBy { phone bookingId usedAt }
+      createdAt
+    }
+  }
+`;
+
+export const GET_REFERRAL_SETTINGS = gql`
+  query GetReferralSettings {
+    getReferralSettings {
+      enabled
+      discountAmount
+      maxUsesPerCode
+    }
+  }
 `;
 
 // ─── Dashboard Query ─────────────────────────────────
@@ -467,6 +548,7 @@ export const GET_DEPARTURES = gql`
     thingsToCarry
     contact
     meetingPoint
+    pickupTime
     transport
     imageUrl
     brochureUrl
@@ -517,6 +599,7 @@ export const GET_DEPARTURE = gql`
     thingsToCarry
     contact
     meetingPoint
+    pickupTime
     transport
     imageUrl
     brochureUrl
@@ -1242,6 +1325,20 @@ export const GET_COUPON = gql`
       isActive
       createdAt
       updatedAt
+    }
+  }
+`;
+
+// ─── Fill Nudge ("filling up" visitor nudge) ──────────────
+export const GET_FILL_NUDGE_STATS = gql`
+  query GetFillNudgeStats($departureId: ID) {
+    getFillNudgeStats(departureId: $departureId) {
+      departureId
+      depUniqueId
+      trekName
+      nudgesSent
+      converted
+      conversionRate
     }
   }
 `;

@@ -353,6 +353,7 @@ export const CREATE_DEPARTURE = gql`
       thingsToCarry
       contact
       meetingPoint
+      pickupTime
       transport
       imageUrl
       brochureUrl
@@ -403,6 +404,7 @@ export const UPDATE_DEPARTURE = gql`
       thingsToCarry
       contact
       meetingPoint
+      pickupTime
       transport
       imageUrl
       brochureUrl
@@ -1118,5 +1120,37 @@ export const TOGGLE_COUPON = gql`
       code
       isActive
     }
+  }
+`;
+
+// ─── Waitlist Mutations ──────────────────────────────
+export const REMOVE_FROM_WAITLIST = gql`
+  mutation RemoveFromWaitlist($departureId: ID!, $phone: String!) {
+    removeFromWaitlist(departureId: $departureId, phone: $phone)
+  }
+`;
+
+// ─── Referral Mutations ──────────────────────────────
+export const UPDATE_REFERRAL = gql`
+  mutation UpdateReferral($id: ID!, $input: UpdateReferralInput!) {
+    updateReferral(id: $id, input: $input) {
+      _id
+      discountAmount
+      maxUses
+      active
+    }
+  }
+`;
+
+export const UPDATE_REFERRAL_SETTINGS = gql`
+  mutation UpdateReferralSettings($input: ReferralSettingsInput!) {
+    updateReferralSettings(input: $input)
+  }
+`;
+
+// ─── Fill Nudge Mutations ──────────────────────────────
+export const TRIGGER_FILL_NUDGE = gql`
+  mutation TriggerFillNudge($departureId: ID!) {
+    triggerFillNudge(departureId: $departureId)
   }
 `;
