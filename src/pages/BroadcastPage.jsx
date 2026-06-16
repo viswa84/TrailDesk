@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@apollo/client/react';
-import { GET_CITIES, GET_TREKS } from '../graphql/queries';
+import { GET_CITIES, GET_TREKS, GET_DEPARTURES } from '../graphql/queries';
 import { useToast } from '../context/ToastContext';
-import { parseTemplateSpec, buildTemplateComponents, totalParamCount } from '../utils/whatsappTemplate';
+import { parseTemplateSpec, buildTemplateComponents, totalParamCount, bodyTextOf, renderTemplateText } from '../utils/whatsappTemplate';
+import { resolveDepartureValues, TEMPLATE_DEPARTURE_MAP, applyDepartureToParams } from '../utils/departureTemplateFill';
 import { Send, Users, AlertTriangle, Loader2, Megaphone, RefreshCcw, ChevronDown, ChevronRight, History, IndianRupee, Search } from 'lucide-react';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080/').replace(/\/$/, '');
@@ -24,6 +25,24 @@ async function api(path, options = {}) {
 
 const BOOKING_STATUSES = ['pending', 'paid', 'partial', 'failed'];
 
+// Personalization tokens resolved per-recipient by the backend at send time.
+// Sample values drive the live preview so the admin sees a realistic message.
+const PERSONALIZATION_TOKENS = [
+  { token: '{{name}}', label: 'Name', sample: 'Rahul' },
+  { token: '{{firstName}}', label: 'First name', sample: 'Rahul' },
+  { token: '{{trek}}', label: 'Trek', sample: 'Jivdhan Valley Trek' },
+  { token: '{{city}}', label: 'City', sample: 'Pune' },
+  { token: '{{date}}', label: 'Date', sample: '15 Jun 2026' },
+];
+
+function applySampleTokens(text) {
+  let out = text || '';
+  for (const t of PERSONALIZATION_TOKENS) {
+    out = out.replace(new RegExp(t.token.replace(/[{}]/g, '\\$&'), 'gi'), t.sample);
+  }
+  return out;
+}
+
 const emptyFilters = {
   lastInboundFrom: '',
   lastInboundTo: '',
@@ -41,6 +60,14 @@ export default function BroadcastPage() {
   const treks  = treksData?.getTreks  || [];
 
   const [filters, setFilters] = useState(emptyFilters);
+
+  // Departures available for optional auto-fill — narrowed by the trek/city filters.
+  const { data: depData } = useQuery(GET_DEPARTURES, {
+    variables: { trekId: filters.trekId || undefined, cityId: filters.cityId || undefined },
+    fetchPolicy: 'cache-first',
+  });
+  const departures = depData?.getDepartures || [];
+  const [selectedDepartureId, setSelectedDepartureId] = useState('');
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState('');
@@ -65,23 +92,50 @@ export default function BroadcastPage() {
     () => (selectedTemplateObj ? parseTemplateSpec(selectedTemplateObj.components) : null),
     [selectedTemplateObj]
   );
+  const tmplName = selectedTemplateObj?.name;
+  const selectedDepartureObj = useMemo(
+    () => departures.find((d) => d._id === selectedDepartureId),
+    [departures, selectedDepartureId]
+  );
 
   // Param values: { headerParams: [], bodyParams: [], buttonParams: { [index]: [] }, headerMedia: { url, filename } }
   const [paramValues, setParamValues] = useState({ headerParams: [], bodyParams: [], buttonParams: {}, headerMedia: { url: '', filename: '' } });
   // Reset param values when the selected template changes
   useEffect(() => {
     setParamValues({ headerParams: [], bodyParams: [], buttonParams: {}, headerMedia: { url: '', filename: '' } });
+    setSelectedDepartureId('');
   }, [selectedTemplate]);
 
   const isHttpsUrl = (u) => /^https:\/\/\S+$/i.test((u || '').trim());
 
-  // Append the per-recipient {{name}} token to a header/body text variable.
-  // The backend substitutes {{name}} with each recipient's name at send time.
-  const insertNameToken = (group, i) => {
+  // Append a per-recipient personalization token to a header/body text variable.
+  // The backend resolves these tokens (name/firstName/trek/city/date) per recipient.
+  const insertToken = (group, i, token) => {
     setParamValues((prev) => {
       const next = [...(prev[group] || [])];
-      next[i] = `${next[i] || ''}{{name}}`;
+      next[i] = `${next[i] || ''}${token}`;
       return { ...prev, [group]: next };
+    });
+  };
+
+  // Overwrite a header/body text variable with a value (used by the per-field
+  // departure insert buttons). Replaces rather than appends.
+  const setParamValue = (group, i, value) => {
+    setParamValues((prev) => {
+      const next = [...(prev[group] || [])];
+      next[i] = String(value ?? '');
+      return { ...prev, [group]: next };
+    });
+  };
+
+  // Overwrite a button-suffix value with a departure value. Mirrors the button
+  // onChange shape ({ buttonParams: { [index]: [] } }).
+  const setButtonParam = (index, i, value) => {
+    setParamValues((prev) => {
+      const existing = prev.buttonParams[index] || [];
+      const next = [...existing];
+      next[i] = String(value ?? '');
+      return { ...prev, buttonParams: { ...prev.buttonParams, [index]: next } };
     });
   };
 
@@ -320,11 +374,19 @@ export default function BroadcastPage() {
       // Phones the user explicitly unchecked in the recipient table.
       const excludePhones = recipientList.filter((r) => !r.checked).map((r) => r.phone);
 
+      // Human-readable body for per-recipient chat logging. May still contain
+      // personalization tokens ({{name}} etc.) — the server resolves them per recipient.
+      const displayText = renderTemplateText(
+        bodyTextOf(selectedTemplateObj.components),
+        paramValues.bodyParams
+      );
+
       const body = {
         filters: buildFilterPayload(),
         templateName: selectedTemplateObj.name,
         templateLanguage: selectedTemplateObj.language,
         templateComponents,
+        displayText,
         name: campaignName.trim() || null,
         excludePhones,
       };
@@ -373,6 +435,7 @@ export default function BroadcastPage() {
     setRecipientList([]);
     setRecipientSearch('');
     setDailySentToday(0);
+    setSelectedDepartureId('');
   };
 
   return (
@@ -647,10 +710,55 @@ export default function BroadcastPage() {
               Template parameters ({totalParamCount(templateSpec)})
             </p>
             <p className="text-[11px] text-slate-500">
-              Text variables use the same value for everyone. To personalise per recipient, insert the{' '}
-              <code className="px-1 py-0.5 bg-slate-100 rounded font-mono">{'{{name}}'}</code> token —
-              it is replaced with each recipient&apos;s name at send time.
+              Text variables use the same value for everyone. To personalise per recipient, insert a token —
+              it is resolved with each recipient&apos;s data at send time. Available tokens:{' '}
+              {PERSONALIZATION_TOKENS.map((t) => (
+                <code key={t.token} className="px-1 py-0.5 mr-1 bg-slate-100 rounded font-mono">{t.token}</code>
+              ))}
             </p>
+
+            {/* ── Auto-fill from a departure (optional) ── */}
+            {departures.length > 0 && (
+              <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-lg space-y-2">
+                <label className="block text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                  Auto-fill from departure (optional)
+                </label>
+                <select
+                  value={selectedDepartureId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedDepartureId(id);
+                    const dep = departures.find((d) => d._id === id);
+                    if (dep && TEMPLATE_DEPARTURE_MAP[tmplName]) {
+                      setParamValues(applyDepartureToParams(tmplName, templateSpec, dep, paramValues));
+                    }
+                  }}
+                  className="select-field"
+                >
+                  <option value="">— Select a departure to auto-fill —</option>
+                  {departures.map((d) => {
+                    const v = resolveDepartureValues(d);
+                    const seats = Math.max(0, (d.capacity ?? 0) - (d.booked ?? 0));
+                    return (
+                      <option key={d._id} value={d._id}>
+                        {`${d.trekName} — ${d.cityName || ''} — ${v.startDate} (${seats} seats left)`}
+                      </option>
+                    );
+                  })}
+                </select>
+                {selectedDepartureObj && (
+                  TEMPLATE_DEPARTURE_MAP[tmplName] ? (
+                    <p className="text-[11px] text-emerald-700">
+                      Auto-filled from this departure — edit any field below.
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">
+                      This template has no auto-map — use the + buttons on each field to insert this departure&apos;s values.
+                    </p>
+                  )
+                )}
+              </div>
+            )}
 
             {templateSpec.headerMediaFormat && (() => {
               const fmt = templateSpec.headerMediaFormat;
@@ -693,15 +801,31 @@ export default function BroadcastPage() {
             {templateSpec.headerParamCount > 0 &&
               Array.from({ length: templateSpec.headerParamCount }, (_, i) => (
                 <div key={`h-${i}`}>
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                     <label className="text-xs font-medium text-slate-700">Header {`{{${i + 1}}}`}</label>
-                    <button
-                      type="button"
-                      onClick={() => insertNameToken('headerParams', i)}
-                      className="text-[10px] text-primary-600 hover:underline"
-                    >
-                      + Insert {'{{name}}'}
-                    </button>
+                    <div className="flex flex-wrap gap-1">
+                      {PERSONALIZATION_TOKENS.map((t) => (
+                        <button
+                          key={t.token}
+                          type="button"
+                          onClick={() => insertToken('headerParams', i, t.token)}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-600 hover:bg-primary-100"
+                        >
+                          + {t.label}
+                        </button>
+                      ))}
+                      {selectedDepartureObj && (() => {
+                        const dv = resolveDepartureValues(selectedDepartureObj);
+                        return (
+                          <>
+                            <button type="button" onClick={() => setParamValue('headerParams', i, dv.trekName)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Trek</button>
+                            <button type="button" onClick={() => setParamValue('headerParams', i, dv.seatsAvailable)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Seats</button>
+                            <button type="button" onClick={() => setParamValue('headerParams', i, dv.startDate)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Date</button>
+                            <button type="button" onClick={() => setParamValue('headerParams', i, dv.price)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Price</button>
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                   <input
                     value={paramValues.headerParams[i] || ''}
@@ -710,7 +834,7 @@ export default function BroadcastPage() {
                       next[i] = e.target.value;
                       setParamValues({ ...paramValues, headerParams: next });
                     }}
-                    placeholder={`Value for {{${i + 1}}} (or {{name}})`}
+                    placeholder={`Value for {{${i + 1}}} (or a token)`}
                     className="input-field text-sm"
                   />
                 </div>
@@ -719,15 +843,31 @@ export default function BroadcastPage() {
             {templateSpec.bodyParamCount > 0 &&
               Array.from({ length: templateSpec.bodyParamCount }, (_, i) => (
                 <div key={`b-${i}`}>
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                     <label className="text-xs font-medium text-slate-700">Body {`{{${i + 1}}}`}</label>
-                    <button
-                      type="button"
-                      onClick={() => insertNameToken('bodyParams', i)}
-                      className="text-[10px] text-primary-600 hover:underline"
-                    >
-                      + Insert {'{{name}}'}
-                    </button>
+                    <div className="flex flex-wrap gap-1">
+                      {PERSONALIZATION_TOKENS.map((t) => (
+                        <button
+                          key={t.token}
+                          type="button"
+                          onClick={() => insertToken('bodyParams', i, t.token)}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-600 hover:bg-primary-100"
+                        >
+                          + {t.label}
+                        </button>
+                      ))}
+                      {selectedDepartureObj && (() => {
+                        const dv = resolveDepartureValues(selectedDepartureObj);
+                        return (
+                          <>
+                            <button type="button" onClick={() => setParamValue('bodyParams', i, dv.trekName)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Trek</button>
+                            <button type="button" onClick={() => setParamValue('bodyParams', i, dv.seatsAvailable)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Seats</button>
+                            <button type="button" onClick={() => setParamValue('bodyParams', i, dv.startDate)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Date</button>
+                            <button type="button" onClick={() => setParamValue('bodyParams', i, dv.price)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Price</button>
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                   <input
                     value={paramValues.bodyParams[i] || ''}
@@ -736,7 +876,7 @@ export default function BroadcastPage() {
                       next[i] = e.target.value;
                       setParamValues({ ...paramValues, bodyParams: next });
                     }}
-                    placeholder={`Value for body {{${i + 1}}} (or {{name}})`}
+                    placeholder={`Value for body {{${i + 1}}} (or a token)`}
                     className="input-field text-sm"
                   />
                 </div>
@@ -745,9 +885,20 @@ export default function BroadcastPage() {
             {templateSpec.buttonParams.map((b) =>
               Array.from({ length: b.placeholderCount }, (_, i) => (
                 <div key={`btn-${b.index}-${i}`}>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Button #{b.index + 1} link value — departure ID / token / txnid {`{{${i + 1}}}`}
-                  </label>
+                  <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+                    <label className="text-xs font-medium text-slate-700">
+                      Button #{b.index + 1} link value — departure ID / token / txnid {`{{${i + 1}}}`} — or tap + Book link
+                    </label>
+                    {selectedDepartureObj && (
+                      <button
+                        type="button"
+                        onClick={() => setButtonParam(b.index, i, resolveDepartureValues(selectedDepartureObj).bookUrlCode)}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      >
+                        + Book link
+                      </button>
+                    )}
+                  </div>
                   <input
                     value={paramValues.buttonParams[b.index]?.[i] || ''}
                     onChange={(e) => {
@@ -769,6 +920,17 @@ export default function BroadcastPage() {
             {!allParamsFilled && (
               <p className="text-xs text-amber-600">Fill in all parameters before sending.</p>
             )}
+          </div>
+        )}
+
+        {selectedTemplateObj && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-1">
+            <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
+              Preview (sample data — actual values personalized per recipient)
+            </p>
+            <p className="text-sm text-slate-800 whitespace-pre-line">
+              {applySampleTokens(renderTemplateText(bodyTextOf(selectedTemplateObj.components), paramValues.bodyParams))}
+            </p>
           </div>
         )}
 

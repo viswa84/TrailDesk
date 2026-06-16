@@ -1148,6 +1148,16 @@ export const UPDATE_REFERRAL_SETTINGS = gql`
   }
 `;
 
+// ─── Reviews (moderation) ──────────────────────────────
+export const SET_REVIEW_STATUS = gql`
+  mutation SetReviewStatus($id: ID!, $status: String!) {
+    setReviewStatus(id: $id, status: $status) {
+      _id
+      status
+    }
+  }
+`;
+
 // ─── Fill Nudge Mutations ──────────────────────────────
 export const TRIGGER_FILL_NUDGE = gql`
   mutation TriggerFillNudge($departureId: ID!) {

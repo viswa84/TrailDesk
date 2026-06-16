@@ -1,10 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { useState } from 'react';
-import { GET_DEPARTURE, GET_PARTICIPANTS_BY_DEPARTURE, GET_BOARDING_POINTS, GET_TREKS, GET_WAITLIST, GET_FILL_NUDGE_STATS } from '../graphql/queries';
+import { GET_DEPARTURE, GET_PARTICIPANTS_BY_DEPARTURE, GET_BOARDING_POINTS, GET_TREKS, GET_WAITLIST, GET_FILL_NUDGE_STATS, GET_COMPANY_PROFILE } from '../graphql/queries';
 import { CREATE_PARTICIPANT, DELETE_PARTICIPANT, COLLECT_PENDING_PAYMENT, MARK_REFUNDED, UPDATE_DEPARTURE, REMOVE_FROM_WAITLIST, TRIGGER_FILL_NUDGE } from '../graphql/mutations';
 import { format, parseISO, differenceInDays } from 'date-fns';
-import { ArrowLeft, MapPin, Clock, Users, IndianRupee, Phone, User, CalendarDays, FileText, Building2, AlertTriangle, Plus, Trash2, X, Download, Navigation, CreditCard, Copy, ExternalLink, Link2, Edit, Zap, Send } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Users, IndianRupee, Phone, User, CalendarDays, FileText, Building2, AlertTriangle, Plus, Trash2, X, Download, Navigation, CreditCard, Copy, ExternalLink, Link2, Edit, Zap, Send, Image as ImageIcon, MessageCircle } from 'lucide-react';
+import { buildWhatsAppBookingLink } from '../utils/whatsappDeepLink';
 import StatusBadge from '../components/ui/StatusBadge';
 import Modal from '../components/ui/Modal';
 import DatePickerInput from '../components/ui/DatePickerInput';
@@ -14,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCities } from '../hooks/useCities';
 import { useGuides } from '../hooks/useGuides';
 import { v, validateForm } from '../utils/validators';
+import { getErrorMessage } from '../utils/errors';
 
 // ── WaitlistSection: people waiting for a seat on a full/almost-full batch ──
 function WaitlistSection({ departureId, toast }) {
@@ -164,6 +166,159 @@ function FillNudgeSection({ departureId, toast }) {
     );
 }
 
+// ── TrekPhotosSection: post-trek photo gallery + send-to-participants ────────
+// Photos upload to R2 via a multipart REST endpoint, then the gallery URL is
+// shared with paid participants through an approved WhatsApp template.
+function TrekPhotosSection({ departureId, galleryUrls, toast, refetch }) {
+    const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '');
+    const token = localStorage.getItem('trekops_token') || '';
+    const [uploading, setUploading] = useState(false);
+    const [sendingPhotos, setSendingPhotos] = useState(false);
+    const [sendingCerts, setSendingCerts] = useState(false);
+    const photos = galleryUrls || [];
+
+    const authHeaders = { Authorization: `Bearer ${token}` };
+
+    const handleUpload = async (e) => {
+        const files = Array.from(e.target.files || []);
+        e.target.value = '';
+        if (files.length === 0) return;
+        setUploading(true);
+        try {
+            const fd = new FormData();
+            files.forEach((f) => fd.append('files', f));
+            const res = await fetch(`${API_BASE}/api/departures/${departureId}/photos`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: fd,
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Upload failed');
+            toast?.success?.(`${json.added} photo${json.added === 1 ? '' : 's'} uploaded`);
+            refetch?.();
+        } catch (err) {
+            toast?.error?.(err.message || 'Failed to upload photos');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleDelete = async (url) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/departures/${departureId}/photos`, {
+                method: 'DELETE',
+                headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Delete failed');
+            toast?.success?.('Photo removed');
+            refetch?.();
+        } catch (err) {
+            toast?.error?.(err.message || 'Failed to remove photo');
+        }
+    };
+
+    const sendPhotos = async () => {
+        if (photos.length === 0) { toast?.info?.('Upload photos first.'); return; }
+        setSendingPhotos(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/departures/${departureId}/send-photos`, {
+                method: 'POST',
+                headers: authHeaders,
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to send');
+            toast?.success?.(`Photos sent to ${json.sent}/${json.total} participant${json.total === 1 ? '' : 's'}`);
+        } catch (err) {
+            toast?.error?.(err.message || 'Failed to send photos');
+        } finally {
+            setSendingPhotos(false);
+        }
+    };
+
+    const sendCertificates = async () => {
+        setSendingCerts(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/departures/${departureId}/send-certificates`, {
+                method: 'POST',
+                headers: authHeaders,
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to send');
+            toast?.success?.(`Certificates sent to ${json.sent}/${json.total} participant${json.total === 1 ? '' : 's'}`);
+        } catch (err) {
+            toast?.error?.(err.message || 'Failed to send certificates');
+        } finally {
+            setSendingCerts(false);
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-violet-500" />
+                    <h3 className="font-semibold text-slate-800">Trek Photos</h3>
+                    {photos.length > 0 && (
+                        <span className="text-xs text-slate-400">({photos.length})</span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-violet-600 text-white hover:bg-violet-700 cursor-pointer disabled:opacity-50">
+                        <Plus className="w-3.5 h-3.5" />
+                        {uploading ? 'Uploading…' : 'Add Photos'}
+                        <input
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                            multiple
+                            className="hidden"
+                            disabled={uploading}
+                            onChange={handleUpload}
+                        />
+                    </label>
+                    <button
+                        onClick={sendPhotos}
+                        disabled={sendingPhotos || photos.length === 0}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
+                        title="Send the gallery link to all paid participants"
+                    >
+                        <Send className="w-3.5 h-3.5" />
+                        {sendingPhotos ? 'Sending…' : 'Send Photos'}
+                    </button>
+                    <button
+                        onClick={sendCertificates}
+                        disabled={sendingCerts}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
+                        title="Generate and send completion certificates to all paid participants"
+                    >
+                        <Send className="w-3.5 h-3.5" />
+                        {sendingCerts ? 'Sending…' : 'Send Certificates'}
+                    </button>
+                </div>
+            </div>
+            {photos.length === 0 ? (
+                <p className="text-sm text-slate-400">No photos yet. Upload images to share with participants after the trek.</p>
+            ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                    {photos.map((p, i) => (
+                        <div key={p.url + i} className="relative group aspect-square rounded-lg overflow-hidden bg-slate-100">
+                            <img src={p.url} alt={`Trek photo ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                            <button
+                                onClick={() => handleDelete(p.url)}
+                                className="absolute top-1 right-1 p-1 rounded-md bg-black/55 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                title="Remove photo"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ── CityBoardingSection: per-city boarding-point checkbox list ──────────────
 function CityBoardingSection({ cityName, cityId, selectedBpIds, onBpToggle }) {
     const { data, loading } = useQuery(GET_BOARDING_POINTS, {
@@ -224,6 +379,8 @@ export default function BatchDetailPage() {
 
     const { data: depData, loading: depLoading, refetch: refetchDeparture } = useQuery(GET_DEPARTURE, { variables: { id } });
     const { data: partData, loading: partLoading, refetch: refetchParticipants } = useQuery(GET_PARTICIPANTS_BY_DEPARTURE, { variables: { departureId: id } });
+    const { data: companyData } = useQuery(GET_COMPANY_PROFILE);
+    const businessWhatsappNumber = companyData?.getCompanyProfile?.businessWhatsappNumber || '';
     const departure = depData?.getDeparture;
     const { data: bpData } = useQuery(GET_BOARDING_POINTS, {
         variables: { cityId: departure?.cityId },
@@ -379,7 +536,7 @@ export default function BatchDetailPage() {
             setEditErrors({});
             refetchDeparture();
         } catch (err) {
-            toast.error(err.message || 'Failed to update departure');
+            toast.error(getErrorMessage(err, 'Failed to update departure'));
         }
     };
 
@@ -435,6 +592,7 @@ export default function BatchDetailPage() {
             refetchParticipants();
         } catch (err) {
             console.error('Failed to add participants:', err);
+            toast.error(getErrorMessage(err, 'Failed to add participants'));
         }
     };
 
@@ -457,6 +615,7 @@ export default function BatchDetailPage() {
             refetchParticipants();
         } catch (err) {
             console.error('Failed to collect payment:', err);
+            toast.error(getErrorMessage(err, 'Failed to collect payment'));
         }
     };
 
@@ -473,6 +632,7 @@ export default function BatchDetailPage() {
             refetchDeparture();
         } catch (err) {
             console.error('Failed to delete participant:', err);
+            toast.error(getErrorMessage(err, 'Failed to delete participant'));
         }
     };
 
@@ -534,6 +694,27 @@ export default function BatchDetailPage() {
         ? `${PUBLIC_BASE}/book/${companyCodeForUrl}/${trekCodeForUrl}`
         : `${PUBLIC_BASE}/book/trek/${departure.trekId}`
       : null;
+
+    // Click-to-WhatsApp booking deep link for this departure. Empty until the
+    // company sets their WhatsApp number in Settings.
+    const whatsappBookingLink = buildWhatsAppBookingLink({
+      businessWhatsappNumber,
+      trekName: departure.trekName,
+      code: departure.departureCode || departure.uniqueId,
+    });
+
+    const handleCopyWhatsAppLink = async () => {
+      if (!whatsappBookingLink) {
+        toast.info('Set your WhatsApp number in Settings to generate booking links');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(whatsappBookingLink);
+        toast.success('WhatsApp booking link copied!');
+      } catch {
+        toast.error('Failed to copy link');
+      }
+    };
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -670,6 +851,42 @@ export default function BatchDetailPage() {
                 </p>
               </div>
             )}
+
+            {/* WhatsApp booking deep link — tap-to-chat, bot starts this departure's booking */}
+            <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                    <MessageCircle className="w-4 h-4 text-emerald-500" />
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">WhatsApp Booking Link</p>
+                </div>
+                {whatsappBookingLink ? (
+                  <>
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+                        <span className="flex-1 font-mono text-sm text-emerald-700 truncate">{whatsappBookingLink}</span>
+                        <button
+                            onClick={handleCopyWhatsAppLink}
+                            className="p-1.5 hover:bg-white rounded-lg shrink-0 transition-colors"
+                            title="Copy WhatsApp booking link"
+                        >
+                            <Copy className="w-4 h-4 text-slate-400" />
+                        </button>
+                        <a
+                            href={whatsappBookingLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 hover:bg-white rounded-lg shrink-0 transition-colors"
+                            title="Open in new tab"
+                        >
+                            <ExternalLink className="w-4 h-4 text-slate-400" />
+                        </a>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5">Share this in your WhatsApp groups. When a customer taps and sends it, the bot captures their number and starts booking <strong>this departure</strong>.</p>
+                  </>
+                ) : (
+                  <p className="text-[11px] text-slate-400">
+                    Set your WhatsApp number in <strong>Settings</strong> to generate a click-to-WhatsApp booking link for this departure.
+                  </p>
+                )}
+            </div>
 
             {/* Details */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -974,7 +1191,14 @@ export default function BatchDetailPage() {
                                         {isPartial && bookingDate && <span className="text-[11px] text-slate-400">{bookingDate}</span>}
                                         {hasRefund && !isPartial && (
                                             <button
-                                                onClick={async () => { await markRefunded({ variables: { bookingId: booking.bookingId } }); refetchParticipants(); }}
+                                                onClick={async () => {
+                                                    try {
+                                                        await markRefunded({ variables: { bookingId: booking.bookingId } });
+                                                        refetchParticipants();
+                                                    } catch (err) {
+                                                        toast.error(getErrorMessage(err, 'Failed to mark refunded'));
+                                                    }
+                                                }}
                                                 className="ml-auto flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors cursor-pointer"
                                             >
                                                 ✓ Mark Refunded
@@ -1061,6 +1285,14 @@ export default function BatchDetailPage() {
             {(departure.status === 'Full' || departure.status === 'Almost Full') && (
                 <WaitlistSection departureId={id} toast={toast} />
             )}
+
+            {/* ──────────────────── POST-TREK PHOTOS & CERTIFICATES ──────────────────── */}
+            <TrekPhotosSection
+                departureId={id}
+                galleryUrls={departure.galleryUrls}
+                toast={toast}
+                refetch={refetchDeparture}
+            />
 
             {/* ──────────────────── EDIT DEPARTURE MODAL ──────────────────── */}
             <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setEditErrors({}); }} title="Edit Departure" size="lg" confirmOnClose>

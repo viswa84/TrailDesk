@@ -20,14 +20,17 @@ import MarketingPage from './pages/MarketingPage';
 import BroadcastPage from './pages/BroadcastPage';
 import SettingsPage from './pages/SettingsPage';
 import TrafficPage from './pages/TrafficPage';
+import GrowthPage from './pages/GrowthPage';
 import SupportChatPage from './pages/SupportChatPage';
 import WhatsAppFlowPage from './pages/WhatsAppFlowPage';
 import FlowBuilderPage from './pages/FlowBuilderPage';
 import SuperAdminPage  from './pages/SuperAdminPage';
 import CouponsPage from './pages/CouponsPage';
 import ReferralPage from './pages/ReferralPage';
+import ReviewsPage from './pages/ReviewsPage';
 import TemplatesPage from './pages/TemplatesPage';
 import AiLogsPage from './pages/AiLogsPage';
+import AiUsagePage from './pages/AiUsagePage';
 
 function PrivacyPolicyPage() {
   useEffect(() => { window.location.replace('/privacy-policy/index.html'); }, []);
@@ -94,9 +97,12 @@ function App() {
               <Route path="/flow-builder" element={<FlowBuilderPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/traffic" element={<TrafficPage />} />
+              <Route path="/growth" element={<GrowthPage />} />
               <Route path="/coupons" element={<CouponsPage />} />
               <Route path="/referrals" element={<ReferralPage />} />
+              <Route path="/reviews" element={<ReviewsPage />} />
               <Route path="/ai-logs" element={<AiLogsPage />} />
+              <Route path="/ai-usage" element={<AiUsagePage />} />
             </Route>
 
             {/* Super Admin only route */}

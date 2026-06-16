@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useCustomers } from '../hooks/useCustomers';
 import { useToast } from '../context/ToastContext';
 import { v, validateForm, onlyDigits } from '../utils/validators';
+import { getErrorMessage } from '../utils/errors';
 import Modal from '../components/ui/Modal';
 import StatusBadge from '../components/ui/StatusBadge';
 import { Search, Plus, Edit, Trash2, Users, Mail, Phone, X } from 'lucide-react';
@@ -37,25 +38,37 @@ export default function CustomersPage() {
     setShowForm(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const { valid, errors: errs } = validateForm({
       name: v.required(formData.name, 'Name'),
       email: v.email(formData.email),
       phone: v.phone(formData.phone),
     });
     if (!valid) { setErrors(errs); toast.error('Please fix the form errors'); return; }
-    if (editingCustomer) {
-      updateCustomer(editingCustomer.id, { ...formData });
-      toast.success('Customer updated');
-    } else {
-      addCustomer({ ...formData });
-      toast.success('Customer added');
+    try {
+      if (editingCustomer) {
+        await updateCustomer(editingCustomer.id, { ...formData });
+        toast.success('Customer updated');
+      } else {
+        await addCustomer({ ...formData });
+        toast.success('Customer added');
+      }
+      setShowForm(false);
+      setErrors({});
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to save customer'));
     }
-    setShowForm(false);
-    setErrors({});
   };
 
-  const handleDelete = (id) => { removeCustomer(id); setShowDeleteConfirm(null); toast.success('Customer deleted'); };
+  const handleDelete = async (id) => {
+    try {
+      await removeCustomer(id);
+      setShowDeleteConfirm(null);
+      toast.success('Customer deleted');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to delete customer'));
+    }
+  };
 
   const addTag = () => {
     if (newTag.trim() && !formData.tags.includes(newTag.trim())) {

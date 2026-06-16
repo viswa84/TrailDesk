@@ -5,7 +5,27 @@ import { SEND_MESSAGE } from '../graphql/mutations';
 import { io } from 'socket.io-client';
 import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, PhoneOff, PhoneIncoming, Mic, MicOff, Check, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X, Image, Film, Music, File, AlertCircle, Bot, BotOff, UserPlus, UserMinus, UserCheck, Info, Clock, Lock } from 'lucide-react';
 import { useWhatsAppCall } from '../hooks/useWhatsAppCall';
-import { parseTemplateSpec, buildTemplateComponents, totalParamCount } from '../utils/whatsappTemplate';
+import { parseTemplateSpec, buildTemplateComponents, totalParamCount, bodyTextOf, renderTemplateText } from '../utils/whatsappTemplate';
+import { resolveDepartureValues, TEMPLATE_DEPARTURE_MAP, applyDepartureToParams } from '../utils/departureTemplateFill';
+
+// Personalization tokens shared with the marketing broadcast page. The backend
+// resolves these per-recipient at send time; sample values drive the live preview.
+const PERSONALIZATION_TOKENS = [
+  { token: '{{name}}', label: 'Name', sample: 'Rahul' },
+  { token: '{{firstName}}', label: 'First name', sample: 'Rahul' },
+  { token: '{{trek}}', label: 'Trek', sample: 'Jivdhan Valley Trek' },
+  { token: '{{city}}', label: 'City', sample: 'Pune' },
+  { token: '{{date}}', label: 'Date', sample: '15 Jun 2026' },
+];
+
+// Replace personalization tokens with sample values for a realistic preview.
+function applySampleTokens(text) {
+  let out = text || '';
+  for (const t of PERSONALIZATION_TOKENS) {
+    out = out.replace(new RegExp(t.token.replace(/[{}]/g, '\\$&'), 'gi'), t.sample);
+  }
+  return out;
+}
 
 function DeliveryTick({ status, failureReason }) {
   if (status === 'read') return <CheckCheck className="w-3.5 h-3.5 text-blue-300" title="Read" />;
@@ -687,17 +707,29 @@ export default function SupportChatPage() {
   const [paramValues, setParamValues] = useState({ headerParams: [], bodyParams: [], buttonParams: {} });
   const [sendingTemplate, setSendingTemplate] = useState(false);
 
+  // Departure auto-fill for the template modal (mirrors the Broadcast page). All
+  // departures load here — there is no trek/city filter context in single-chat.
+  const { data: chatDepData } = useQuery(GET_DEPARTURES, { fetchPolicy: 'cache-first' });
+  const chatDepartures = chatDepData?.getDepartures || [];
+  const [tmplDepartureId, setTmplDepartureId] = useState('');
+
   const pickedTemplateObj = useMemo(
     () => templates.find((t) => `${t.name}::${t.language}` === pickedTemplate),
     [templates, pickedTemplate]
   );
+  const pickedName = pickedTemplateObj?.name;
   const templateSpec = useMemo(
     () => (pickedTemplateObj ? parseTemplateSpec(pickedTemplateObj.components) : null),
     [pickedTemplateObj]
   );
+  const tmplDepartureObj = useMemo(
+    () => chatDepartures.find((d) => d._id === tmplDepartureId),
+    [chatDepartures, tmplDepartureId]
+  );
 
   useEffect(() => {
     setParamValues({ headerParams: [], bodyParams: [], buttonParams: {} });
+    setTmplDepartureId('');
   }, [pickedTemplate]);
 
   const loadWindow = useCallback(async (phone) => {
@@ -736,11 +768,40 @@ export default function SupportChatPage() {
   // Refresh window state when active conversation changes or a new inbound arrives.
   useEffect(() => { loadWindow(activePhone); }, [activePhone, loadWindow]);
 
+  // Insert a personalization token into a header/body param input (appends to value).
+  const insertTokenChat = useCallback((group, i, token) => {
+    setParamValues((prev) => {
+      const next = [...(prev[group] || [])];
+      next[i] = `${next[i] || ''}${token}`;
+      return { ...prev, [group]: next };
+    });
+  }, []);
+
+  // Overwrite a header/body text variable with a departure value (replaces, not appends).
+  const setParamValueChat = useCallback((group, i, value) => {
+    setParamValues((prev) => {
+      const next = [...(prev[group] || [])];
+      next[i] = String(value ?? '');
+      return { ...prev, [group]: next };
+    });
+  }, []);
+
+  // Overwrite a button-suffix value with a departure value. Mirrors the button onChange shape.
+  const setButtonParamChat = useCallback((index, i, value) => {
+    setParamValues((prev) => {
+      const existing = prev.buttonParams[index] || [];
+      const next = [...existing];
+      next[i] = String(value ?? '');
+      return { ...prev, buttonParams: { ...prev.buttonParams, [index]: next } };
+    });
+  }, []);
+
   const sendTemplate = useCallback(async () => {
     if (!activePhone || !pickedTemplateObj) return;
     setSendingTemplate(true);
     try {
       const components = templateSpec ? buildTemplateComponents(templateSpec, paramValues) : [];
+      const displayText = renderTemplateText(bodyTextOf(pickedTemplateObj.components), paramValues.bodyParams);
       const token = localStorage.getItem('trekops_token');
       const res = await fetch(`${API_URL}/api/chat/${activePhone}/template`, {
         method: 'POST',
@@ -749,12 +810,14 @@ export default function SupportChatPage() {
           name: pickedTemplateObj.name,
           language: pickedTemplateObj.language,
           components,
+          displayText,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setShowTemplatePicker(false);
       setPickedTemplate('');
+      setTmplDepartureId('');
       // Backend marked the lead "contacted" — refetch so it flips to Replied.
       refetchChats();
       // Optimistic: socket will push the saved ChatMessage shortly.
@@ -1141,12 +1204,11 @@ export default function SupportChatPage() {
           ? 'Your session has expired. Please log out and log in again to send files.'
           : (data?.error || `Send failed (HTTP ${res.status})`);
         setFilesSendError(errMsg);
-        // If the backend partially succeeded (some files failed), still clear attachments
-        // so the admin doesn't accidentally re-send. The failed messages are in the chat.
-        if (res.status !== 401 && res.status !== 403) {
-          setAttachedFiles([]);
-          setMessage('');
-        }
+        // Clear attachments on any failure — including 401/403 — so the admin
+        // can't keep retrying with a dead token; the error message tells them
+        // to log in again. Failed messages (partial success) are in the chat.
+        setAttachedFiles([]);
+        setMessage('');
         return;
       }
       // Partial failure: some files were sent, some failed.
@@ -1349,7 +1411,11 @@ export default function SupportChatPage() {
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
                       <p className="text-xs text-slate-500 truncate">{contact.lastMessage || (contact.source === 'session' ? `Bot step: ${contact.step}` : 'No messages')}</p>
-                      {contact.messageCount > 0 && <span className="ml-2 shrink-0 text-[10px] text-slate-400">{contact.messageCount}</span>}
+                      {contact.unreadCount > 0 && (
+                        <span className="ml-2 shrink-0 min-w-[18px] h-[18px] px-1.5 inline-flex items-center justify-center rounded-full bg-emerald-500 text-white text-[10px] font-semibold">
+                          {contact.unreadCount > 99 ? '99+' : contact.unreadCount}
+                        </span>
+                      )}
                     </div>
                     {/* Lead status chip + AI status badge + assigned guide chip */}
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -2134,7 +2200,7 @@ export default function SupportChatPage() {
       {showTemplatePicker && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowTemplatePicker(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowTemplatePicker(false); setTmplDepartureId(''); } }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -2145,7 +2211,7 @@ export default function SupportChatPage() {
                 <h2 className="text-base font-bold text-slate-900">Send Template Message</h2>
               </div>
               <button
-                onClick={() => setShowTemplatePicker(false)}
+                onClick={() => { setShowTemplatePicker(false); setTmplDepartureId(''); }}
                 className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4 text-slate-500" />
@@ -2196,6 +2262,48 @@ export default function SupportChatPage() {
                 </div>
               )}
 
+              {pickedTemplateObj && chatDepartures.length > 0 && (
+                <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-lg space-y-2">
+                  <label className="block text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                    Auto-fill from departure (optional)
+                  </label>
+                  <select
+                    value={tmplDepartureId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setTmplDepartureId(id);
+                      const dep = chatDepartures.find((d) => d._id === id);
+                      if (dep && TEMPLATE_DEPARTURE_MAP[pickedName]) {
+                        setParamValues(applyDepartureToParams(pickedName, templateSpec, dep, paramValues));
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                  >
+                    <option value="">— Select a departure to auto-fill —</option>
+                    {chatDepartures.map((d) => {
+                      const v = resolveDepartureValues(d);
+                      const seats = Math.max(0, (d.capacity ?? 0) - (d.booked ?? 0));
+                      return (
+                        <option key={d._id} value={d._id}>
+                          {`${d.trekName} — ${d.cityName || ''} — ${v.startDate} (${seats} seats left)`}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {tmplDepartureObj && (
+                    TEMPLATE_DEPARTURE_MAP[pickedName] ? (
+                      <p className="text-[11px] text-emerald-700">
+                        Auto-filled from this departure — edit any field below.
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-slate-500">
+                        This template has no auto-map — use the + buttons on each field to insert this departure&apos;s values.
+                      </p>
+                    )
+                  )}
+                </div>
+              )}
+
               {templateSpec && totalParamCount(templateSpec) > 0 && (
                 <div className="space-y-3 p-3 border border-slate-200 rounded-lg">
                   <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
@@ -2204,7 +2312,32 @@ export default function SupportChatPage() {
                   {templateSpec.headerParamCount > 0 &&
                     Array.from({ length: templateSpec.headerParamCount }, (_, i) => (
                       <div key={`h-${i}`}>
-                        <label className="block text-xs font-medium text-slate-700 mb-1">Header {`{{${i + 1}}}`}</label>
+                        <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+                          <label className="text-xs font-medium text-slate-700">Header {`{{${i + 1}}}`}</label>
+                          <div className="flex flex-wrap gap-1">
+                            {PERSONALIZATION_TOKENS.map((t) => (
+                              <button
+                                key={t.token}
+                                type="button"
+                                onClick={() => insertTokenChat('headerParams', i, t.token)}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-600 hover:bg-primary-100"
+                              >
+                                + {t.label}
+                              </button>
+                            ))}
+                            {tmplDepartureObj && (() => {
+                              const dv = resolveDepartureValues(tmplDepartureObj);
+                              return (
+                                <>
+                                  <button type="button" onClick={() => setParamValueChat('headerParams', i, dv.trekName)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Trek</button>
+                                  <button type="button" onClick={() => setParamValueChat('headerParams', i, dv.seatsAvailable)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Seats</button>
+                                  <button type="button" onClick={() => setParamValueChat('headerParams', i, dv.startDate)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Date</button>
+                                  <button type="button" onClick={() => setParamValueChat('headerParams', i, dv.price)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Price</button>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
                         <input
                           value={paramValues.headerParams[i] || ''}
                           onChange={(e) => {
@@ -2219,7 +2352,32 @@ export default function SupportChatPage() {
                   {templateSpec.bodyParamCount > 0 &&
                     Array.from({ length: templateSpec.bodyParamCount }, (_, i) => (
                       <div key={`b-${i}`}>
-                        <label className="block text-xs font-medium text-slate-700 mb-1">Body {`{{${i + 1}}}`}</label>
+                        <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+                          <label className="text-xs font-medium text-slate-700">Body {`{{${i + 1}}}`}</label>
+                          <div className="flex flex-wrap gap-1">
+                            {PERSONALIZATION_TOKENS.map((t) => (
+                              <button
+                                key={t.token}
+                                type="button"
+                                onClick={() => insertTokenChat('bodyParams', i, t.token)}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-600 hover:bg-primary-100"
+                              >
+                                + {t.label}
+                              </button>
+                            ))}
+                            {tmplDepartureObj && (() => {
+                              const dv = resolveDepartureValues(tmplDepartureObj);
+                              return (
+                                <>
+                                  <button type="button" onClick={() => setParamValueChat('bodyParams', i, dv.trekName)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Trek</button>
+                                  <button type="button" onClick={() => setParamValueChat('bodyParams', i, dv.seatsAvailable)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Seats</button>
+                                  <button type="button" onClick={() => setParamValueChat('bodyParams', i, dv.startDate)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Date</button>
+                                  <button type="button" onClick={() => setParamValueChat('bodyParams', i, dv.price)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Price</button>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
                         <input
                           value={paramValues.bodyParams[i] || ''}
                           onChange={(e) => {
@@ -2234,9 +2392,20 @@ export default function SupportChatPage() {
                   {templateSpec.buttonParams.map((b) =>
                     Array.from({ length: b.placeholderCount }, (_, i) => (
                       <div key={`btn-${b.index}-${i}`}>
-                        <label className="block text-xs font-medium text-slate-700 mb-1">
-                          Button #{b.index + 1} URL {`{{${i + 1}}}`}
-                        </label>
+                        <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+                          <label className="text-xs font-medium text-slate-700">
+                            Button #{b.index + 1} URL {`{{${i + 1}}}`}
+                          </label>
+                          {tmplDepartureObj && (
+                            <button
+                              type="button"
+                              onClick={() => setButtonParamChat(b.index, i, resolveDepartureValues(tmplDepartureObj).bookUrlCode)}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            >
+                              + Book link
+                            </button>
+                          )}
+                        </div>
                         <input
                           value={paramValues.buttonParams[b.index]?.[i] || ''}
                           onChange={(e) => {
@@ -2253,13 +2422,29 @@ export default function SupportChatPage() {
                       </div>
                     ))
                   )}
+                  <p className="text-[11px] text-slate-400">
+                    Insert a token to personalize per recipient: {PERSONALIZATION_TOKENS.map((t) => t.token).join(', ')}.
+                  </p>
+                </div>
+              )}
+
+              {pickedTemplateObj && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-1">
+                  <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
+                    {tmplDepartureObj
+                      ? `Preview (using ${resolveDepartureValues(tmplDepartureObj).trekName} — actual name personalized per recipient)`
+                      : 'Preview (sample data — actual values personalized per recipient)'}
+                  </p>
+                  <p className="text-sm text-slate-800 whitespace-pre-line">
+                    {applySampleTokens(renderTemplateText(bodyTextOf(pickedTemplateObj.components), paramValues.bodyParams))}
+                  </p>
                 </div>
               )}
             </div>
 
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
               <button
-                onClick={() => setShowTemplatePicker(false)}
+                onClick={() => { setShowTemplatePicker(false); setTmplDepartureId(''); }}
                 className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
                 Cancel

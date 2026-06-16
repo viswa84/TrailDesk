@@ -26,6 +26,7 @@
  *   Socket emits `callPermissionGranted` → callState resets to 'idle' so admin can retry
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createRingtone } from '../utils/ringtone';
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '');
 
@@ -77,18 +78,42 @@ async function callApi(path, body, method = 'POST') {
   }
 }
 
+// WhatsApp Calling does NOT support Trickle ICE — the SDP we send must already
+// contain the full ICE candidate list. We therefore block until gathering
+// reaches 'complete'. Sending a candidate-less / partial offer is the #1 cause
+// of Meta's "SDP validation error" (code 138008 / subcode 2593093), so the
+// safety timeout is generous (8 s) rather than the old 3 s, which fired before
+// host+srflx gathering finished on a slow first call.
 const waitForIce = (pc) =>
   new Promise((resolve) => {
     if (pc.iceGatheringState === 'complete') return resolve();
-    const check = () => {
-      if (pc.iceGatheringState === 'complete') {
-        pc.removeEventListener('icegatheringstatechange', check);
-        resolve();
-      }
+    let settled = false;
+    let timer;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      pc.removeEventListener('icegatheringstatechange', check);
+      resolve();
     };
+    const check = () => { if (pc.iceGatheringState === 'complete') finish(); };
     pc.addEventListener('icegatheringstatechange', check);
-    setTimeout(resolve, 3000); // 3 s safety
+    timer = setTimeout(finish, 8000); // safety net for networks that never reach 'complete'
   });
+
+// Guard against shipping an SDP that WhatsApp will reject. A complete WebRTC
+// offer/answer must carry at least one ICE candidate; if gathering produced
+// none (blocked STUN, no network), fail locally with a clear message instead
+// of letting Meta return the opaque "SDP validation error".
+function assertSendableSdp(sdp) {
+  if (!sdp || !/^a=candidate:/m.test(sdp)) {
+    throw new Error(
+      'No ICE candidates were gathered for the call. Check network / STUN access — ' +
+      'WhatsApp rejects an offer with no candidates as an invalid SDP.'
+    );
+  }
+  return sdp;
+}
 
 /**
  * @param {object} opts
@@ -136,6 +161,35 @@ export function useWhatsAppCall({ socket } = {}) {
   }, []);
 
   useEffect(() => () => teardown(), [teardown]);
+
+  // ── Incoming-call ringtone ────────────────────────────────────────────────
+  // Ring while an inbound call is waiting to be answered (callState 'ringing-in')
+  // and stop the moment it's answered, rejected, missed, or ended. Synthesized
+  // via the Web Audio API (see utils/ringtone) — no audio file needed.
+  const ringtoneRef = useRef(null);
+  if (!ringtoneRef.current) ringtoneRef.current = createRingtone();
+
+  // Resume the AudioContext on the first user gesture so a later incoming call
+  // can ring even though the browser blocks audio until the page is interacted with.
+  useEffect(() => {
+    const unlock = () => ringtoneRef.current?.unlock();
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
+  // Start/stop the ringtone strictly from callState so it can never get stuck on.
+  useEffect(() => {
+    const rt = ringtoneRef.current;
+    if (callState === 'ringing-in') rt.start();
+    else rt.stop();
+  }, [callState]);
+
+  // Belt-and-suspenders: silence the ringtone if the hook unmounts mid-ring.
+  useEffect(() => () => ringtoneRef.current?.stop(), []);
 
   // ── Wire up remote audio to the <audio> element ───────────────────────────
   function attachRemoteAudio(stream) {
@@ -215,7 +269,7 @@ export function useWhatsAppCall({ socket } = {}) {
       }
     };
 
-    const onCallEvent = ({ callId, sdp, sdpType }) => {
+    const onCallEvent = ({ sdp, sdpType }) => {
       // Outbound: backend relays the answer SDP via socket when it arrives from Meta
       if (sdpType === 'answer' && sdp && pcRef.current) {
         pcRef.current
@@ -248,7 +302,6 @@ export function useWhatsAppCall({ socket } = {}) {
       socket.off('callEvent', onCallEvent);
       socket.off('callPermissionGranted', onCallPermissionGranted);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, teardown]);
 
   // ── OUTBOUND: start a call to a phone number ──────────────────────────────
@@ -267,7 +320,7 @@ export function useWhatsAppCall({ socket } = {}) {
 
       const result = await callApi('/initiate', {
         phone,
-        sdpOffer: pc.localDescription.sdp,
+        sdpOffer: assertSendableSdp(pc.localDescription.sdp),
       });
 
       activeCallIdRef.current = result.callId;
@@ -332,7 +385,7 @@ export function useWhatsAppCall({ socket } = {}) {
       // Send answer to Meta via backend
       await callApi('/answer', {
         callId,
-        sdpAnswer: pc.localDescription.sdp,
+        sdpAnswer: assertSendableSdp(pc.localDescription.sdp),
       });
 
       activeCallIdRef.current = callId;
@@ -342,6 +395,8 @@ export function useWhatsAppCall({ socket } = {}) {
       setError(e.message);
       teardown('idle');
     }
+  // buildPC is a stable module-local helper; intentionally omitted from deps.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callState, incomingCall, teardown]);
 
   // ── INBOUND: reject the ringing call ─────────────────────────────────────
@@ -363,17 +418,6 @@ export function useWhatsAppCall({ socket } = {}) {
       try { await callApi('/terminate', { callId }); } catch { /* log only */ }
     }
   }, [activeCallId, teardown]);
-
-  // ── Called after receiving answer SDP via socket for outbound calls ───────
-  const receiveAnswer = useCallback(async (sdpAnswer) => {
-    if (!pcRef.current) return;
-    try {
-      await pcRef.current.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
-      setCallState('in-call');
-    } catch (e) {
-      setError(e.message);
-    }
-  }, []);
 
   const toggleMute = useCallback(() => {
     if (!localStreamRef.current) return;
@@ -399,7 +443,6 @@ export function useWhatsAppCall({ socket } = {}) {
     rejectCall,
     terminateCall,
     toggleMute,
-    receiveAnswer,
     requestCallPermission,
   };
 }

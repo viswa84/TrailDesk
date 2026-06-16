@@ -5,7 +5,7 @@ import { useToast } from "../context/ToastContext";
 import { Navigate } from "react-router-dom";
 import {
   SUPER_ADMIN_DASHBOARD, GET_ALL_COMPANIES, GET_ALL_USERS_ADMIN, GET_PLATFORM_ACTIVITY_LOG,
-  GET_CONTACT_INQUIRIES, GET_COMPANY_DETAILS
+  GET_CONTACT_INQUIRIES, GET_COMPANY_DETAILS, GET_AI_TOKEN_USAGE_PLATFORM
 } from '../graphql/queries';
 import {
   SUSPEND_COMPANY, ACTIVATE_COMPANY, DELETE_COMPANY,
@@ -19,8 +19,11 @@ import {
   XCircle, Clock, Crown, Zap, Star, RefreshCw, Trash2, Lock, UserPlus,
   Package, Globe, Mail, Phone, Calendar, Edit3, Eye, LogOut, X, BookOpen,
   GitBranch, Database, Layers, Key, FileCode, ArrowRight, Server, Monitor,
-  MessageSquare
+  MessageSquare, Cpu, Coins, ChevronRight
 } from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+} from 'recharts';
 import { format, parseISO } from 'date-fns';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -1064,6 +1067,223 @@ function GqlRef({ name, type, auth, params, returns, description }) {
   );
 }
 
+// ── Platform AI Usage ──────────────────────────────────────────────────────────
+const aiNf = new Intl.NumberFormat('en-IN');
+const fmtTokens = (n) => aiNf.format(Math.round(n || 0));
+const fmtInr = (n) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const AI_PROVIDER_BADGE = {
+  'gemini-flash': 'bg-blue-100 text-blue-700',
+  'gemini-lite': 'bg-sky-100 text-sky-700',
+  groq: 'bg-orange-100 text-orange-700',
+};
+
+const AI_GRANULARITIES = [
+  { key: 'daily', label: 'Daily' },
+  { key: 'weekly', label: 'Weekly' },
+  { key: 'monthly', label: 'Monthly' },
+];
+
+function AiUsageTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null;
+  const row = payload[0].payload;
+  return (
+    <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-200 text-sm">
+      <p className="text-slate-500 mb-1">{label}</p>
+      <p className="font-semibold text-slate-900">{fmtTokens(row.totalTokens)} tokens</p>
+      <p className="text-xs text-slate-500">{fmtInr(row.costInr)}</p>
+    </div>
+  );
+}
+
+function CompanyUsageRow({ company }) {
+  const [open, setOpen] = useState(false);
+  const models = company.byModel || [];
+  return (
+    <>
+      <tr onClick={() => setOpen((o) => !o)} className="border-t border-slate-100 cursor-pointer hover:bg-slate-50">
+        <td className="px-4 py-2 text-slate-400">
+          {models.length > 0 ? <ChevronRight className={`w-4 h-4 transition-transform ${open ? 'rotate-90' : ''}`} /> : null}
+        </td>
+        <td className="px-4 py-2">
+          <p className="text-sm font-medium text-slate-900">{company.companyName || company.companyCode || '—'}</p>
+          {company.companyCode && <p className="text-[10px] font-mono text-slate-400">{company.companyCode}</p>}
+        </td>
+        <td className="px-4 py-2 text-right font-mono text-xs text-slate-600">{fmtTokens(company.calls)}</td>
+        <td className="px-4 py-2 text-right font-mono text-xs font-semibold text-slate-800">{fmtTokens(company.totalTokens)}</td>
+        <td className="px-4 py-2 text-right font-mono text-xs text-slate-800">{fmtInr(company.costInr)}</td>
+      </tr>
+      {open && models.map((m) => (
+        <tr key={`${company.companyCode}-${m.provider}-${m.model}`} className="bg-slate-50/60 text-xs">
+          <td></td>
+          <td className="px-4 py-1.5 pl-8">
+            <span className="font-mono text-slate-600">{m.model || '—'}</span>
+            {m.provider && (
+              <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded ${AI_PROVIDER_BADGE[m.provider] || 'bg-slate-100 text-slate-600'}`}>{m.provider}</span>
+            )}
+          </td>
+          <td className="px-4 py-1.5 text-right font-mono text-slate-500">{fmtTokens(m.calls)}</td>
+          <td className="px-4 py-1.5 text-right font-mono text-slate-600">{fmtTokens(m.totalTokens)}</td>
+          <td className="px-4 py-1.5 text-right font-mono text-slate-600">{fmtInr(m.costInr)}</td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function PlatformAiUsageTab() {
+  const [granularity, setGranularity] = useState('daily');
+  const [range, setRange] = useState({ from: '', to: '' });
+  const [sortBy, setSortBy] = useState('totalTokens'); // 'totalTokens' | 'costInr'
+
+  const { data, loading } = useQuery(GET_AI_TOKEN_USAGE_PLATFORM, {
+    variables: { from: range.from || undefined, to: range.to || undefined },
+    errorPolicy: 'all',
+  });
+
+  const usage = data?.getAiTokenUsagePlatform;
+  const total = usage?.total || {};
+  const series = usage?.[granularity] || [];
+  const byModel = usage?.byModel || [];
+  const byCompany = [...(usage?.byCompany || [])].sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
+
+  if (loading && !usage) {
+    return (
+      <div className="flex items-center justify-center h-40">
+        <RefreshCw className="w-6 h-6 text-slate-400 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Date range */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-col sm:flex-row gap-3 sm:items-end">
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">From</label>
+          <input type="date" value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">To</label>
+          <input type="date" value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none" />
+        </div>
+        {(range.from || range.to) && (
+          <button onClick={() => setRange({ from: '', to: '' })} className="px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">Clear</button>
+        )}
+      </div>
+
+      {/* Headline KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <KpiCard label="Total tokens" value={fmtTokens(total.totalTokens)} icon={Cpu} color="bg-violet-100 text-violet-600" />
+        <KpiCard label="Total cost" value={fmtInr(total.costInr)} icon={Coins} color="bg-amber-100 text-amber-600" />
+        <KpiCard label="AI calls" value={fmtTokens(total.calls)} icon={Activity} color="bg-emerald-100 text-emerald-600" />
+      </div>
+
+      {/* Time series */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-bold text-slate-900">Token usage over time</h3>
+          <div className="flex bg-slate-100 rounded-lg p-0.5">
+            {AI_GRANULARITIES.map((g) => (
+              <button
+                key={g.key}
+                onClick={() => setGranularity(g.key)}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${granularity === g.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="h-[280px]">
+          {series.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-sm text-slate-400">No usage data for this period.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={series} barSize={series.length > 20 ? 12 : 36}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v)} />
+                <RechartsTooltip content={<AiUsageTooltip />} cursor={{ fill: '#f8fafc' }} />
+                <Bar dataKey="totalTokens" fill="url(#platformAiGradient)" radius={[6, 6, 0, 0]} />
+                <defs>
+                  <linearGradient id="platformAiGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#7c3aed" />
+                    <stop offset="100%" stopColor="#a78bfa" />
+                  </linearGradient>
+                </defs>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* By model */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100"><h3 className="text-base font-bold text-slate-900">Usage by model</h3></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr className="text-left text-xs text-slate-500 uppercase tracking-wider">
+                  <th className="px-4 py-2">Model</th>
+                  <th className="px-4 py-2 text-right">Calls</th>
+                  <th className="px-4 py-2 text-right">Tokens</th>
+                  <th className="px-4 py-2 text-right">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byModel.length === 0 ? (
+                  <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-400">No model usage recorded.</td></tr>
+                ) : byModel.map((m) => (
+                  <tr key={`${m.provider}-${m.model}`} className="border-t border-slate-100">
+                    <td className="px-4 py-2">
+                      <span className="font-mono text-xs text-slate-800">{m.model || '—'}</span>
+                      {m.provider && <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded ${AI_PROVIDER_BADGE[m.provider] || 'bg-slate-100 text-slate-600'}`}>{m.provider}</span>}
+                    </td>
+                    <td className="px-4 py-2 text-right font-mono text-xs text-slate-600">{fmtTokens(m.calls)}</td>
+                    <td className="px-4 py-2 text-right font-mono text-xs font-semibold text-slate-800">{fmtTokens(m.totalTokens)}</td>
+                    <td className="px-4 py-2 text-right font-mono text-xs text-slate-800">{fmtInr(m.costInr)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* By company */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-base font-bold text-slate-900">Usage by company</h3>
+            <div className="flex bg-slate-100 rounded-lg p-0.5 text-xs">
+              <button onClick={() => setSortBy('totalTokens')} className={`px-2.5 py-1 rounded-md font-medium transition-colors ${sortBy === 'totalTokens' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Tokens</button>
+              <button onClick={() => setSortBy('costInr')} className={`px-2.5 py-1 rounded-md font-medium transition-colors ${sortBy === 'costInr' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Cost</button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr className="text-left text-xs text-slate-500 uppercase tracking-wider">
+                  <th className="px-4 py-2 w-8"></th>
+                  <th className="px-4 py-2">Company</th>
+                  <th className="px-4 py-2 text-right">Calls</th>
+                  <th className="px-4 py-2 text-right">Tokens</th>
+                  <th className="px-4 py-2 text-right">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byCompany.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No company usage recorded.</td></tr>
+                ) : byCompany.map((c) => <CompanyUsageRow key={c.companyCode || c.companyName} company={c} />)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function SuperAdminPage() {
   const { user } = useAuth();
@@ -1131,6 +1351,7 @@ export default function SuperAdminPage() {
     { id: 'tenants', label: 'Companies', icon: Building2 },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'contacts', label: 'Contacts', icon: MessageSquare },
+    { id: 'ai-usage', label: 'AI Usage', icon: Cpu },
     { id: 'activity', label: 'Activity Log', icon: Clock },
     { id: 'docs', label: 'Documentation', icon: BookOpen },
   ];
@@ -1557,6 +1778,9 @@ export default function SuperAdminPage() {
             </div>
           </div>
         )}
+
+        {/* ── AI USAGE TAB ────────────────────────────────────────────────── */}
+        {activeTab === "ai-usage" && <PlatformAiUsageTab />}
 
         {/* ── ACTIVITY LOG TAB ────────────────────────────────────────────── */}
         {activeTab === "activity" && (

@@ -161,6 +161,20 @@ export function bodyTextOf(components = []) {
 }
 
 /**
+ * Render the BODY text with {{1}},{{2}}… replaced by the provided bodyParams
+ * values, for human-readable chat logging / preview. Personalization tokens
+ * like {{name}} are left intact (resolved per-recipient server-side).
+ */
+export function renderTemplateText(bodyText, bodyParams = []) {
+  if (!bodyText) return '';
+  return bodyText.replace(/\{\{(\d+)\}\}/g, (m, n) => {
+    const idx = Number(n) - 1;
+    const v = bodyParams[idx];
+    return (v === undefined || v === null || v === '') ? m : String(v);
+  });
+}
+
+/**
  * Distinct, sorted variable indices in a string, e.g. "Hi {{1}} {{2}} {{1}}" -> [1, 2].
  */
 export function variableIndices(text) {

@@ -255,6 +255,7 @@ export const GET_CHATS = gql`
       lastMessage
       lastMessageTime
       messageCount
+      unreadCount
       source
       step
       aiEnabled
@@ -569,6 +570,66 @@ export const GET_DEPARTURES = gql`
 }
 `;
 
+// Soft-deleted departures, newest-deleted first. Fetches everything the
+// Deleted tab displays plus everything needed to "Copy" into a fresh create form.
+export const GET_DELETED_DEPARTURES = gql`
+  query GetDeletedDepartures {
+  getDeletedDepartures {
+    _id
+    uniqueId
+    departureCode
+    trekId
+    trekName
+    cityPickups {
+      cityId
+      cityName
+      boardingPoints {
+        _id
+        name
+      }
+    }
+    cityId
+    cityName
+    startDate
+    endDate
+    duration
+    nights
+    days
+    price
+    packages {
+      name
+      price
+      inclusions
+      cityIds
+    }
+    capacity
+    booked
+    itinerary
+    thingsToCarry
+    contact
+    meetingPoint
+    pickupTime
+    transport
+    imageUrl
+    brochureUrl
+    whatsappGroupInviteLink
+    whatsappGroupName
+    guideId
+    guideName
+    status
+    boardingPointIds
+    acceptPartialPayment
+    partialPaymentAmount
+    acceptsCoupons
+    maxDiscountPerPerson
+    cancellationReason
+    isDeleted
+    deletedAt
+    createdAt
+  }
+}
+`;
+
 export const GET_DEPARTURE = gql`
   query GetDeparture($id: ID!) {
   getDeparture(id: $id) {
@@ -603,6 +664,10 @@ export const GET_DEPARTURE = gql`
     transport
     imageUrl
     brochureUrl
+    galleryUrls {
+      url
+      uploadedAt
+    }
     whatsappGroupInviteLink
     whatsappGroupName
     guideId
@@ -1288,6 +1353,59 @@ export const GET_TRAFFIC_OVERVIEW = gql`
   }
 `;
 
+// ─── Growth (Acquisition & Engagement) queries ───────────────────────────────
+export const GET_ACQUISITION_OVERVIEW = gql`
+  query GetAcquisitionOverview($days: Int) {
+    getAcquisitionOverview(days: $days) {
+      totalUnique
+      totalNew
+      totalReturning
+      adConversations
+      adBookings
+      adConversionRate
+      organicConversations
+      daily {
+        date
+        unique
+        newCustomers
+        returning
+      }
+      adAttribution {
+        key
+        adId
+        conversations
+        bookings
+        conversionRate
+        revenue
+      }
+      reengagement {
+        reactivatedAfter24h
+        returnedAfter7d
+        returnedAfter30d
+      }
+    }
+  }
+`;
+
+export const GET_META_ADS = gql`
+  query GetMetaAds($days: Int) {
+    getMetaAds(days: $days) {
+      configured
+      error
+      totalSpend
+      totalClicks
+      ads {
+        campaign
+        spend
+        impressions
+        clicks
+        cpc
+        ctr
+      }
+    }
+  }
+`;
+
 // ─── Coupon queries ──────────────────────────────────────────────────────────
 export const GET_COUPONS = gql`
   query GetCoupons {
@@ -1329,6 +1447,24 @@ export const GET_COUPON = gql`
   }
 `;
 
+// ─── Reviews (post-trek social proof / moderation) ──────────────
+export const GET_REVIEWS = gql`
+  query GetReviews($trekId: ID, $status: String) {
+    getReviews(trekId: $trekId, status: $status) {
+      _id
+      trekId
+      departureId
+      bookingId
+      phone
+      customerName
+      rating
+      comment
+      status
+      createdAt
+    }
+  }
+`;
+
 // ─── Fill Nudge ("filling up" visitor nudge) ──────────────
 export const GET_FILL_NUDGE_STATS = gql`
   query GetFillNudgeStats($departureId: ID) {
@@ -1339,6 +1475,35 @@ export const GET_FILL_NUDGE_STATS = gql`
       nudgesSent
       converted
       conversionRate
+    }
+  }
+`;
+
+// ─── AI Token Usage (analytics) ───────────────────────────
+export const GET_AI_TOKEN_USAGE = gql`
+  query GetAiTokenUsage($from: String, $to: String) {
+    getAiTokenUsage(from: $from, to: $to) {
+      total { calls promptTokens completionTokens totalTokens costUsd costInr }
+      byModel { model provider calls promptTokens completionTokens totalTokens costUsd costInr }
+      daily   { period calls totalTokens costUsd costInr }
+      weekly  { period calls totalTokens costUsd costInr }
+      monthly { period calls totalTokens costUsd costInr }
+    }
+  }
+`;
+
+export const GET_AI_TOKEN_USAGE_PLATFORM = gql`
+  query GetAiTokenUsagePlatform($from: String, $to: String) {
+    getAiTokenUsagePlatform(from: $from, to: $to) {
+      total { calls totalTokens costUsd costInr }
+      byModel { model provider calls totalTokens costUsd costInr }
+      daily   { period totalTokens costUsd costInr }
+      weekly  { period totalTokens costUsd costInr }
+      monthly { period totalTokens costUsd costInr }
+      byCompany {
+        companyCode companyName calls totalTokens costUsd costInr
+        byModel { model provider calls totalTokens costUsd costInr }
+      }
     }
   }
 `;

@@ -5,6 +5,7 @@ import { CREATE_TREK, UPDATE_TREK, DELETE_TREK, PUBLISH_TREK, UNPUBLISH_TREK } f
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { v, validateForm, onlyDigits } from '../utils/validators';
+import { getErrorMessage } from '../utils/errors';
 import Modal from '../components/ui/Modal';
 import MultiImageUpload from '../components/ui/MultiImageUpload';
 import {
@@ -181,7 +182,7 @@ export default function TreksPage() {
       setErrors({});
     } catch (err) {
       console.error('Error saving trek:', err);
-      toast.error(err.message || 'Failed to save trek');
+      toast.error(getErrorMessage(err, 'Failed to save trek'));
     } finally {
       setSaving(false);
     }
@@ -197,7 +198,7 @@ export default function TreksPage() {
       toast.success('Trek deleted');
     } catch (err) {
       console.error('Error deleting trek:', err);
-      toast.error(err.message || 'Failed to delete trek');
+      toast.error(getErrorMessage(err, 'Failed to delete trek'));
     } finally {
       setDeleting(false);
     }
@@ -211,7 +212,7 @@ export default function TreksPage() {
       toast.success(`${trek.name} is now live!`);
     } catch (err) {
       console.error('Error publishing trek:', err);
-      toast.error(err.message || 'Failed to publish trek');
+      toast.error(getErrorMessage(err, 'Failed to publish trek'));
     }
   };
 
@@ -222,7 +223,7 @@ export default function TreksPage() {
       await unpublishTrekMut({ variables: { id: trek._id } });
       toast.success(`${trek.name} is now offline`);
     } catch (err) {
-      toast.error(err.message || 'Failed to take offline');
+      toast.error(getErrorMessage(err, 'Failed to take offline'));
     }
   };
 

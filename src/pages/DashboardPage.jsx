@@ -27,6 +27,27 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function DashboardPage() {
   const { kpis: dashboardKPIs, revenueByMonth, bookingsByRegion, recentActivity, alerts, loading, error } = useDashboard();
+
+  if (loading) return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="space-y-2"><div className="h-5 w-40 skeleton rounded" /><div className="h-3 w-64 skeleton rounded" /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map(i => <div key={i} className="card p-6 skeleton rounded-2xl h-24" />)}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="card skeleton rounded-2xl h-[340px] lg:col-span-2" />
+        <div className="card skeleton rounded-2xl h-[340px]" />
+      </div>
+    </div>
+  );
+
+  if (error) return (
+    <div className="card p-8 text-center">
+      <p className="text-red-500 font-medium">Failed to load dashboard</p>
+      <p className="text-sm text-slate-400 mt-1">{error.message}</p>
+    </div>
+  );
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Page Header */}

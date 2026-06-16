@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery as useApolloQuery } from '@apollo/client/react';
-import { GET_BOARDING_POINTS } from '../graphql/queries';
+import { GET_BOARDING_POINTS, GET_DELETED_DEPARTURES, GET_COMPANY_PROFILE } from '../graphql/queries';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDepartures } from '../hooks/useDepartures';
 import { useCities } from '../hooks/useCities';
@@ -8,12 +8,14 @@ import { useCities } from '../hooks/useCities';
 import { useGuides } from '../hooks/useGuides';
 import { useToast } from '../context/ToastContext';
 import { v, validateForm } from '../utils/validators';
+import { getErrorMessage } from '../utils/errors';
 import Modal from '../components/ui/Modal';
 import DatePickerInput from '../components/ui/DatePickerInput';
 import StatusBadge from '../components/ui/StatusBadge';
 import FileUpload from '../components/ui/FileUpload';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isSameDay, differenceInDays, addMonths, subMonths } from 'date-fns';
-import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, X, Eye, AlertTriangle, IndianRupee, Building2, Phone, FileText, Copy, GripVertical } from 'lucide-react';
+import { CalendarDays, List, Plus, Edit, Trash2, MapPin, User, ChevronLeft, ChevronRight, Clock, Users, X, Eye, AlertTriangle, IndianRupee, Building2, Phone, FileText, Copy, GripVertical, MessageCircle } from 'lucide-react';
+import { buildWhatsAppBookingLink } from '../utils/whatsappDeepLink';
 import {
   DndContext,
   closestCenter,
@@ -145,6 +147,23 @@ export default function DeparturesPage() {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isDuplicating, setIsDuplicating] = useState(false);
+  // Active vs Deleted tab. The deleted list is lazy-loaded only when the tab is opened.
+  const [tab, setTab] = useState('active');
+  const {
+    data: deletedData,
+    loading: deletedLoading,
+    refetch: refetchDeleted,
+  } = useApolloQuery(GET_DELETED_DEPARTURES, {
+    skip: tab !== 'deleted',
+    fetchPolicy: 'cache-and-network',
+  });
+  const deletedDeps = deletedData?.getDeletedDepartures || [];
+  // Company profile — used to build the click-to-WhatsApp booking deep link.
+  const { data: companyData } = useApolloQuery(GET_COMPANY_PROFILE);
+  const businessWhatsappNumber = companyData?.getCompanyProfile?.businessWhatsappNumber || '';
+  // True when the open create form was seeded from a deleted departure's "Copy"
+  // button — drives the post-create switch back to the Active tab.
+  const [copiedFromDeleted, setCopiedFromDeleted] = useState(false);
 
   // User's preferred order of departure IDs (set by drag-and-drop). `null` =
   // follow the server order. `orderedDeps` is derived from this + the latest
@@ -185,7 +204,7 @@ export default function DeparturesPage() {
     } catch (err) {
       // Roll back on failure.
       setLocalDepOrder(previousOrder);
-      toast.error(err.message || 'Failed to save departure order');
+      toast.error(getErrorMessage(err, 'Failed to save departure order'));
     }
   };
 
@@ -205,10 +224,11 @@ export default function DeparturesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleAdd = () => { setEditingDep(null); setIsDuplicating(false); setFormData(emptyDeparture); setErrors({}); setShowForm(true); };
+  const handleAdd = () => { setEditingDep(null); setIsDuplicating(false); setCopiedFromDeleted(false); setFormData(emptyDeparture); setErrors({}); setShowForm(true); };
 
   const handleEdit = (dep, e) => {
     if (e) e.stopPropagation();
+    setCopiedFromDeleted(false);
     setEditingDep(dep);
     setFormData({
       ...dep,
@@ -260,12 +280,36 @@ export default function DeparturesPage() {
       await updateDep(dep.id || dep._id, { status: newStatus });
       toast.success(isFull ? 'Bookings resumed' : 'Bookings stopped — departure marked Full');
     } catch (err) {
-      toast.error('Failed to update booking status');
+      toast.error(getErrorMessage(err, 'Failed to update booking status'));
+    }
+  };
+
+  // Copy the click-to-WhatsApp booking deep link for a departure so the admin
+  // can share it in their WhatsApp groups. When a customer taps + sends it, the
+  // bot captures their number/name and starts this departure's booking.
+  const handleCopyWhatsAppLink = async (dep, e) => {
+    if (e) e.stopPropagation();
+    if (!businessWhatsappNumber) {
+      toast.info('Set your WhatsApp number in Settings to generate booking links');
+      return;
+    }
+    const code = dep.departureCode || dep.uniqueId;
+    const link = buildWhatsAppBookingLink({ businessWhatsappNumber, trekName: dep.trekName, code });
+    if (!link) {
+      toast.error('Could not build the WhatsApp link for this departure');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success('WhatsApp booking link copied!');
+    } catch {
+      toast.error('Failed to copy link');
     }
   };
 
   const handleDuplicate = (dep, e) => {
     if (e) e.stopPropagation();
+    setCopiedFromDeleted(false);
     setEditingDep(null);
     setIsDuplicating(true);
     setFormData({
@@ -302,6 +346,7 @@ export default function DeparturesPage() {
         name: p.name || '',
         price: String(p.price ?? ''),
         inclusions: (p.inclusions || []).join('\n'),
+        cityIds: (p.cityIds || []),
       })),
       acceptPartialPayment: dep.acceptPartialPayment || false,
       partialPaymentAmount: dep.partialPaymentAmount != null ? String(dep.partialPaymentAmount) : '',
@@ -310,6 +355,15 @@ export default function DeparturesPage() {
     });
     setErrors({});
     setShowForm(true);
+  };
+
+  // Copy a previously deleted departure into a fresh create form. Reuses the
+  // same prefill as Duplicate (clears dates, booked=0 on the server, status reset),
+  // then goes through the normal CREATE_DEPARTURE flow so all validation applies.
+  const handleCopyFromDeleted = (dep, e) => {
+    if (e) e.stopPropagation();
+    handleDuplicate(dep);
+    setCopiedFromDeleted(true);
   };
 
   const handleSave = async () => {
@@ -389,8 +443,15 @@ export default function DeparturesPage() {
       setShowForm(false);
       setIsDuplicating(false);
       setErrors({});
+      // A copy from a deleted departure is a fresh create — return to the
+      // Active tab so the new batch is visible, and refresh the deleted list.
+      if (copiedFromDeleted && !editingDep) {
+        setTab('active');
+        refetchDeleted();
+      }
+      setCopiedFromDeleted(false);
     } catch (err) {
-      toast.error(err.message || 'Failed to save departure');
+      toast.error(getErrorMessage(err, 'Failed to save departure'));
     }
   };
 
@@ -400,7 +461,7 @@ export default function DeparturesPage() {
       setShowDeleteConfirm(null);
       toast.success('Batch deleted');
     } catch (err) {
-      toast.error(err.message || 'Failed to delete');
+      toast.error(getErrorMessage(err, 'Failed to delete'));
     }
   };
 
@@ -412,7 +473,7 @@ export default function DeparturesPage() {
       setCancelTarget(null);
       setCancelReason('');
     } catch (err) {
-      toast.error(err.message || 'Failed to cancel batch');
+      toast.error(getErrorMessage(err, 'Failed to cancel batch'));
     }
   };
 
@@ -457,22 +518,36 @@ export default function DeparturesPage() {
           <p className="page-subtitle mt-1">Manage inventory, guide assignments, and capacity.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex bg-slate-100 rounded-lg p-1">
-            <button onClick={() => setView('list')} className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${view === 'list' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
-              <List className="w-4 h-4" /> <span className="hidden sm:inline">List</span>
+          {tab === 'active' && (
+            <div className="flex bg-slate-100 rounded-lg p-1">
+              <button onClick={() => setView('list')} className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${view === 'list' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+                <List className="w-4 h-4" /> <span className="hidden sm:inline">List</span>
+              </button>
+              <button onClick={() => setView('calendar')} className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${view === 'calendar' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+                <CalendarDays className="w-4 h-4" /> <span className="hidden sm:inline">Calendar</span>
+              </button>
+            </div>
+          )}
+          {tab === 'active' && (
+            <button onClick={handleAdd} className="btn-primary flex items-center gap-2">
+              <Plus className="w-4 h-4" /> Add Batch
             </button>
-            <button onClick={() => setView('calendar')} className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${view === 'calendar' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
-              <CalendarDays className="w-4 h-4" /> <span className="hidden sm:inline">Calendar</span>
-            </button>
-          </div>
-          <button onClick={handleAdd} className="btn-primary flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Add Batch
-          </button>
+          )}
         </div>
       </div>
 
+      {/* ──────────────────── ACTIVE / DELETED TABS ──────────────────── */}
+      <div className="flex bg-slate-100 rounded-lg p-1 w-fit">
+        <button onClick={() => setTab('active')} className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${tab === 'active' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+          Active
+        </button>
+        <button onClick={() => setTab('deleted')} className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-all cursor-pointer ${tab === 'deleted' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+          <Trash2 className="w-3.5 h-3.5" /> Deleted
+        </button>
+      </div>
+
       {/* ──────────────────── LIST VIEW ──────────────────── */}
-      {view === 'list' ? (
+      {tab === 'active' && (view === 'list' ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={orderedDeps.map(d => d.id || d._id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-3">
@@ -602,6 +677,9 @@ export default function DeparturesPage() {
                     </button>
                     <button onClick={(e) => handleDuplicate(dep, e)} className="p-2 hover:bg-primary-50 rounded-lg transition-colors" title="Duplicate Departure">
                       <Copy className="w-4 h-4 text-primary-400" />
+                    </button>
+                    <button onClick={(e) => handleCopyWhatsAppLink(dep, e)} className="p-2 hover:bg-emerald-50 rounded-lg transition-colors" title="Copy WhatsApp booking link">
+                      <MessageCircle className="w-4 h-4 text-emerald-500" />
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(dep.id || dep._id); }} className="p-2 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                       <Trash2 className="w-4 h-4 text-red-400" />
@@ -780,6 +858,82 @@ export default function DeparturesPage() {
           </div>
           </div>
         </div>
+      ))}
+
+      {/* ──────────────────── DELETED TAB ──────────────────── */}
+      {tab === 'deleted' && (
+        <div className="space-y-3">
+          {deletedLoading && deletedDeps.length === 0 ? (
+            <div className="card p-12 text-center">
+              <p className="text-slate-400 text-sm">Loading deleted departures…</p>
+            </div>
+          ) : deletedDeps.length === 0 ? (
+            <div className="card p-12 text-center">
+              <Trash2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <p className="text-slate-500 text-sm">No deleted departures yet</p>
+            </div>
+          ) : (
+            deletedDeps.map((dep) => {
+              let duration = dep.duration || '';
+              if (dep.nights || dep.days) {
+                duration = `${dep.nights || 0} Night${dep.nights !== 1 ? 's' : ''} / ${dep.days || 0} Day${dep.days !== 1 ? 's' : ''}`;
+              }
+              let dateRange = '';
+              try {
+                dateRange = `${format(parseISO(dep.startDate), 'MMM dd, yyyy')} → ${format(parseISO(dep.endDate), 'MMM dd, yyyy')}`;
+              } catch { /* missing dates */ }
+              let deletedOn = '';
+              try { deletedOn = format(parseISO(dep.deletedAt), 'MMM dd, yyyy'); } catch { /* no date */ }
+              const cityLabel = (dep.cityPickups && dep.cityPickups.length > 0)
+                ? dep.cityPickups.map(cp => cp.cityName).join(', ')
+                : (dep.cityName || '');
+
+              return (
+                <div key={dep._id} className="card overflow-hidden opacity-75 hover:opacity-100 transition-opacity">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 sm:p-5">
+                    <div className="w-16 h-16 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                      <Trash2 className="w-6 h-6 text-slate-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        {dep.uniqueId && <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{dep.uniqueId}</span>}
+                        {dep.departureCode && <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">{dep.departureCode}</span>}
+                        <h3 className="text-base font-semibold text-slate-600 truncate">{dep.trekName}</h3>
+                        {deletedOn && (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-red-50 text-red-500 border border-red-100">Deleted on {deletedOn}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                        {duration && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{duration}</span>}
+                        {cityLabel && <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{cityLabel}</span>}
+                        {dateRange && <span className="flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5" />{dateRange}</span>}
+                        {dep.packages?.length > 0 ? (
+                          <span className="flex items-center gap-1">
+                            <IndianRupee className="w-3.5 h-3.5" />
+                            ₹{Math.min(...dep.packages.map(p => p.price)).toLocaleString()}
+                            {dep.packages.length > 1 && ` – ₹${Math.max(...dep.packages.map(p => p.price)).toLocaleString()}`}
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1"><IndianRupee className="w-3.5 h-3.5" />₹{dep.price?.toLocaleString()}</span>
+                        )}
+                        <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />Capacity {dep.capacity}</span>
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      <button
+                        onClick={(e) => handleCopyFromDeleted(dep, e)}
+                        className="btn-secondary flex items-center gap-2"
+                        title="Copy into a new departure (pick fresh dates)"
+                      >
+                        <Copy className="w-4 h-4" /> Copy
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       )}
 
       {/* ──────────────────── BATCH DETAILS MODAL ──────────────────── */}
@@ -924,7 +1078,7 @@ export default function DeparturesPage() {
       </Modal>
 
       {/* ──────────────────── CRUD FORM MODAL ──────────────────── */}
-      <Modal isOpen={showForm} onClose={() => { setShowForm(false); setIsDuplicating(false); }} title={editingDep ? 'Edit Departure' : isDuplicating ? 'Duplicate Departure' : 'New Departure'} size="lg" confirmOnClose>
+      <Modal isOpen={showForm} onClose={() => { setShowForm(false); setIsDuplicating(false); setCopiedFromDeleted(false); }} title={editingDep ? 'Edit Departure' : isDuplicating ? 'Duplicate Departure' : 'New Departure'} size="lg" confirmOnClose>
         {isDuplicating && (
           <div className="flex items-center gap-2 mb-4 px-3 py-2.5 rounded-lg bg-primary-50 border border-primary-200 text-primary-700 text-sm">
             <Copy className="w-4 h-4 shrink-0" />
@@ -1291,7 +1445,7 @@ export default function DeparturesPage() {
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-          <button onClick={() => { setShowForm(false); setIsDuplicating(false); }} className="btn-secondary">Cancel</button>
+          <button onClick={() => { setShowForm(false); setIsDuplicating(false); setCopiedFromDeleted(false); }} className="btn-secondary">Cancel</button>
           <button onClick={handleSave} className="btn-primary">
             {editingDep ? 'Save Changes' : isDuplicating ? 'Create Duplicate' : 'Create Batch'}
           </button>
