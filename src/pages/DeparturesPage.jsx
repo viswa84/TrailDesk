@@ -33,6 +33,13 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+// Departure dates come from the API as date-only values coerced to UTC midnight
+// (e.g. "2026-07-15T00:00:00.000Z"). parseISO() on the full string shifts into
+// local time and renders the wrong calendar day for any viewer west of UTC.
+// Parsing only the YYYY-MM-DD portion (no time/zone) yields local midnight of
+// the intended date, so it formats correctly in every timezone.
+const parseDateOnly = (iso) => (iso ? parseISO(String(iso).slice(0, 10)) : null);
+
 const emptyDeparture = {
   trekId: '', trekName: '', cityId: '', startDate: '', endDate: '',
   nights: '', days: '', capacity: '', guideId: '', price: '',
@@ -484,13 +491,23 @@ export default function DeparturesPage() {
   const startDay = getDay(monthStart);
   const paddingDays = Array(startDay).fill(null);
 
-  const getDayDeps = (day) => deps.filter(d => {
-    try {
-      const start = parseISO(d.startDate);
-      const end = parseISO(d.endDate);
-      return day >= start && day <= end;
-    } catch { return false; }
-  });
+  // Departure dates are stored as date-only values coerced to UTC midnight
+  // (e.g. "2026-07-15T00:00:00.000Z"). Parsing them into a local Date and
+  // comparing against a local-midnight calendar `day` shifts every departure
+  // one day late in any east-of-UTC timezone (IST), and hides single-day
+  // departures (start === end) entirely. Compare the YYYY-MM-DD portions as
+  // strings instead — timezone-independent and chronologically ordered.
+  const dateKey = (iso) => (typeof iso === 'string' ? iso.slice(0, 10) : '');
+
+  const getDayDeps = (day) => {
+    const dayKey = format(day, 'yyyy-MM-dd');
+    return deps.filter(d => {
+      const startKey = dateKey(d.startDate);
+      const endKey = dateKey(d.endDate);
+      if (!startKey || !endKey) return false;
+      return dayKey >= startKey && dayKey <= endKey;
+    });
+  };
 
   const getOccupancyColor = (booked, capacity) => {
     const ratio = booked / capacity;
@@ -557,8 +574,8 @@ export default function DeparturesPage() {
               duration = `${dep.nights || 0} Night${dep.nights !== 1 ? 's' : ''} / ${dep.days || 0} Day${dep.days !== 1 ? 's' : ''}`;
             }
             try {
-              const startDate = parseISO(dep.startDate);
-              const endDate = parseISO(dep.endDate);
+              const startDate = parseDateOnly(dep.startDate);
+              const endDate = parseDateOnly(dep.endDate);
               if (!duration) duration = `${differenceInDays(endDate, startDate) + 1} Days`;
             } catch { }
             const occ = getOccupancyColor(dep.booked, dep.capacity);
@@ -566,7 +583,7 @@ export default function DeparturesPage() {
             const ratio = dep.booked / dep.capacity;
             const guideInitial = dep.guideName ? dep.guideName.split(' ').map(n => n[0]).join('') : '?';
             let startDateFormatted = '';
-            try { startDateFormatted = format(parseISO(dep.startDate), 'MMM dd'); } catch { }
+            try { startDateFormatted = format(parseDateOnly(dep.startDate), 'MMM dd'); } catch { }
 
             return (
               <SortableDepartureCard key={dep.id || dep._id} id={dep.id || dep._id}>
@@ -732,7 +749,7 @@ export default function DeparturesPage() {
             </button>
             <div className="text-center">
               <h3 className="text-lg font-bold text-slate-900">{format(calendarDate, 'MMMM yyyy')}</h3>
-              <p className="text-xs text-slate-500 mt-0.5">{deps.filter(d => { try { const s = parseISO(d.startDate); return s.getMonth() === calendarDate.getMonth() && s.getFullYear() === calendarDate.getFullYear(); } catch { return false; } }).length} departures starting this month</p>
+              <p className="text-xs text-slate-500 mt-0.5">{deps.filter(d => dateKey(d.startDate).slice(0, 7) === format(calendarDate, 'yyyy-MM')).length} departures starting this month</p>
             </div>
             <button onClick={() => setCalendarDate(addMonths(calendarDate, 1))} className="p-2 hover:bg-white rounded-xl transition-all duration-200 shadow-sm border border-slate-200/80 hover:shadow cursor-pointer">
               <ChevronRight className="w-4 h-4 text-slate-600" />
@@ -880,7 +897,7 @@ export default function DeparturesPage() {
               }
               let dateRange = '';
               try {
-                dateRange = `${format(parseISO(dep.startDate), 'MMM dd, yyyy')} → ${format(parseISO(dep.endDate), 'MMM dd, yyyy')}`;
+                dateRange = `${format(parseDateOnly(dep.startDate), 'MMM dd, yyyy')} → ${format(parseDateOnly(dep.endDate), 'MMM dd, yyyy')}`;
               } catch { /* missing dates */ }
               let deletedOn = '';
               try { deletedOn = format(parseISO(dep.deletedAt), 'MMM dd, yyyy'); } catch { /* no date */ }
@@ -945,8 +962,8 @@ export default function DeparturesPage() {
           }
           let startDate, endDate;
           try {
-            startDate = parseISO(selectedDep.startDate);
-            endDate = parseISO(selectedDep.endDate);
+            startDate = parseDateOnly(selectedDep.startDate);
+            endDate = parseDateOnly(selectedDep.endDate);
             if (!duration) duration = `${differenceInDays(endDate, startDate) + 1} Days`;
           } catch { }
           const ratio = selectedDep.booked / selectedDep.capacity;

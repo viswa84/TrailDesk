@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@apollo/client/react';
 import { GET_CITIES, GET_TREKS, GET_DEPARTURES } from '../graphql/queries';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { parseTemplateSpec, buildTemplateComponents, totalParamCount, bodyTextOf, renderTemplateText } from '../utils/whatsappTemplate';
 import { resolveDepartureValues, TEMPLATE_DEPARTURE_MAP, applyDepartureToParams } from '../utils/departureTemplateFill';
 import { Send, Users, AlertTriangle, Loader2, Megaphone, RefreshCcw, ChevronDown, ChevronRight, History, IndianRupee, Search } from 'lucide-react';
@@ -54,6 +55,10 @@ const emptyFilters = {
 
 export default function BroadcastPage() {
   const toast = useToast();
+  // Booking-link values must be scoped to this company: DEP numbers are issued
+  // per company, so a bare "DEP-0074" button would open another company's trek.
+  const { user } = useAuth();
+  const linkOpts = { companyCode: user?.companyCode || '' };
   const { data: citiesData } = useQuery(GET_CITIES, { variables: { isActive: true }, fetchPolicy: 'cache-first' });
   const { data: treksData }  = useQuery(GET_TREKS,  { variables: { isActive: true }, fetchPolicy: 'cache-first' });
   const cities = citiesData?.getCities || [];
@@ -730,14 +735,14 @@ export default function BroadcastPage() {
                     setSelectedDepartureId(id);
                     const dep = departures.find((d) => d._id === id);
                     if (dep && TEMPLATE_DEPARTURE_MAP[tmplName]) {
-                      setParamValues(applyDepartureToParams(tmplName, templateSpec, dep, paramValues));
+                      setParamValues(applyDepartureToParams(tmplName, templateSpec, dep, paramValues, linkOpts));
                     }
                   }}
                   className="select-field"
                 >
                   <option value="">— Select a departure to auto-fill —</option>
                   {departures.map((d) => {
-                    const v = resolveDepartureValues(d);
+                    const v = resolveDepartureValues(d, linkOpts);
                     const seats = Math.max(0, (d.capacity ?? 0) - (d.booked ?? 0));
                     return (
                       <option key={d._id} value={d._id}>
@@ -815,7 +820,7 @@ export default function BroadcastPage() {
                         </button>
                       ))}
                       {selectedDepartureObj && (() => {
-                        const dv = resolveDepartureValues(selectedDepartureObj);
+                        const dv = resolveDepartureValues(selectedDepartureObj, linkOpts);
                         return (
                           <>
                             <button type="button" onClick={() => setParamValue('headerParams', i, dv.trekName)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Trek</button>
@@ -857,7 +862,7 @@ export default function BroadcastPage() {
                         </button>
                       ))}
                       {selectedDepartureObj && (() => {
-                        const dv = resolveDepartureValues(selectedDepartureObj);
+                        const dv = resolveDepartureValues(selectedDepartureObj, linkOpts);
                         return (
                           <>
                             <button type="button" onClick={() => setParamValue('bodyParams', i, dv.trekName)} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100">+ Trek</button>
@@ -892,7 +897,7 @@ export default function BroadcastPage() {
                     {selectedDepartureObj && (
                       <button
                         type="button"
-                        onClick={() => setButtonParam(b.index, i, resolveDepartureValues(selectedDepartureObj).bookUrlCode)}
+                        onClick={() => setButtonParam(b.index, i, resolveDepartureValues(selectedDepartureObj, linkOpts).bookUrlCode)}
                         className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                       >
                         + Book link

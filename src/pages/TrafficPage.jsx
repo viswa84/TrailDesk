@@ -1,12 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@apollo/client/react';
-import { GET_TRAFFIC_OVERVIEW, GET_CONVERSION_FUNNEL, GET_FILL_NUDGE_STATS } from '../graphql/queries';
+import { GET_TRAFFIC_OVERVIEW, GET_CONVERSION_FUNNEL, GET_FILL_NUDGE_STATS, GET_GROUP_LINK_CLICKS, GET_GROUP_LINK_STATS } from '../graphql/queries';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { TrendingUp, Eye, Mountain, CalendarRange, ChevronDown, ChevronRight, ExternalLink, Smartphone, Zap } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { TrendingUp, Eye, Mountain, CalendarRange, ChevronDown, ChevronRight, ExternalLink, Smartphone, Zap, Users2, MessageCircle } from 'lucide-react';
+import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { io as socketIO } from 'socket.io-client';
+import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 const PERIOD_OPTIONS = [
   { label: 'Last 7 days',  value: 7 },
@@ -34,7 +37,9 @@ function StatCard({ icon: Icon, label, value, sub, color = 'primary' }) {
   );
 }
 
-function TrekRow({ trek, baseUrl }) {
+// `companyCode` keeps departure links company-scoped — DEP numbers are issued
+// per company, so a bare /book/DEP-0074 can open another company's trek.
+function TrekRow({ trek, baseUrl, companyCode }) {
   const [open, setOpen] = useState(false);
   const pct = trek.totalVisits > 0 ? Math.round((trek.trekPageVisits / trek.totalVisits) * 100) : 0;
 
@@ -120,9 +125,9 @@ function TrekRow({ trek, baseUrl }) {
                 <div key={dep.depUniqueId} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-slate-200">
                   <div className="flex items-center gap-2 min-w-0">
                     <CalendarRange className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                    <span className="text-xs font-mono text-slate-500 truncate">/book/{dep.depUniqueId}</span>
+                    <span className="text-xs font-mono text-slate-500 truncate">/book/{companyCode ? `${companyCode}/` : ''}{dep.depUniqueId}</span>
                     {baseUrl && (
-                      <a href={`${baseUrl}/book/${dep.depUniqueId}`} target="_blank" rel="noopener noreferrer"
+                      <a href={`${baseUrl}/book/${companyCode ? `${companyCode}/` : ''}${dep.depUniqueId}`} target="_blank" rel="noopener noreferrer"
                         onClick={e => e.stopPropagation()} className="text-slate-300 hover:text-blue-500 shrink-0">
                         <ExternalLink className="w-3 h-3" />
                       </a>
@@ -252,7 +257,145 @@ function ConversionFunnel({ funnel }) {
   );
 }
 
+// ─── Group-share deep-link click activity ──────────────────────────────
+// Identified pre-booking clicks on Click-to-WhatsApp group-share links.
+// Initial data from getGroupLinkClicks / getGroupLinkStats; live-prepended when
+// a `groupLinkClicked` socket event arrives on the company room.
+function relTime(at) {
+  if (!at) return '';
+  try { return formatDistanceToNow(parseISO(at), { addSuffix: true }); }
+  catch { return at; }
+}
+
+function GroupLinkActivity() {
+  const toast = useToast();
+  const { data: clicksData } = useQuery(GET_GROUP_LINK_CLICKS, {
+    variables: { limit: 100 },
+    fetchPolicy: 'cache-and-network',
+  });
+  const { data: statsData, refetch: refetchStats } = useQuery(GET_GROUP_LINK_STATS, {
+    fetchPolicy: 'cache-and-network',
+  });
+
+  // Live clicks prepended from the socket, kept separate from the query cache.
+  const [liveClicks, setLiveClicks] = useState([]);
+
+  useEffect(() => {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+    const socket = socketIO(socketUrl, {
+      transports: ['websocket', 'polling'],
+      auth: { token: localStorage.getItem('trekops_token') },
+    });
+
+    socket.on('groupLinkClicked', (payload) => {
+      // Shape: { phone, customerName, groupCode, trekName, departureId, departureCode, at }
+      setLiveClicks((prev) => [{ _id: `live-${payload.at}-${payload.phone}`, ...payload }, ...prev].slice(0, 100));
+      refetchStats();
+      const who = payload.customerName || payload.phone || 'Someone';
+      const grp = payload.groupCode ? ` from ${payload.groupCode}` : '';
+      const trek = payload.trekName ? ` ${payload.trekName}` : ' a trek';
+      toast.info(`${who}${grp} started booking${trek}`);
+    });
+
+    socket.on('connect_error', (err) => {
+      console.warn('Socket connect_error:', err.message);
+      socket.auth = { token: localStorage.getItem('trekops_token') };
+    });
+
+    return () => socket.disconnect();
+  }, [refetchStats, toast]);
+
+  // Merge live clicks in front of the fetched ones, de-duping on _id.
+  const clicks = useMemo(() => {
+    const fetched = clicksData?.getGroupLinkClicks || [];
+    const seen = new Set(liveClicks.map((c) => c._id));
+    return [...liveClicks, ...fetched.filter((c) => !seen.has(c._id))].slice(0, 100);
+  }, [liveClicks, clicksData]);
+
+  const stats = statsData?.getGroupLinkStats || [];
+
+  return (
+    <>
+      {/* Per-group summary table */}
+      <div className="card p-5 mt-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Users2 className="w-4 h-4 text-emerald-500" />
+          <h2 className="font-semibold text-slate-800">Group Link Performance</h2>
+          <span className="text-xs text-slate-400">Clicks per group-share link</span>
+        </div>
+        {stats.length === 0 ? (
+          <p className="text-sm text-slate-400">No group-link clicks yet. Share a tracked group link from a departure to start.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
+                  <th className="py-2 pr-3 font-medium">Group</th>
+                  <th className="py-2 px-2 text-right font-medium">Clicks</th>
+                  <th className="py-2 px-2 text-right font-medium">Unique people</th>
+                  <th className="py-2 pl-2 text-right font-medium">Last click</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.map((s) => (
+                  <tr key={s.groupCode || '__none__'} className="border-b border-slate-50 last:border-0">
+                    <td className="py-2 pr-3">
+                      {s.groupCode
+                        ? <span className="font-medium text-slate-700">{s.groupCode}</span>
+                        : <span className="italic text-slate-400">No group</span>}
+                    </td>
+                    <td className="py-2 px-2 text-right font-semibold text-slate-700">{s.clicks}</td>
+                    <td className="py-2 px-2 text-right text-slate-600">{s.uniquePhones}</td>
+                    <td className="py-2 pl-2 text-right text-slate-400">{relTime(s.lastClickAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Live click feed */}
+      <div className="card p-5 mt-6">
+        <div className="flex items-center gap-2 mb-4">
+          <MessageCircle className="w-4 h-4 text-emerald-500" />
+          <h2 className="font-semibold text-slate-800">Group Link Activity</h2>
+          <span className="text-xs text-slate-400">Live · who tapped which group link</span>
+        </div>
+        {clicks.length === 0 ? (
+          <p className="text-sm text-slate-400">No clicks recorded yet.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {clicks.map((c) => {
+              const who = c.customerName || c.phone || 'Unknown';
+              return (
+                <div key={c._id} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-100 gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700 truncate">
+                      {who}
+                      {' · '}
+                      {c.groupCode
+                        ? <span className="text-emerald-600 font-semibold">{c.groupCode}</span>
+                        : <span className="italic text-slate-400">No group</span>}
+                    </p>
+                    <p className="text-xs text-slate-400 truncate">
+                      {c.trekName || '—'}
+                      {c.departureCode && <span className="font-mono"> · {c.departureCode}</span>}
+                    </p>
+                  </div>
+                  <span className="text-xs text-slate-400 shrink-0">{relTime(c.at)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 export default function TrafficPage() {
+  const { user } = useAuth();
   const [days, setDays] = useState(30);
   const { data, loading, error } = useQuery(GET_TRAFFIC_OVERVIEW, {
     variables: { days },
@@ -278,6 +421,7 @@ export default function TrafficPage() {
 
   // Base URL for external links (just the origin of the API)
   const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '');
+  const companyCode = user?.companyCode || '';
 
   const chartData = useMemo(() => {
     if (!stats?.trend) return [];
@@ -428,7 +572,7 @@ export default function TrafficPage() {
             ) : (
               <div className="space-y-2">
                 {stats.treks.map(trek => (
-                  <TrekRow key={trek.trekId} trek={trek} baseUrl={baseUrl} />
+                  <TrekRow key={trek.trekId} trek={trek} baseUrl={baseUrl} companyCode={companyCode} />
                 ))}
               </div>
             )}
@@ -488,6 +632,10 @@ export default function TrafficPage() {
           )}
         </>
       )}
+
+      {/* Group-share deep-link click tracking — independent of traffic overview,
+          so it renders even while the charts above are loading. */}
+      <GroupLinkActivity />
     </div>
   );
 }

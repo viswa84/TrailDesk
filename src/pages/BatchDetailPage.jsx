@@ -5,7 +5,7 @@ import { GET_DEPARTURE, GET_PARTICIPANTS_BY_DEPARTURE, GET_BOARDING_POINTS, GET_
 import { CREATE_PARTICIPANT, DELETE_PARTICIPANT, COLLECT_PENDING_PAYMENT, MARK_REFUNDED, UPDATE_DEPARTURE, REMOVE_FROM_WAITLIST, TRIGGER_FILL_NUDGE } from '../graphql/mutations';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { ArrowLeft, MapPin, Clock, Users, IndianRupee, Phone, User, CalendarDays, FileText, Building2, AlertTriangle, Plus, Trash2, X, Download, Navigation, CreditCard, Copy, ExternalLink, Link2, Edit, Zap, Send, Image as ImageIcon, MessageCircle } from 'lucide-react';
-import { buildWhatsAppBookingLink } from '../utils/whatsappDeepLink';
+import { buildWhatsAppBookingLink, buildWhatsAppGroupShareLink } from '../utils/whatsappDeepLink';
 import StatusBadge from '../components/ui/StatusBadge';
 import Modal from '../components/ui/Modal';
 import DatePickerInput from '../components/ui/DatePickerInput';
@@ -419,6 +419,9 @@ export default function BatchDetailPage() {
     const [showEditModal, setShowEditModal] = useState(false);
     const [editFormData, setEditFormData] = useState(emptyEditForm);
     const [editErrors, setEditErrors] = useState({});
+    // Optional group/campaign code baked into the WhatsApp group-share link so
+    // clicks can be attributed to a specific group (e.g. "PuneGroup").
+    const [groupShareCode, setGroupShareCode] = useState('');
 
     const handleOpenEdit = () => {
         if (!departure) return;
@@ -685,9 +688,13 @@ export default function BatchDetailPage() {
     const trekForUrl = treksList.find(t => String(t._id || t.id) === String(departure.trekId));
     const trekCodeForUrl = trekForUrl?.trekCode || '';
     const depCodeForUrl = departure.departureCode || departure.uniqueId || '';
+    // Always keep the company code in the URL: DEP numbers are issued per
+    // company, so a bare /book/DEP-0074 can open a different company's trek.
     const bookingUrl = (companyCodeForUrl && trekCodeForUrl && depCodeForUrl)
       ? `${PUBLIC_BASE}/book/${companyCodeForUrl}/${trekCodeForUrl}/${depCodeForUrl}`
-      : `${PUBLIC_BASE}/book/${bookingSlug}`;
+      : (companyCodeForUrl && departure.uniqueId)
+        ? `${PUBLIC_BASE}/book/${companyCodeForUrl}/${departure.uniqueId}`
+        : `${PUBLIC_BASE}/book/${bookingSlug}`;
     // Prefer clean slug URL for trek page; fall back to legacy /book/trek/:trekId
     const trekBookingUrl = departure.trekId
       ? (companyCodeForUrl && trekCodeForUrl)
@@ -711,6 +718,33 @@ export default function BatchDetailPage() {
       try {
         await navigator.clipboard.writeText(whatsappBookingLink);
         toast.success('WhatsApp booking link copied!');
+      } catch {
+        toast.error('Failed to copy link');
+      }
+    };
+
+    // Group-share variant of the deep link. The optional group code is baked in
+    // (client-side, byte-identical to the backend's `(group: <code>)` suffix) so
+    // every click from that link is attributed to the group in Traffic analytics.
+    const whatsappGroupShareLink = buildWhatsAppGroupShareLink({
+      businessWhatsappNumber,
+      trekName: departure.trekName,
+      code: departure.departureCode || departure.uniqueId,
+      groupCode: groupShareCode,
+    });
+
+    const handleCopyGroupShareLink = async () => {
+      if (!whatsappGroupShareLink) {
+        toast.info('Set your WhatsApp number in Settings to generate booking links');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(whatsappGroupShareLink);
+        toast.success(
+          groupShareCode.trim()
+            ? `Group share link copied (group: ${groupShareCode.trim()})!`
+            : 'Group share link copied!'
+        );
       } catch {
         toast.error('Failed to copy link');
       }
@@ -887,6 +921,49 @@ export default function BatchDetailPage() {
                   </p>
                 )}
             </div>
+
+            {/* Group-share WhatsApp deep link — same as above but tags every click
+                with an optional group/campaign code for attribution in Traffic. */}
+            {whatsappBookingLink && (
+              <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                    <MessageCircle className="w-4 h-4 text-emerald-500" />
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Group Share Link (tracked)</p>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                    <label className="text-xs font-medium text-slate-500 shrink-0">Group code (optional)</label>
+                    <input
+                        value={groupShareCode}
+                        onChange={(e) => setGroupShareCode(e.target.value)}
+                        placeholder="e.g. PuneGroup"
+                        className="input-field flex-1 text-sm"
+                        maxLength={40}
+                    />
+                </div>
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+                    <span className="flex-1 font-mono text-sm text-emerald-700 truncate">{whatsappGroupShareLink}</span>
+                    <button
+                        onClick={handleCopyGroupShareLink}
+                        className="p-1.5 hover:bg-white rounded-lg shrink-0 transition-colors"
+                        title="Copy group share link"
+                    >
+                        <Copy className="w-4 h-4 text-slate-400" />
+                    </button>
+                    <a
+                        href={whatsappGroupShareLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 hover:bg-white rounded-lg shrink-0 transition-colors"
+                        title="Open in new tab"
+                    >
+                        <ExternalLink className="w-4 h-4 text-slate-400" />
+                    </a>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                    Add a <strong>group code</strong> (e.g. a WhatsApp group name) to attribute every click to that group. Each tap is tracked by phone in <strong>Traffic → Group Link Activity</strong>. Leave blank for an untagged link.
+                </p>
+              </div>
+            )}
 
             {/* Details */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

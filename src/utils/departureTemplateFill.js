@@ -27,9 +27,14 @@ function fmt(d) {
  * template placeholders.
  *
  * @param {object} departure  A GET_DEPARTURES row
+ * @param {object} [options]
+ * @param {string} [options.companyCode]  Logged-in company code — REQUIRED for a
+ *   correct bookUrlCode: DEP numbers are generated per company database, so
+ *   "DEP-0074" alone can point at another company's departure.
  * @returns {object}          Flat map of string values (all keys present)
  */
-export function resolveDepartureValues(departure = {}) {
+export function resolveDepartureValues(departure = {}, options = {}) {
+  const companyCode = String(options.companyCode || '').trim().toLowerCase();
   return {
     trekName:       departure.trekName || '',
     cityName:       departure.cityName || departure.cityPickups?.[0]?.cityName || '',
@@ -39,11 +44,16 @@ export function resolveDepartureValues(departure = {}) {
     capacity:       departure.capacity != null ? String(departure.capacity) : '',
     seatsAvailable: String(Math.max(0, (departure.capacity ?? 0) - (departure.booked ?? 0))),
     // Suffix appended to the template button's baked-in "https://api.trekops.in/book/"
-    // prefix. The single-segment "/book/:uniqueId" route resolves straight to this
-    // departure's booking page, so uniqueId (e.g. "DEP-0001") is the reliable value.
+    // prefix. Always company-scoped ("mdv-hikes/DEP-0001"): uniqueIds are only
+    // unique inside one company's database, so a bare "DEP-0001" resolves to
+    // whichever company owns that number first — another company's trek page.
     // departureCode alone is NOT a valid standalone path (it needs a company/trek
     // prefix) and is often empty, so it's only a last-ditch fallback.
-    bookUrlCode:    departure.uniqueId || departure.departureCode || '',
+    bookUrlCode:    (() => {
+      const code = departure.uniqueId || departure.departureCode || '';
+      if (!code) return '';
+      return companyCode ? `${companyCode}/${code}` : code;
+    })(),
     meetingPoint:   departure.meetingPoint || '',
     guideName:      departure.guideName || '',
     pickupTime:     departure.pickupTime || '',
@@ -153,13 +163,14 @@ function entryValue(entry, values) {
  * @param {object} spec            Output of parseTemplateSpec
  * @param {object} departure       A GET_DEPARTURES row
  * @param {object} prevParamValues Current { headerParams, bodyParams, buttonParams, headerMedia }
+ * @param {object} [options]       { companyCode } — needed for the booking-URL button
  * @returns {object}               New paramValues of the same shape
  */
-export function applyDepartureToParams(templateName, spec, departure, prevParamValues) {
+export function applyDepartureToParams(templateName, spec, departure, prevParamValues, options = {}) {
   const map = TEMPLATE_DEPARTURE_MAP[templateName];
   if (!map) return prevParamValues;
 
-  const values = resolveDepartureValues(departure);
+  const values = resolveDepartureValues(departure, options);
 
   // Deep-copy the bits we touch so callers' state stays untouched.
   const next = {
@@ -170,6 +181,15 @@ export function applyDepartureToParams(templateName, spec, departure, prevParamV
     ),
     headerMedia: { ...(prevParamValues.headerMedia || {}) },
   };
+
+  // For media-header (IMAGE) templates, auto-fill the header image URL from the
+  // departure's own image so the preview shows it and the send-validation passes
+  // without a manual paste. The backend (marketingHeaderImage.js) independently
+  // resolves trek.images[0] → trek.image → company logo at send time, so this is
+  // only the departure-level image we have client-side; leave blank if absent.
+  if (spec?.headerMediaFormat === 'IMAGE' && departure.imageUrl) {
+    next.headerMedia = { ...next.headerMedia, url: departure.imageUrl };
+  }
 
   const bodyCount = spec?.bodyParamCount || 0;
   (map.body || []).forEach((entry, i) => {

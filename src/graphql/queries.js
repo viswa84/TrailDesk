@@ -1507,3 +1507,33 @@ export const GET_AI_TOKEN_USAGE_PLATFORM = gql`
     }
   }
 `;
+
+// ─── Group-share deep-link click tracking (analytics) ─────────────────
+// Identified pre-booking clicks on Click-to-WhatsApp group-share links.
+export const GET_GROUP_LINK_CLICKS = gql`
+  query GetGroupLinkClicks($groupCode: String, $limit: Int) {
+    getGroupLinkClicks(groupCode: $groupCode, limit: $limit) {
+      _id
+      phone
+      customerName
+      groupCode
+      trekId
+      trekName
+      departureId
+      departureCode
+      matchedCode
+      at
+    }
+  }
+`;
+
+export const GET_GROUP_LINK_STATS = gql`
+  query GetGroupLinkStats {
+    getGroupLinkStats {
+      groupCode
+      clicks
+      uniquePhones
+      lastClickAt
+    }
+  }
+`;
