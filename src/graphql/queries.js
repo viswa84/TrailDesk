@@ -303,6 +303,8 @@ export const GET_BOOKINGS = gql`
     trek
     trekName
     departureId
+    departureDate
+    departureEndDate
     cityName
     name
     email
@@ -339,6 +341,8 @@ export const GET_BOOKING = gql`
     trek
     trekName
     departureId
+    departureDate
+    departureEndDate
     cityName
     name
     email

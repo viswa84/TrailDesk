@@ -7,10 +7,26 @@ import { GET_SCHEDULED_MESSAGES } from '../graphql/queries';
 import Modal from '../components/ui/Modal';
 import Drawer from '../components/ui/Drawer';
 import StatusBadge from '../components/ui/StatusBadge';
-import { format } from 'date-fns';
-import { Search, Eye, BookOpen, Phone, Users, Copy, ExternalLink, FileDown, Loader2, Gift, Clock } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { Search, Eye, BookOpen, Phone, Users, Copy, ExternalLink, FileDown, Loader2, Gift, Clock, CalendarDays } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
+// Departure dates are date-only values stored at UTC midnight. Feeding the full
+// ISO string to new Date() shifts them into local time and can render the wrong
+// calendar day; parsing only the YYYY-MM-DD portion gives local midnight of the
+// intended date, which formats correctly in every timezone.
+const parseDateOnly = (iso) => (iso ? parseISO(String(iso).slice(0, 10)) : null);
+
+// "12 Aug 2026", or "12–14 Aug 2026" when the trek spans days.
+const formatTrekDates = (startIso, endIso) => {
+  const start = parseDateOnly(startIso);
+  if (!start || isNaN(start)) return null;
+  const end = parseDateOnly(endIso);
+  if (!end || isNaN(end) || +end === +start) return format(start, 'dd MMM yyyy');
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  return `${format(start, sameMonth ? 'dd' : 'dd MMM')}–${format(end, 'dd MMM yyyy')}`;
+};
 
 const SCHED_LABELS = {
   packing_list: 'Packing checklist (T-7)',
@@ -125,12 +141,29 @@ export default function BookingsPage() {
     }
   };
 
+  // Money actually collected. A "partial" booking has had a real advance taken,
+  // so its paidAmount is revenue — filtering to status==='paid' hid it entirely.
+  // Bookings created before paidAmount was tracked can be 'paid' with paidAmount
+  // 0, so fall back to amount for those rather than under-reporting.
   const totalRevenue = useMemo(() => {
-    return bookingsList.filter(b => b.status === 'paid').reduce((sum, b) => sum + (b.amount || 0), 0);
+    return bookingsList.reduce((sum, b) => {
+      if (b.status === 'paid') return sum + (b.paidAmount || b.amount || 0);
+      if (b.status === 'partial') return sum + (b.paidAmount || 0);
+      return sum;
+    }, 0);
+  }, [bookingsList]);
+
+  // Balance still owed across every part-paid booking.
+  const totalOutstanding = useMemo(() => {
+    return bookingsList
+      .filter(b => b.status === 'partial')
+      .reduce((sum, b) => sum + (b.pendingAmount || 0), 0);
   }, [bookingsList]);
 
   const paidCount = bookingsList.filter(b => b.status === 'paid').length;
+  const partialCount = bookingsList.filter(b => b.status === 'partial').length;
   const pendingCount = bookingsList.filter(b => b.status === 'pending').length;
+  const failedCount = bookingsList.filter(b => b.status === 'failed').length;
 
   if (loading) return (
     <div className="space-y-6 animate-fade-in">
@@ -160,23 +193,56 @@ export default function BookingsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-slate-900">{bookingsList.length}</p>
           <p className="text-xs text-slate-500 mt-1">Total Bookings</p>
         </div>
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-emerald-600">₹{totalRevenue.toLocaleString('en-IN')}</p>
-          <p className="text-xs text-slate-500 mt-1">Revenue (Paid)</p>
+          <p className="text-xs text-slate-500 mt-1">Revenue (Collected)</p>
         </div>
-        <div className="card p-4 text-center">
+        {/* Status tiles double as filters, and together account for every
+            booking in the total — paid + partial + pending + failed. */}
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'paid' ? 'All' : 'paid')}
+          className={`card p-4 text-center transition-all hover:shadow-md ${statusFilter === 'paid' ? 'ring-2 ring-emerald-400' : ''}`}
+        >
           <p className="text-2xl font-bold text-emerald-600">{paidCount}</p>
           <p className="text-xs text-slate-500 mt-1">Paid</p>
-        </div>
-        <div className="card p-4 text-center">
+        </button>
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'partial' ? 'All' : 'partial')}
+          className={`card p-4 text-center transition-all hover:shadow-md ${statusFilter === 'partial' ? 'ring-2 ring-blue-400' : ''}`}
+        >
+          <p className="text-2xl font-bold text-blue-600">{partialCount}</p>
+          <p className="text-xs text-slate-500 mt-1">
+            Partial
+            {totalOutstanding > 0 && (
+              <span className="block text-[11px] text-amber-600 mt-0.5">
+                ₹{totalOutstanding.toLocaleString('en-IN')} due
+              </span>
+            )}
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'pending' ? 'All' : 'pending')}
+          className={`card p-4 text-center transition-all hover:shadow-md ${statusFilter === 'pending' ? 'ring-2 ring-amber-400' : ''}`}
+        >
           <p className="text-2xl font-bold text-amber-600">{pendingCount}</p>
           <p className="text-xs text-slate-500 mt-1">Pending</p>
-        </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'failed' ? 'All' : 'failed')}
+          className={`card p-4 text-center transition-all hover:shadow-md ${statusFilter === 'failed' ? 'ring-2 ring-red-400' : ''}`}
+        >
+          <p className="text-2xl font-bold text-red-600">{failedCount}</p>
+          <p className="text-xs text-slate-500 mt-1">Failed</p>
+        </button>
       </div>
 
       {/* Filters */}
@@ -229,7 +295,13 @@ export default function BookingsPage() {
                       <div className="w-8 h-8 rounded-lg bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold shrink-0">
                         {(booking.trekName || '?').charAt(0)}
                       </div>
-                      <span className="font-medium text-slate-900 truncate max-w-[200px]">{booking.trekName}</span>
+                      <div className="min-w-0">
+                        <span className="block font-medium text-slate-900 truncate max-w-[200px]">{booking.trekName}</span>
+                        <span className="block text-[11px] text-slate-500 flex items-center gap-1">
+                          <CalendarDays className="w-3 h-3 shrink-0" />
+                          {formatTrekDates(booking.departureDate, booking.departureEndDate) || 'Date not set'}
+                        </span>
+                      </div>
                     </div>
                   </td>
                   <td className="table-cell text-slate-600">{booking.cityName || '—'}</td>
@@ -243,7 +315,16 @@ export default function BookingsPage() {
                       <Users className="w-3.5 h-3.5 text-slate-400" /> {booking.peopleCount}
                     </span>
                   </td>
-                  <td className="table-cell font-semibold text-slate-900">₹{(booking.amount || 0).toLocaleString('en-IN')}</td>
+                  <td className="table-cell font-semibold text-slate-900">
+                    ₹{(booking.amount || 0).toLocaleString('en-IN')}
+                    {booking.status === 'partial' && (
+                      <span className="block text-[11px] font-normal text-slate-500 mt-0.5">
+                        <span className="text-emerald-600">₹{(booking.paidAmount || 0).toLocaleString('en-IN')} paid</span>
+                        {' · '}
+                        <span className="text-amber-600">₹{(booking.pendingAmount || 0).toLocaleString('en-IN')} due</span>
+                      </span>
+                    )}
+                  </td>
                   <td className="table-cell">{getStatusBadge(booking.status)}</td>
                   <td className="table-cell text-sm text-slate-500">{booking.createdAt ? format(new Date(booking.createdAt), 'dd/MM/yyyy') : '—'}</td>
                   <td className="table-cell text-right">
@@ -309,6 +390,13 @@ export default function BookingsPage() {
               <div>
                 <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Amount</p>
                 <p className="font-bold text-lg text-primary-700">₹{(selectedBooking.amount || 0).toLocaleString('en-IN')}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Trek Dates</p>
+                <p className="font-medium text-slate-900 flex items-center gap-1">
+                  <CalendarDays className="w-3 h-3" />
+                  {formatTrekDates(selectedBooking.departureDate, selectedBooking.departureEndDate) || '—'}
+                </p>
               </div>
               <div>
                 <p className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Booked On</p>
