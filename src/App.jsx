@@ -28,6 +28,7 @@ import SuperAdminPage  from './pages/SuperAdminPage';
 import CouponsPage from './pages/CouponsPage';
 import ReferralPage from './pages/ReferralPage';
 import ReviewsPage from './pages/ReviewsPage';
+import PaymentVerificationPage from './pages/PaymentVerificationPage';
 import TemplatesPage from './pages/TemplatesPage';
 import AiLogsPage from './pages/AiLogsPage';
 import AiUsagePage from './pages/AiUsagePage';
@@ -101,6 +102,7 @@ function App() {
               <Route path="/coupons" element={<CouponsPage />} />
               <Route path="/referrals" element={<ReferralPage />} />
               <Route path="/reviews" element={<ReviewsPage />} />
+              <Route path="/payment-verification" element={<PaymentVerificationPage />} />
               <Route path="/ai-logs" element={<AiLogsPage />} />
               <Route path="/ai-usage" element={<AiUsagePage />} />
             </Route>

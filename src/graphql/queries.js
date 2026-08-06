@@ -1218,7 +1218,14 @@ export const LIST_SUPPORTED_PROVIDERS = gql`
     listSupportedProviders {
       name
       displayName
+      kind
       requiredFields {
+        key
+        label
+        type
+        required
+      }
+      settingsFields {
         key
         label
         type
@@ -1238,9 +1245,54 @@ export const LIST_PAYMENT_GATEWAYS = gql`
       isDefault
       env
       maskedCredentials
+      settings
       createdAt
       updatedAt
     }
+  }
+`;
+
+// ─── Manual UPI payment verification ───────────────────
+export const MANUAL_PAYMENTS = gql`
+  query ManualPayments($state: String, $limit: Int, $offset: Int) {
+    manualPayments(state: $state, limit: $limit, offset: $offset) {
+      total
+      pendingCount
+      items {
+        bookingId
+        txnid
+        state
+        amountExpected
+        amountClaimed
+        utr
+        screenshotUrl
+        submittedAt
+        submitCount
+        reviewedAt
+        reviewedByName
+        reviewNote
+        customerName
+        phone
+        email
+        trekName
+        departureId
+        departureDate
+        peopleCount
+        bookingAmount
+        paidAmount
+        pendingAmount
+        bookingStatus
+        paymentType
+        seatsAvailable
+        createdAt
+      }
+    }
+  }
+`;
+
+export const MANUAL_PAYMENT_PENDING_COUNT = gql`
+  query ManualPaymentPendingCount {
+    manualPaymentPendingCount
   }
 `;
 

@@ -1,9 +1,11 @@
 import { NavLink, useLocation } from 'react-router-dom';
+import { useQuery } from '@apollo/client/react';
 import {
   LayoutDashboard, Mountain, CalendarRange, BookOpen, Users, Navigation,
-  Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft, Building2, Shield, Bot, Workflow, BarChart2, Tag, Send, FileText, Contact, Gift, Database, TrendingUp, Star, Cpu
+  Wallet, Megaphone, MessageCircle, Settings, X, ChevronLeft, Building2, Shield, Bot, Workflow, BarChart2, Tag, Send, FileText, Contact, Gift, Database, TrendingUp, Star, Cpu, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { MANUAL_PAYMENT_PENDING_COUNT } from '../../graphql/queries';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -11,6 +13,8 @@ const navItems = [
   { path: '/treks', label: 'Treks', icon: Mountain },
   { path: '/departures', label: 'Departures', icon: CalendarRange },
   { path: '/bookings', label: 'Bookings', icon: BookOpen },
+  // badgeKey drives the unread-style counter — see pendingPayments below.
+  { path: '/payment-verification', label: 'Payment Verification', icon: ShieldCheck, badgeKey: 'pendingPayments' },
   { path: '/participants', label: 'Participants', icon: Users },
   { path: '/customers', label: 'Customers', icon: Users },
   { path: '/contacts', label: 'Contacts', icon: Contact },
@@ -36,6 +40,18 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
   const location = useLocation();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'superadmin';
+
+  // Manual UPI payments waiting on a human. Polled rather than socket-driven:
+  // the sidebar is always mounted, and a stale-by-a-minute badge is fine.
+  // errorPolicy 'ignore' so a company with no UPI provider never sees an error.
+  const { data: pendingData } = useQuery(MANUAL_PAYMENT_PENDING_COUNT, {
+    pollInterval: 60000,
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'ignore',
+  });
+  const badgeCounts = {
+    pendingPayments: pendingData?.manualPaymentPendingCount || 0,
+  };
 
   return (
     <>
@@ -73,6 +89,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
               const isActive = location.pathname === item.path ||
                 (item.path !== '/' && location.pathname.startsWith(item.path));
               const Icon = item.icon;
+              const badge = item.badgeKey ? badgeCounts[item.badgeKey] : 0;
 
               return (
                 <NavLink
@@ -88,8 +105,20 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
                     }
                   `}
                 >
-                  <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? 'text-secondary-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
-                  {!collapsed && <span>{item.label}</span>}
+                  <div className="relative shrink-0">
+                    <Icon className={`w-[18px] h-[18px] transition-colors ${isActive ? 'text-secondary-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                    {/* Collapsed rail has no room for a label, so the count
+                        becomes a dot on the icon itself. */}
+                    {collapsed && badge > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
+                    )}
+                  </div>
+                  {!collapsed && <span className="flex-1">{item.label}</span>}
+                  {!collapsed && badge > 0 && (
+                    <span className="px-1.5 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 rounded-full">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
                 </NavLink>
               );
             })}

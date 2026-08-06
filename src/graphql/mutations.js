@@ -982,6 +982,7 @@ export const UPSERT_PAYMENT_GATEWAY = gql`
       isDefault
       env
       maskedCredentials
+      settings
       createdAt
       updatedAt
     }
@@ -997,6 +998,32 @@ export const DELETE_PAYMENT_GATEWAY = gql`
 export const SET_DEFAULT_PAYMENT_GATEWAY = gql`
   mutation SetDefaultPaymentGateway($provider: String!) {
     setDefaultPaymentGateway(provider: $provider)
+  }
+`;
+
+// ─── Manual UPI payment verification ───────────────────
+export const APPROVE_MANUAL_PAYMENT = gql`
+  mutation ApproveManualPayment($bookingId: ID!, $amountReceived: Float, $note: String) {
+    approveManualPayment(bookingId: $bookingId, amountReceived: $amountReceived, note: $note) {
+      success
+      message
+      bookingId
+      bookingStatus
+      paidAmount
+      pendingAmount
+      participantLink
+    }
+  }
+`;
+
+export const REJECT_MANUAL_PAYMENT = gql`
+  mutation RejectManualPayment($bookingId: ID!, $reason: String!) {
+    rejectManualPayment(bookingId: $bookingId, reason: $reason) {
+      success
+      message
+      bookingId
+      bookingStatus
+    }
   }
 `;
 
