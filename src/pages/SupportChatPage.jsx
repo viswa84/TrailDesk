@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client/react';
 import { GET_CHATS, GET_MESSAGES, GET_CONVERSATION_LOGS, GET_STAFF_USERS, ASSIGN_GUIDE, UNASSIGN_GUIDE, TOGGLE_AI, GET_CITIES, GET_TREKS, GET_DEPARTURES } from '../graphql/queries';
 import { SEND_MESSAGE } from '../graphql/mutations';
@@ -590,6 +591,26 @@ export default function SupportChatPage() {
   // Ticking clock (ms) so the 24h-window countdowns + sort refresh on their own.
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [showMobileChat, setShowMobileChat] = useState(false);
+
+  // ─── Deep link: /support-chat?phone=91XXXXXXXXXX ───────────────────────────
+  // Opens that conversation immediately. Used by the "Open chat" action on the
+  // Contacts page, which targets a new tab. GET_MESSAGES is keyed on activePhone
+  // alone, so the contact does not need to already exist in the chat list — a
+  // never-messaged number opens to an empty thread ready to send.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const raw = searchParams.get('phone');
+    if (!raw) return;
+    const phone = raw.replace(/\D/g, '');
+    if (phone) {
+      setActivePhone(phone);
+      setShowMobileChat(true);
+    }
+    // Strip the param so picking another conversation isn't undone on re-render.
+    const next = new URLSearchParams(searchParams);
+    next.delete('phone');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   // Lead-action menu / inline editors in the conversation header.
   const [showLeadMenu, setShowLeadMenu] = useState(false);
   const [leadUpdating, setLeadUpdating] = useState(false);

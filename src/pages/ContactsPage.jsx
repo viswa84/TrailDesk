@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import {
   Contact, Download, RefreshCcw, Loader2, Users, AlertTriangle, Ban,
-  Cloud, CheckCircle2, Link2, Unlink, Info, Settings,
+  Cloud, CheckCircle2, Link2, Unlink, Info, Settings, MessageCircle,
 } from 'lucide-react';
 
 // API base — same convention as BroadcastPage / sibling pages.
@@ -531,12 +531,13 @@ export default function ContactsPage() {
                 <th className="table-header">Email</th>
                 <th className="table-header">Last contact</th>
                 <th className="table-header">Status</th>
+                <th className="table-header text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {!loading && !hasContacts && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center">
+                  <td colSpan={8} className="px-4 py-12 text-center">
                     <Contact className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                     <p className="text-sm text-slate-400">No contacts match these filters.</p>
                   </td>
@@ -560,6 +561,26 @@ export default function ContactsPage() {
                       <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-600">
                         Active
                       </span>
+                    )}
+                  </td>
+                  <td className="table-cell text-right">
+                    {/* Opens the WhatsApp Chat page in a new tab with this
+                        contact's conversation already selected. A real anchor
+                        rather than window.open so middle-click and
+                        open-in-new-window behave as expected. */}
+                    {c.phone ? (
+                      <a
+                        href={`/support-chat?phone=${encodeURIComponent(String(c.phone).replace(/\D/g, ''))}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Open WhatsApp chat with ${c.name || c.phone}`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        Chat
+                      </a>
+                    ) : (
+                      <span className="text-xs text-slate-300">—</span>
                     )}
                   </td>
                 </tr>
