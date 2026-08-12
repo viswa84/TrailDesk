@@ -529,6 +529,7 @@ export default function ContactsPage() {
                 <th className="table-header">Trek</th>
                 <th className="table-header">City</th>
                 <th className="table-header">Email</th>
+                <th className="table-header">Note</th>
                 <th className="table-header">Last contact</th>
                 <th className="table-header">Status</th>
                 <th className="table-header text-right">Actions</th>
@@ -537,7 +538,7 @@ export default function ContactsPage() {
             <tbody>
               {!loading && !hasContacts && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center">
+                  <td colSpan={9} className="px-4 py-12 text-center">
                     <Contact className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                     <p className="text-sm text-slate-400">No contacts match these filters.</p>
                   </td>
@@ -551,6 +552,21 @@ export default function ContactsPage() {
                   <td className="table-cell text-slate-600">{c.trek || '—'}</td>
                   <td className="table-cell text-slate-600">{c.city || '—'}</td>
                   <td className="table-cell text-slate-600">{c.email || '—'}</td>
+                  {/* Lead note typed by an agent on the WhatsApp Chat screen.
+                      Truncated inline; full text on hover so long notes never
+                      stretch the row. */}
+                  <td className="table-cell text-slate-600">
+                    {c.note ? (
+                      <span
+                        title={c.note}
+                        className="block max-w-[16rem] truncate"
+                      >
+                        {c.note}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
                   <td className="table-cell text-xs text-slate-500">{formatDate(c.lastContact)}</td>
                   <td className="table-cell">
                     {c.optedOut ? (
