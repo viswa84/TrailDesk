@@ -93,6 +93,25 @@ export default function BroadcastPage() {
     () => templates.find((t) => `${t.name}::${t.language}` === selectedTemplate),
     [templates, selectedTemplate]
   );
+  // Standard-catalog metadata, so this picker reads like the chat one: friendly
+  // titles grouped by purpose instead of a flat list of raw Meta names.
+  const [catalogGroups, setCatalogGroups] = useState([]);
+  const [catalogByName, setCatalogByName] = useState({});
+
+  // Live approved templates bucketed into catalog groups, in catalog order.
+  // Anything the catalog does not know about (older or hand-made templates) is
+  // kept in a trailing group rather than hidden — it is still sendable.
+  const groupedTemplates = useMemo(() => {
+    const buckets = catalogGroups.map((g) => ({ ...g, items: [] }));
+    const other = { key: '__other__', title: 'Other templates', items: [] };
+    for (const t of templates) {
+      const meta = catalogByName[t.name];
+      const bucket = meta && buckets.find((b) => b.key === meta.group);
+      (bucket || other).items.push(t);
+    }
+    return [...buckets.filter((b) => b.items.length), ...(other.items.length ? [other] : [])];
+  }, [templates, catalogGroups, catalogByName]);
+
   const templateSpec = useMemo(
     () => (selectedTemplateObj ? parseTemplateSpec(selectedTemplateObj.components) : null),
     [selectedTemplateObj]
@@ -205,6 +224,15 @@ export default function BroadcastPage() {
     try {
       const { templates: t } = await api('/api/chat/templates');
       setTemplates(t || []);
+      // Catalog is presentation only — a failure here must not stop the page
+      // loading, it just falls back to an ungrouped list.
+      try {
+        const cat = await api('/api/templates/catalog');
+        setCatalogGroups(cat.groups || []);
+        setCatalogByName(
+          Object.fromEntries((cat.entries || []).map((e) => [e.name, e]))
+        );
+      } catch { /* ungrouped fallback */ }
     } catch (e) {
       setTemplatesError(e.message);
     } finally {
@@ -688,17 +716,30 @@ export default function BroadcastPage() {
             className="select-field"
           >
             <option value="">{templatesLoading ? 'Loading…' : `Select a template (${templates.length} available)`}</option>
-            {templates.map((t) => (
-              <option key={`${t.name}::${t.language}`} value={`${t.name}::${t.language}`}>
-                {t.name} ({t.language}) — {t.category}
-              </option>
+            {groupedTemplates.map((g) => (
+              <optgroup key={g.key} label={g.title}>
+                {g.items.map((t) => (
+                  <option key={`${t.name}::${t.language}`} value={`${t.name}::${t.language}`}>
+                    {catalogByName[t.name]?.title || t.name} ({t.language}) — {t.category}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
 
         {selectedTemplateObj && (
           <div className="text-xs text-slate-500 p-3 bg-slate-50 rounded-lg space-y-1">
-            <p className="font-semibold mb-1">Template body preview:</p>
+            {catalogByName[selectedTemplateObj.name]?.whenToUse && (
+              <p className="text-slate-600 mb-2 pb-2 border-b border-slate-200">
+                <span className="font-semibold">When to use: </span>
+                {catalogByName[selectedTemplateObj.name].whenToUse}
+              </p>
+            )}
+            <p className="font-semibold mb-1">
+              Template body preview
+              <span className="font-normal text-slate-400"> ({selectedTemplateObj.name})</span>:
+            </p>
             {selectedTemplateObj.components.map((c, idx) => (
               <div key={idx}>
                 <span className="uppercase text-[10px] text-slate-400">{c.type}{c.format ? `/${c.format}` : ''}: </span>
