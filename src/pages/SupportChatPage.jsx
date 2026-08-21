@@ -4,7 +4,7 @@ import { useQuery, useMutation, useApolloClient } from '@apollo/client/react';
 import { GET_CHATS, GET_MESSAGES, GET_CONVERSATION_LOGS, GET_STAFF_USERS, ASSIGN_GUIDE, UNASSIGN_GUIDE, TOGGLE_AI, GET_CITIES, GET_TREKS, GET_DEPARTURES } from '../graphql/queries';
 import { SEND_MESSAGE } from '../graphql/mutations';
 import { io } from 'socket.io-client';
-import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, PhoneOff, PhoneIncoming, Mic, MicOff, Check, CheckCheck, ArrowLeft, MessageCircle, FileText, CreditCard, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X, Image, Film, Music, File, AlertCircle, Bot, BotOff, UserPlus, UserMinus, UserCheck, Info, Clock, Lock } from 'lucide-react';
+import { Search, Send, Paperclip, MoreVertical, Phone as PhoneIcon, PhoneOff, PhoneIncoming, Mic, MicOff, Check, CheckCheck, ArrowLeft, MessageCircle, FileText, SmilePlus, Loader2, RefreshCw, List, ChevronRight, PenSquare, X, Image, Film, Music, File, AlertCircle, Bot, BotOff, UserPlus, UserMinus, UserCheck, Info, Clock, Lock } from 'lucide-react';
 import { useWhatsAppCall } from '../hooks/useWhatsAppCall';
 import { parseTemplateSpec, buildTemplateComponents, totalParamCount, bodyTextOf, renderTemplateText } from '../utils/whatsappTemplate';
 import { resolveDepartureValues, TEMPLATE_DEPARTURE_MAP, applyDepartureToParams } from '../utils/departureTemplateFill';
@@ -133,12 +133,6 @@ function MediaMessage({ raw, message, messageType, mediaUrl, mediaType, fileName
 }
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_GRAPHQL_URL?.replace('/graphql', '') || 'http://localhost:8080';
-
-const quickReplies = [
-  { label: 'Packing List PDF', icon: FileText },
-  { label: 'Payment Link', icon: CreditCard },
-  { label: 'Trek Itinerary', icon: FileText },
-];
 
 // ─── Lead triage (human-reply based) ─────────────────────────────────────────
 // Visual config per leadStatus. Colors: needs_reply→red, contacted→green,
@@ -2007,11 +2001,19 @@ export default function SupportChatPage() {
                   <div className="flex items-center gap-2">
                     <span className="hidden sm:block text-[10px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">Quick:</span>
                     <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
-                      {quickReplies.map(qr => (
-                        <button key={qr.label} onClick={() => setMessage(qr.label)} className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full text-xs font-medium whitespace-nowrap transition-colors cursor-pointer">
-                          <qr.icon className="w-3 h-3" /> {qr.label}
-                        </button>
-                      ))}
+                      {/* Opens the approved-template picker with parameters
+                          pre-filled from this conversation. Previously this row
+                          held three labels that only typed their own text into
+                          the box, which sent nothing useful. The "Send template"
+                          button elsewhere appears ONLY when the 24h window has
+                          closed, so this is the one always-available way in. */}
+                      <button
+                        onClick={openTemplatePicker}
+                        title="Send an approved WhatsApp template"
+                        className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full text-xs font-medium whitespace-nowrap transition-colors cursor-pointer"
+                      >
+                        <FileText className="w-3 h-3" /> Templates
+                      </button>
                     </div>
                   </div>
                 </div>
