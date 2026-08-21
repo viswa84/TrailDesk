@@ -728,16 +728,45 @@ export default function SupportChatPage() {
   const [paramValues, setParamValues] = useState({ headerParams: [], bodyParams: [], buttonParams: {} });
   const [sendingTemplate, setSendingTemplate] = useState(false);
 
+  // ─── Standard template catalog (GET /api/chat/:phone/template-drafts) ───────
+  // The backend returns the standard set already classified against this
+  // company's WABA and already filled in from THIS customer's booking, so the
+  // admin picks a purpose rather than a template name and edits labelled fields
+  // rather than {{1}}/{{2}}. `draftParams` is a flat { paramKey: value } map.
+  const [drafts, setDrafts] = useState([]);
+  const [draftGroups, setDraftGroups] = useState([]);
+  const [draftExtras, setDraftExtras] = useState([]);
+  const [draftContext, setDraftContext] = useState(null);
+  const [pickedDraftName, setPickedDraftName] = useState('');
+  const [draftParams, setDraftParams] = useState({});
+  const [templateSearch, setTemplateSearch] = useState('');
+
   // Departure auto-fill for the template modal (mirrors the Broadcast page). All
   // departures load here — there is no trek/city filter context in single-chat.
   const { data: chatDepData } = useQuery(GET_DEPARTURES, { fetchPolicy: 'cache-first' });
   const chatDepartures = chatDepData?.getDepartures || [];
   const [tmplDepartureId, setTmplDepartureId] = useState('');
 
-  const pickedTemplateObj = useMemo(
-    () => templates.find((t) => `${t.name}::${t.language}` === pickedTemplate),
-    [templates, pickedTemplate]
+  const pickedDraft = useMemo(
+    () => drafts.find((d) => d.name === pickedDraftName) || null,
+    [drafts, pickedDraftName]
   );
+
+  // Legacy raw-parameter path — used for templates the catalog does not define
+  // ("extras") and for catalog entries whose live copy has drifted ("mismatch").
+  // Those still have to be editable by {{n}}, against the company's REAL
+  // components, or the admin would be locked out of templates they already have.
+  const pickedTemplateObj = useMemo(() => {
+    if (pickedDraft?.state === 'mismatch' && pickedDraft.liveComponents) {
+      return {
+        name: pickedDraft.name,
+        language: pickedDraft.language,
+        components: pickedDraft.liveComponents,
+      };
+    }
+    return templates.find((t) => `${t.name}::${t.language}` === pickedTemplate);
+  }, [templates, pickedTemplate, pickedDraft]);
+
   const pickedName = pickedTemplateObj?.name;
   const templateSpec = useMemo(
     () => (pickedTemplateObj ? parseTemplateSpec(pickedTemplateObj.components) : null),
@@ -747,6 +776,10 @@ export default function SupportChatPage() {
     () => chatDepartures.find((d) => d._id === tmplDepartureId),
     [chatDepartures, tmplDepartureId]
   );
+
+  // True when the admin is editing a standard entry with named, pre-filled
+  // fields; false when falling back to raw {{n}} editing.
+  const usingCatalog = !!pickedDraft && pickedDraft.state === 'ready';
 
   useEffect(() => {
     setParamValues({ headerParams: [], bodyParams: [], buttonParams: {} });
@@ -768,23 +801,79 @@ export default function SupportChatPage() {
     }
   }, []);
 
-  const loadChatTemplates = useCallback(async () => {
+  // Load the standard catalog (pre-filled for this customer) plus the raw
+  // approved list that backs the legacy path. Fetched together so opening the
+  // picker is a single wait.
+  const loadChatTemplates = useCallback(async (phone, departureId = '') => {
+    if (!phone) return;
     setTemplatesLoading(true);
     setTemplatesError('');
     try {
       const token = localStorage.getItem('trekops_token');
-      const res = await fetch(`${API_URL}/api/chat/templates`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setTemplates(data.templates || []);
+      const headers = { Authorization: `Bearer ${token}` };
+      const qs = departureId ? `?departureId=${encodeURIComponent(departureId)}` : '';
+
+      const [draftRes, rawRes] = await Promise.all([
+        fetch(`${API_URL}/api/chat/${phone}/template-drafts${qs}`, { headers }),
+        fetch(`${API_URL}/api/chat/templates`, { headers }),
+      ]);
+
+      const draftData = await draftRes.json().catch(() => ({}));
+      if (!draftRes.ok) throw new Error(draftData.error || `HTTP ${draftRes.status}`);
+
+      setDrafts(draftData.drafts || []);
+      setDraftGroups(draftData.groups || []);
+      setDraftExtras(draftData.extras || []);
+      setDraftContext(draftData.context || null);
+
+      // The raw list is only needed for "extras"; a failure there must not stop
+      // the standard set from rendering.
+      if (rawRes.ok) {
+        const rawData = await rawRes.json().catch(() => ({}));
+        setTemplates(rawData.templates || []);
+      }
     } catch (e) {
       setTemplatesError(e.message);
     } finally {
       setTemplatesLoading(false);
     }
   }, []);
+
+  // Open the picker for the active conversation.
+  const openTemplatePicker = useCallback(() => {
+    setShowTemplatePicker(true);
+    setPickedDraftName('');
+    setPickedTemplate('');
+    setDraftParams({});
+    setTemplateSearch('');
+    setTmplDepartureId('');
+    loadChatTemplates(activePhone);
+  }, [activePhone, loadChatTemplates]);
+
+  // Select a standard entry — seed the editable fields from the server's
+  // auto-filled values.
+  const pickDraft = useCallback((draft) => {
+    setPickedDraftName(draft.name);
+    setPickedTemplate('');
+    setDraftParams(
+      Object.fromEntries((draft.params || []).map((p) => [p.key, p.value || '']))
+    );
+  }, []);
+
+  // Re-resolve auto-fill against a different departure (the customer's booking
+  // is the default, but an admin may be talking about another batch).
+  const retargetDeparture = useCallback(async (departureId) => {
+    setTmplDepartureId(departureId);
+    await loadChatTemplates(activePhone, departureId);
+  }, [activePhone, loadChatTemplates]);
+
+  // Re-seed the selected entry's fields whenever the drafts payload changes
+  // (i.e. after a departure retarget), keeping the current selection.
+  useEffect(() => {
+    if (!pickedDraftName) return;
+    const d = drafts.find((x) => x.name === pickedDraftName);
+    if (d) setDraftParams(Object.fromEntries((d.params || []).map((p) => [p.key, p.value || ''])));
+  }, [drafts, pickedDraftName]);
 
   // Refresh window state when active conversation changes or a new inbound arrives.
   useEffect(() => { loadWindow(activePhone); }, [activePhone, loadWindow]);
@@ -817,27 +906,64 @@ export default function SupportChatPage() {
     });
   }, []);
 
+  // Live preview of the standard message. Rendered from the raw copy each time
+  // so it tracks edits — re-substituting into the server's already-rendered
+  // preview would freeze whatever was auto-filled.
+  const draftPreview = useMemo(() => {
+    if (!usingCatalog) return '';
+    const bodyParams = pickedDraft.params.filter((p) => p.slot === 'body');
+    return String(pickedDraft.bodyTemplate || pickedDraft.preview || '')
+      .replace(/\{\{(\d+)\}\}/g, (m, n) => {
+        const p = bodyParams[Number(n) - 1];
+        const v = p ? draftParams[p.key] : '';
+        return v === undefined || v === null || v === '' ? m : String(v);
+      });
+  }, [usingCatalog, pickedDraft, draftParams]);
+
+  // Which standard fields are still blank? Meta rejects empty text parameters,
+  // so block the send here rather than let it fail at the API.
+  const missingDraftParams = useMemo(() => {
+    if (!usingCatalog) return [];
+    return (pickedDraft.params || [])
+      .filter((p) => !String(draftParams[p.key] ?? '').trim())
+      .map((p) => p.label);
+  }, [usingCatalog, pickedDraft, draftParams]);
+
   const sendTemplate = useCallback(async () => {
-    if (!activePhone || !pickedTemplateObj) return;
+    if (!activePhone) return;
+    if (!usingCatalog && !pickedTemplateObj) return;
+
     setSendingTemplate(true);
     try {
-      const components = templateSpec ? buildTemplateComponents(templateSpec, paramValues) : [];
-      const displayText = renderTemplateText(bodyTextOf(pickedTemplateObj.components), paramValues.bodyParams);
       const token = localStorage.getItem('trekops_token');
+
+      // Standard send: post named params and let the backend compile the
+      // components against this company's live template shape.
+      // Legacy send: post an explicit components array we built here.
+      const payload = usingCatalog
+        ? { name: pickedDraft.name, params: draftParams }
+        : {
+            name: pickedTemplateObj.name,
+            language: pickedTemplateObj.language,
+            components: templateSpec ? buildTemplateComponents(templateSpec, paramValues) : [],
+            displayText: renderTemplateText(
+              bodyTextOf(pickedTemplateObj.components),
+              paramValues.bodyParams
+            ),
+          };
+
       const res = await fetch(`${API_URL}/api/chat/${activePhone}/template`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          name: pickedTemplateObj.name,
-          language: pickedTemplateObj.language,
-          components,
-          displayText,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
       setShowTemplatePicker(false);
       setPickedTemplate('');
+      setPickedDraftName('');
+      setDraftParams({});
       setTmplDepartureId('');
       // Backend marked the lead "contacted" — refetch so it flips to Replied.
       refetchChats();
@@ -847,7 +973,10 @@ export default function SupportChatPage() {
     } finally {
       setSendingTemplate(false);
     }
-  }, [activePhone, pickedTemplateObj, templateSpec, paramValues, refetchChats]);
+  }, [
+    activePhone, usingCatalog, pickedDraft, draftParams,
+    pickedTemplateObj, templateSpec, paramValues, refetchChats,
+  ]);
 
   // ─── GraphQL: Messages for active phone (initial load, paginated) ─
   const { data: messagesData, loading: messagesLoading, refetch: refetchMessages, fetchMore } = useQuery(GET_MESSAGES, {
@@ -1965,7 +2094,7 @@ export default function SupportChatPage() {
                         </span>
                       </div>
                       <button
-                        onClick={() => { setShowTemplatePicker(true); loadChatTemplates(); }}
+                        onClick={openTemplatePicker}
                         className="btn-primary text-sm flex items-center gap-1.5 shrink-0"
                       >
                         <Send className="w-4 h-4" /> Send template
@@ -2223,13 +2352,20 @@ export default function SupportChatPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) { setShowTemplatePicker(false); setTmplDepartureId(''); } }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 bg-primary-50 rounded-lg flex items-center justify-center">
                   <Send className="w-4 h-4 text-primary-600" />
                 </div>
-                <h2 className="text-base font-bold text-slate-900">Send Template Message</h2>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Send Template Message</h2>
+                  <p className="text-[11px] text-slate-500">
+                    To <span className="font-mono font-semibold text-slate-700">{activePhone}</span>
+                    {draftContext?.customerName ? ` · ${draftContext.customerName}` : ''}
+                    {' · works inside and outside the 24h window'}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => { setShowTemplatePicker(false); setTmplDepartureId(''); }}
@@ -2239,93 +2375,332 @@ export default function SupportChatPage() {
               </button>
             </div>
 
-            <div className="px-6 py-5 space-y-4 overflow-y-auto">
-              <p className="text-xs text-slate-500">
-                Sending to <span className="font-mono font-semibold text-slate-700">{activePhone}</span>.
-                Templates work inside AND outside the 24h window.
-              </p>
-
-              {templatesError && (
-                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-100 rounded-lg">
-                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                  <span className="text-xs text-red-600">{templatesError}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Choose an APPROVED template
-                </label>
-                <select
-                  value={pickedTemplate}
-                  onChange={(e) => setPickedTemplate(e.target.value)}
-                  disabled={templatesLoading}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                >
-                  <option value="">{templatesLoading ? 'Loading…' : `Select a template (${templates.length} available)`}</option>
-                  {templates.map((t) => (
-                    <option key={`${t.name}::${t.language}`} value={`${t.name}::${t.language}`}>
-                      {t.name} ({t.language}) — {t.category}
-                    </option>
-                  ))}
-                </select>
+            {templatesError && (
+              <div className="flex items-start gap-2 mx-6 mt-4 px-3 py-2 bg-red-50 border border-red-100 rounded-lg">
+                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                <span className="text-xs text-red-600">{templatesError}</span>
               </div>
+            )}
 
-              {pickedTemplateObj && (
-                <div className="text-xs text-slate-500 p-3 bg-slate-50 rounded-lg space-y-1">
-                  <p className="font-semibold mb-1">Body preview:</p>
-                  {pickedTemplateObj.components.map((c, idx) => (
-                    <div key={idx}>
-                      <span className="uppercase text-[10px] text-slate-400">{c.type}{c.format ? `/${c.format}` : ''}: </span>
-                      <span className="font-mono">{c.text || (c.buttons && c.buttons.map((b) => b.text).join(' | ')) || JSON.stringify(c).slice(0, 100)}</span>
-                    </div>
-                  ))}
+            <div className="flex flex-1 min-h-0 divide-x divide-slate-100">
+              {/* ── Left: pick a purpose ───────────────────────────────── */}
+              <div className="w-[19rem] shrink-0 flex flex-col min-h-0">
+                <div className="p-3 border-b border-slate-100">
+                  <input
+                    value={templateSearch}
+                    onChange={(e) => setTemplateSearch(e.target.value)}
+                    placeholder="Search messages…"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  />
                 </div>
-              )}
 
-              {pickedTemplateObj && chatDepartures.length > 0 && (
-                <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-lg space-y-2">
-                  <label className="block text-xs font-bold text-emerald-700 uppercase tracking-wider">
-                    Auto-fill from departure (optional)
-                  </label>
-                  <select
-                    value={tmplDepartureId}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setTmplDepartureId(id);
-                      const dep = chatDepartures.find((d) => d._id === id);
-                      if (dep && TEMPLATE_DEPARTURE_MAP[pickedName]) {
-                        setParamValues(applyDepartureToParams(pickedName, templateSpec, dep, paramValues));
-                      }
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
-                  >
-                    <option value="">— Select a departure to auto-fill —</option>
-                    {chatDepartures.map((d) => {
-                      const v = resolveDepartureValues(d);
-                      const seats = Math.max(0, (d.capacity ?? 0) - (d.booked ?? 0));
-                      return (
-                        <option key={d._id} value={d._id}>
-                          {`${d.trekName} — ${d.cityName || ''} — ${v.startDate} (${seats} seats left)`}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  {tmplDepartureObj && (
-                    TEMPLATE_DEPARTURE_MAP[pickedName] ? (
-                      <p className="text-[11px] text-emerald-700">
-                        Auto-filled from this departure — edit any field below.
+                <div className="flex-1 overflow-y-auto p-3 space-y-4">
+                  {templatesLoading && (
+                    <div className="flex items-center gap-2 text-xs text-slate-500 px-1 py-4">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading your templates…
+                    </div>
+                  )}
+
+                  {!templatesLoading && draftGroups.map((g) => {
+                    const q = templateSearch.trim().toLowerCase();
+                    const rows = drafts.filter((d) =>
+                      d.group === g.key &&
+                      (!q || d.title.toLowerCase().includes(q) || d.name.includes(q) ||
+                        (d.whenToUse || '').toLowerCase().includes(q))
+                    );
+                    if (!rows.length) return null;
+
+                    return (
+                      <div key={g.key}>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 mb-1.5">
+                          {g.title}
+                        </p>
+                        <div className="space-y-1">
+                          {rows.map((d) => {
+                            const selected = pickedDraftName === d.name;
+                            const sendable = d.state === 'ready' || d.state === 'mismatch';
+                            return (
+                              <button
+                                key={d.name}
+                                type="button"
+                                onClick={() => sendable && pickDraft(d)}
+                                disabled={!sendable}
+                                title={sendable ? d.whenToUse : d.reason}
+                                className={`w-full text-left px-2.5 py-2 rounded-lg border transition-colors ${
+                                  selected
+                                    ? 'bg-primary-50 border-primary-300'
+                                    : sendable
+                                      ? 'bg-white border-slate-200 hover:bg-slate-50 cursor-pointer'
+                                      : 'bg-slate-50 border-slate-100 opacity-60 cursor-not-allowed'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <span className="text-xs font-semibold text-slate-800 leading-snug">
+                                    {d.title}
+                                  </span>
+                                  {d.state !== 'ready' && (
+                                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full shrink-0 font-semibold uppercase ${
+                                      d.state === 'mismatch' ? 'bg-amber-100 text-amber-700'
+                                        : d.state === 'pending' ? 'bg-sky-100 text-sky-700'
+                                        : d.state === 'rejected' ? 'bg-red-100 text-red-700'
+                                        : 'bg-slate-200 text-slate-600'
+                                    }`}>
+                                      {d.state === 'missing' ? 'not set up' : d.state}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-slate-500 leading-snug mt-0.5 line-clamp-2">
+                                  {d.state === 'ready' ? d.whenToUse : d.reason}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Templates this company has that aren't part of the standard
+                      set — still sendable through the raw {{n}} editor. */}
+                  {!templatesLoading && draftExtras.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 mb-1.5">
+                        Other templates
                       </p>
-                    ) : (
-                      <p className="text-[11px] text-slate-500">
-                        This template has no auto-map — use the + buttons on each field to insert this departure&apos;s values.
-                      </p>
-                    )
+                      <div className="space-y-1">
+                        {templates
+                          .filter((t) => draftExtras.some((x) => x.name === t.name))
+                          .filter((t) => {
+                            const q = templateSearch.trim().toLowerCase();
+                            return !q || t.name.includes(q);
+                          })
+                          .map((t) => {
+                            const id = `${t.name}::${t.language}`;
+                            return (
+                              <button
+                                key={id}
+                                type="button"
+                                onClick={() => { setPickedDraftName(''); setPickedTemplate(id); }}
+                                className={`w-full text-left px-2.5 py-2 rounded-lg border transition-colors cursor-pointer ${
+                                  pickedTemplate === id
+                                    ? 'bg-primary-50 border-primary-300'
+                                    : 'bg-white border-slate-200 hover:bg-slate-50'
+                                }`}
+                              >
+                                <span className="text-xs font-mono text-slate-700">{t.name}</span>
+                                <p className="text-[10px] text-slate-400">{t.category} · {t.language}</p>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
+                  {!templatesLoading && !drafts.length && !draftExtras.length && (
+                    <p className="text-xs text-slate-500 px-1 py-4">
+                      No templates found for this company.
+                    </p>
                   )}
                 </div>
-              )}
+              </div>
 
-              {templateSpec && totalParamCount(templateSpec) > 0 && (
+              {/* ── Right: fill and send ───────────────────────────────── */}
+              <div className="flex-1 min-w-0 overflow-y-auto px-6 py-5 space-y-4">
+                {!pickedDraft && !pickedTemplateObj && (
+                  <div className="h-full flex items-center justify-center text-center py-12">
+                    <div>
+                      <Send className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                      <p className="text-sm text-slate-500">Pick a message on the left.</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Standard messages come pre-filled from this customer&apos;s booking.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Standard entry: named, pre-filled fields */}
+                {usingCatalog && (
+                  <>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm font-bold text-slate-900">{pickedDraft.title}</h3>
+                        {pickedDraft.automatic && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-semibold uppercase">
+                            usually automatic
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">{pickedDraft.whenToUse}</p>
+                    </div>
+
+                    {/* Where the auto-filled values came from */}
+                    <div className={`px-3 py-2 rounded-lg border text-[11px] ${
+                      draftContext?.hasBooking
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-amber-50 border-amber-200 text-amber-800'
+                    }`}>
+                      {draftContext?.hasBooking ? (
+                        <>
+                          Filled from booking <span className="font-mono font-semibold">{draftContext.bookingRef}</span>
+                          {draftContext.departureLabel ? ` · ${draftContext.departureLabel}` : ''}
+                          {draftContext.bookingStatus ? ` · ${draftContext.bookingStatus}` : ''}
+                        </>
+                      ) : (
+                        <>No booking found for this number — fill the fields below manually.</>
+                      )}
+                    </div>
+
+                    {chatDepartures.length > 0 && (
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                          Use a different departure (optional)
+                        </label>
+                        <select
+                          value={tmplDepartureId}
+                          onChange={(e) => retargetDeparture(e.target.value)}
+                          disabled={templatesLoading}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                        >
+                          <option value="">— This customer&apos;s own booking —</option>
+                          {chatDepartures.map((d) => {
+                            const v = resolveDepartureValues(d);
+                            const seats = Math.max(0, (d.capacity ?? 0) - (d.booked ?? 0));
+                            return (
+                              <option key={d._id} value={d._id}>
+                                {`${d.trekName} — ${d.cityName || ''} — ${v.startDate} (${seats} seats left)`}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    )}
+
+                    {pickedDraft.params.length > 0 && (
+                      <div className="space-y-3">
+                        {pickedDraft.params.map((p) => {
+                          const value = draftParams[p.key] ?? '';
+                          const blank = !String(value).trim();
+                          return (
+                            <div key={p.key}>
+                              <div className="flex items-center justify-between mb-1 gap-2">
+                                <label className="text-xs font-medium text-slate-700">
+                                  {p.label}
+                                  {p.autoFilled && !blank && (
+                                    <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold uppercase">
+                                      auto
+                                    </span>
+                                  )}
+                                </label>
+                                {blank && (
+                                  <span className="text-[10px] text-amber-600 font-medium">needs a value</span>
+                                )}
+                              </div>
+                              {p.multiline ? (
+                                <textarea
+                                  rows={3}
+                                  value={value}
+                                  placeholder={p.example}
+                                  onChange={(e) => setDraftParams((prev) => ({ ...prev, [p.key]: e.target.value }))}
+                                  className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-sm ${
+                                    blank ? 'border-amber-300' : 'border-slate-200'
+                                  }`}
+                                />
+                              ) : (
+                                <input
+                                  value={value}
+                                  placeholder={p.example}
+                                  onChange={(e) => setDraftParams((prev) => ({ ...prev, [p.key]: e.target.value }))}
+                                  className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-sm ${
+                                    p.slot === 'button' ? 'font-mono text-xs' : ''
+                                  } ${blank ? 'border-amber-300' : 'border-slate-200'}`}
+                                />
+                              )}
+                              {p.hint && <p className="text-[10px] text-slate-400 mt-1">{p.hint}</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Exactly what the customer will see
+                      </p>
+                      <p className="text-sm text-slate-800 whitespace-pre-line">
+                        {draftPreview}
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* Drifted standard entry, or a non-standard template: raw {{n}} */}
+                {!usingCatalog && pickedTemplateObj && (
+                  <>
+                    {pickedDraft?.state === 'mismatch' && (
+                      <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-[11px] text-amber-800">
+                          <span className="font-semibold">{pickedDraft.title}</span> is approved on your
+                          WhatsApp account but doesn&apos;t match the standard layout ({pickedDraft.reason}),
+                          so fields can&apos;t be auto-filled. Fill the variables below against your own copy.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="text-xs text-slate-500 p-3 bg-slate-50 rounded-lg space-y-1">
+                      <p className="font-semibold mb-1 font-mono text-slate-700">{pickedTemplateObj.name}</p>
+                      {pickedTemplateObj.components.map((c, idx) => (
+                        <div key={idx}>
+                          <span className="uppercase text-[10px] text-slate-400">{c.type}{c.format ? `/${c.format}` : ''}: </span>
+                          <span className="font-mono">{c.text || (c.buttons && c.buttons.map((b) => b.text).join(' | ')) || JSON.stringify(c).slice(0, 100)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {chatDepartures.length > 0 && (
+                      <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-lg space-y-2">
+                        <label className="block text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                          Auto-fill from departure (optional)
+                        </label>
+                        <select
+                          value={tmplDepartureId}
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            setTmplDepartureId(id);
+                            const dep = chatDepartures.find((d) => d._id === id);
+                            if (dep && TEMPLATE_DEPARTURE_MAP[pickedName]) {
+                              setParamValues(applyDepartureToParams(pickedName, templateSpec, dep, paramValues));
+                            }
+                          }}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
+                        >
+                          <option value="">— Select a departure to auto-fill —</option>
+                          {chatDepartures.map((d) => {
+                            const v = resolveDepartureValues(d);
+                            const seats = Math.max(0, (d.capacity ?? 0) - (d.booked ?? 0));
+                            return (
+                              <option key={d._id} value={d._id}>
+                                {`${d.trekName} — ${d.cityName || ''} — ${v.startDate} (${seats} seats left)`}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        {tmplDepartureObj && (
+                          TEMPLATE_DEPARTURE_MAP[pickedName] ? (
+                            <p className="text-[11px] text-emerald-700">
+                              Auto-filled from this departure — edit any field below.
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-slate-500">
+                              This template has no auto-map — use the + buttons on each field to insert this departure&apos;s values.
+                            </p>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+              {!usingCatalog && templateSpec && totalParamCount(templateSpec) > 0 && (
                 <div className="space-y-3 p-3 border border-slate-200 rounded-lg">
                   <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
                     Parameters ({totalParamCount(templateSpec)})
@@ -2449,7 +2824,7 @@ export default function SupportChatPage() {
                 </div>
               )}
 
-              {pickedTemplateObj && (
+              {!usingCatalog && pickedTemplateObj && (
                 <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-1">
                   <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
                     {tmplDepartureObj
@@ -2461,23 +2836,34 @@ export default function SupportChatPage() {
                   </p>
                 </div>
               )}
+              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-              <button
-                onClick={() => { setShowTemplatePicker(false); setTmplDepartureId(''); }}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={sendTemplate}
-                disabled={sendingTemplate || !pickedTemplateObj}
-                className="btn-primary text-sm flex items-center gap-1.5"
-              >
-                {sendingTemplate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                Send
-              </button>
+            <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <p className="text-[11px] text-amber-600">
+                {usingCatalog && missingDraftParams.length > 0
+                  ? `Fill in: ${missingDraftParams.join(', ')}`
+                  : ''}
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { setShowTemplatePicker(false); setTmplDepartureId(''); }}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={sendTemplate}
+                  disabled={
+                    sendingTemplate ||
+                    (usingCatalog ? missingDraftParams.length > 0 : !pickedTemplateObj)
+                  }
+                  className="btn-primary text-sm flex items-center gap-1.5"
+                >
+                  {sendingTemplate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Send
+                </button>
+              </div>
             </div>
           </div>
         </div>

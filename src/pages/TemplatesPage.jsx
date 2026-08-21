@@ -121,6 +121,15 @@ export default function TemplatesPage() {
 
   const [uploadingMedia, setUploadingMedia] = useState(false);
 
+  // ── Standard catalog ────────────────────────────────────────────────────────
+  // The set of messages every company is expected to have. The backend compares
+  // it against this company's live WhatsApp account and reports what's missing
+  // or drifted, so gaps surface here rather than when an agent tries to reply to
+  // a customer outside the 24h window.
+  const [catalog, setCatalog] = useState(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
+
   // ── Load list ───────────────────────────────────────────────────────────────
   const load = async () => {
     setLoading(true);
@@ -134,7 +143,48 @@ export default function TemplatesPage() {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
+
+  const loadCatalog = async () => {
+    try {
+      setCatalog(await api('/api/templates/catalog'));
+    } catch (e) {
+      // Non-fatal: the main template list is still usable without the catalog.
+      console.warn('Standard template catalog unavailable:', e.message);
+    }
+  };
+
+  useEffect(() => { load(); loadCatalog(); }, []);
+
+  // Create every standard template this company is missing. Meta reviews them
+  // asynchronously, so they land as PENDING and become sendable on approval.
+  const provisionStandard = async () => {
+    setProvisioning(true);
+    try {
+      const res = await api('/api/templates/provision', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const created = res.created?.length || 0;
+      const failed = res.failed?.length || 0;
+
+      if (created) {
+        toast.success(
+          `Submitted ${created} template${created === 1 ? '' : 's'} to Meta for approval.` +
+          (failed ? ` ${failed} failed.` : '')
+        );
+      } else if (failed) {
+        toast.error(`Could not create ${failed} template${failed === 1 ? '' : 's'}: ${res.failed[0].error}`);
+      } else {
+        toast.success('All standard templates are already set up.');
+      }
+
+      await Promise.all([load(), loadCatalog()]);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setProvisioning(false);
+    }
+  };
 
   // ── Body variables -> keep bodyExamples array length in sync ───────────────────
   const bodyVars = useMemo(() => variableIndices(form.body), [form.body]);
@@ -358,6 +408,98 @@ export default function TemplatesPage() {
         <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-100 rounded-lg mb-4">
           <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
           <span className="text-xs text-red-600">{loadError}</span>
+        </div>
+      )}
+
+      {/* ── Standard message set ────────────────────────────────────────── */}
+      {catalog && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
+          <div className="flex items-start justify-between gap-4 px-5 py-4">
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-slate-900">Standard message set</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {catalog.entries.length} messages every trek company needs — booking, payment,
+                pre-trek and post-trek. Agents send these in one click when a chat is past
+                the 24-hour reply window.
+              </p>
+
+              <div className="flex items-center gap-3 mt-3 flex-wrap text-xs">
+                <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <b>{catalog.summary.ready}</b> ready to send
+                </span>
+                {catalog.summary.pending > 0 && (
+                  <span className="text-sky-700"><b>{catalog.summary.pending}</b> awaiting Meta review</span>
+                )}
+                {catalog.summary.mismatch > 0 && (
+                  <span className="text-amber-700"><b>{catalog.summary.mismatch}</b> need manual fields</span>
+                )}
+                {catalog.summary.rejected > 0 && (
+                  <span className="text-red-600"><b>{catalog.summary.rejected}</b> rejected</span>
+                )}
+                {catalog.summary.missing > 0 && (
+                  <span className="text-slate-500"><b>{catalog.summary.missing}</b> not set up</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              {catalog.summary.missing > 0 && (
+                <button
+                  onClick={provisionStandard}
+                  disabled={provisioning}
+                  className="btn-primary text-sm flex items-center gap-2 whitespace-nowrap"
+                >
+                  {provisioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Add {catalog.summary.missing} missing
+                </button>
+              )}
+              <button
+                onClick={() => setCatalogOpen((v) => !v)}
+                className="text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                {catalogOpen ? 'Hide details' : 'Show details'}
+              </button>
+            </div>
+          </div>
+
+          {catalogOpen && (
+            <div className="border-t border-slate-100 divide-y divide-slate-50">
+              {catalog.groups.map((g) => {
+                const rows = catalog.entries.filter((e) => e.group === g.key);
+                if (!rows.length) return null;
+                return (
+                  <div key={g.key} className="px-5 py-3">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      {g.title} — <span className="normal-case font-normal">{g.blurb}</span>
+                    </p>
+                    <div className="space-y-1.5">
+                      {rows.map((e) => (
+                        <div key={e.name} className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="text-xs font-semibold text-slate-800">{e.title}</span>
+                            <span className="text-[10px] text-slate-400 font-mono ml-2">{e.name}</span>
+                            {e.state !== 'ready' && e.reason && (
+                              <p className="text-[10px] text-slate-500">{e.reason}</p>
+                            )}
+                          </div>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full shrink-0 font-semibold uppercase ${
+                            e.state === 'ready' ? 'bg-emerald-50 text-emerald-700'
+                              : e.state === 'pending' ? 'bg-sky-50 text-sky-700'
+                              : e.state === 'mismatch' ? 'bg-amber-50 text-amber-700'
+                              : e.state === 'rejected' ? 'bg-red-50 text-red-700'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {e.state === 'missing' ? 'not set up' : e.state}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
