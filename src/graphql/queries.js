@@ -1271,6 +1271,24 @@ export const MANUAL_PAYMENTS = gql`
         reviewedAt
         reviewedByName
         reviewNote
+        autoConfirmed
+        ocr {
+          verdict
+          passed
+          failed
+          scannedAt
+          readAmount
+          readUtr
+          readVpas
+          readStatus
+          readPaidAt
+          checks {
+            key
+            label
+            status
+            detail
+          }
+        }
         customerName
         phone
         email
@@ -1477,6 +1495,7 @@ export const GET_COUPONS = gql`
       validFrom
       validTo
       isActive
+      isPublic
       createdAt
       updatedAt
     }
@@ -1497,6 +1516,7 @@ export const GET_COUPON = gql`
       validFrom
       validTo
       isActive
+      isPublic
       createdAt
       updatedAt
     }

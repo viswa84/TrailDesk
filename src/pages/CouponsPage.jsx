@@ -23,6 +23,7 @@ const emptyForm = {
   validFrom: '',
   validTo: '',
   isActive: true,
+  isPublic: true,
 };
 
 function fmtDate(iso) {
@@ -72,6 +73,7 @@ export default function CouponsPage() {
       validFrom: coupon.validFrom ? coupon.validFrom.slice(0, 10) : '',
       validTo: coupon.validTo ? coupon.validTo.slice(0, 10) : '',
       isActive: coupon.isActive !== false,
+      isPublic: coupon.isPublic !== false,
     });
     setFormErrors({});
     setShowForm(true);
@@ -101,6 +103,7 @@ export default function CouponsPage() {
       validFrom: formData.validFrom || null,
       validTo: formData.validTo || null,
       isActive: formData.isActive,
+      isPublic: formData.isPublic,
     };
 
     try {
@@ -392,6 +395,25 @@ export default function CouponsPage() {
               <span className="text-sm font-medium text-slate-700">Coupon is active</span>
             </label>
             <p className="text-[11px] text-slate-400 mt-1 ml-6">Inactive coupons cannot be applied at checkout</p>
+          </div>
+
+          {/* Advertising, not permission: a private coupon still works at
+              checkout for anyone holding the code — it is simply not announced
+              in the WhatsApp trek card. */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={formData.isPublic}
+                onChange={e => setField('isPublic', e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm font-medium text-slate-700">Show this coupon to customers</span>
+            </label>
+            <p className="text-[11px] text-slate-400 mt-1 ml-6">
+              On: listed on the WhatsApp trek card so customers can see it.
+              Off: private — still works at checkout for anyone you give the code to, but never advertised.
+            </p>
           </div>
         </div>
 

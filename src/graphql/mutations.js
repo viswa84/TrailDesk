@@ -1110,6 +1110,7 @@ export const CREATE_COUPON = gql`
       validFrom
       validTo
       isActive
+      isPublic
       createdAt
     }
   }
@@ -1129,6 +1130,7 @@ export const UPDATE_COUPON = gql`
       validFrom
       validTo
       isActive
+      isPublic
       updatedAt
     }
   }
@@ -1146,6 +1148,7 @@ export const TOGGLE_COUPON = gql`
       _id
       code
       isActive
+      isPublic
     }
   }
 `;
