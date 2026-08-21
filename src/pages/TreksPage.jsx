@@ -27,6 +27,19 @@ function buildTrekBookingUrl(trek, companyCode) {
   return `${PUBLIC_BOOKING_BASE}/book/trek/${trek?._id}`;
 }
 
+// Mirrors the backend's normalizeTrekCode (src/utils/trekCode.js): when the
+// code field is left blank the server derives one from the trek name, so show
+// the admin what that will be.
+function slugPreview(name) {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 // Fallback images mapped by trek name keywords
 const trekImages = {
   'pangong': 'https://images.unsplash.com/photo-1583497606541-043ab1a7f2f3?w=400&h=250&fit=crop',
@@ -588,7 +601,7 @@ export default function TreksPage() {
               className="input-field"
               placeholder="e.g. kedarkantha-winter"
             />
-            <p className="text-xs text-slate-400 mt-1">Used in the booking URL: /book/your-company/<strong>{formData.trekCode || 'code'}</strong>. Lowercase letters, numbers, and hyphens only. Leave blank to use the legacy ID-based URL.</p>
+            <p className="text-xs text-slate-400 mt-1">Used in the booking URL: /book/your-company/<strong>{formData.trekCode || slugPreview(formData.name) || 'code'}</strong>. Lowercase letters, numbers, and hyphens only. Leave blank and a code is created from the trek name.</p>
           </div>
           {f('Difficulty', 'difficulty', 'select', '', { options: ['Easy', 'Easy-Moderate', 'Moderate', 'Hard', 'Difficult'] })}
           {f('Altitude', 'altitude', 'text', 'e.g. 12,500 ft')}
