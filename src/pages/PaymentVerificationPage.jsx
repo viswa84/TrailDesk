@@ -6,7 +6,7 @@ import { APPROVE_MANUAL_PAYMENT, REJECT_MANUAL_PAYMENT } from '../graphql/mutati
 import { useToast } from '../context/ToastContext';
 import {
   ShieldCheck, Loader2, Check, X, ExternalLink, AlertTriangle,
-  Copy, Phone, Users, Calendar, RefreshCw, Inbox,
+  Copy, Phone, Users, Calendar, RefreshCw, Inbox, ScanLine, Bot,
 } from 'lucide-react';
 
 const TABS = [
@@ -33,6 +33,75 @@ function when(iso) {
 function dateOnly(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/**
+ * Automated screenshot checks.
+ *
+ * Deliberately worded as "checks on the screenshot", never as verification: the
+ * whole panel is derived from an image the customer uploaded, so a convincing
+ * fake receipt shows all-green here. It exists to save reading the image
+ * manually and to make mismatches jump out — the bank statement is still what
+ * proves the money arrived.
+ */
+function OcrPanel({ ocr }) {
+  const [open, setOpen] = useState(false);
+  if (!ocr) return null;
+
+  const tone = ocr.verdict === 'all_passed'
+    ? { box: 'bg-emerald-50 border-emerald-200 text-emerald-900', Icon: ShieldCheck }
+    : ocr.verdict === 'mismatch'
+      ? { box: 'bg-red-50 border-red-200 text-red-900', Icon: AlertTriangle }
+      : { box: 'bg-slate-50 border-slate-200 text-slate-700', Icon: ScanLine };
+
+  const headline = ocr.verdict === 'all_passed'
+    ? `All ${ocr.passed} screenshot checks passed`
+    : ocr.verdict === 'mismatch'
+      ? `${ocr.failed} screenshot check${ocr.failed === 1 ? '' : 's'} failed`
+      : 'Screenshot could not be fully checked';
+
+  const dot = (status) => (
+    status === 'pass' ? 'text-emerald-600' : status === 'fail' ? 'text-red-600' : 'text-slate-400'
+  );
+  const glyph = (status) => (status === 'pass' ? '✓' : status === 'fail' ? '✕' : '–');
+
+  return (
+    <div className={`mt-3 text-xs rounded-lg border px-3 py-2 ${tone.box}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 w-full text-left font-medium"
+      >
+        <tone.Icon className="w-3.5 h-3.5 shrink-0" />
+        <span className="flex-1">{headline}</span>
+        <span className="text-[11px] opacity-70">{open ? 'Hide' : 'Details'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-2 pt-2 border-t border-current/10 space-y-1">
+          {(ocr.checks || []).map((c) => (
+            <div key={c.key} className="flex gap-2">
+              <span className={`font-bold ${dot(c.status)}`}>{glyph(c.status)}</span>
+              <span className="flex-1">
+                <span className="font-medium">{c.label}</span>
+                {c.detail && <span className="opacity-70"> — {c.detail}</span>}
+              </span>
+            </div>
+          ))}
+          <div className="pt-1.5 mt-1 border-t border-current/10 opacity-70">
+            Read from the image: {ocr.readAmount != null ? money(ocr.readAmount) : 'no amount'}
+            {ocr.readUtr && ` · ${ocr.readUtr}`}
+            {ocr.readStatus && ` · ${ocr.readStatus}`}
+            {ocr.readVpas?.length ? ` · ${ocr.readVpas.join(', ')}` : ''}
+          </div>
+          <div className="opacity-60 italic">
+            These checks read the customer's screenshot. They cannot prove the money arrived —
+            confirm against your bank statement.
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ProofCard({ item, onApprove, onReject, busy }) {
@@ -137,6 +206,9 @@ function ProofCard({ item, onApprove, onReject, busy }) {
             {item.bookingStatus === 'partial' && ' · balance payment (advance already paid)'}
           </div>
 
+          {/* Automated screenshot checks */}
+          <OcrPanel ocr={item.ocr} />
+
           {/* Warnings */}
           {amountMismatch && (
             <div className="mt-3 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 flex gap-2">
@@ -165,9 +237,20 @@ function ProofCard({ item, onApprove, onReject, busy }) {
                 : 'bg-red-50 border border-red-200 text-red-800'
             }`}>
               <strong>{item.state === 'approved' ? 'Approved' : 'Rejected'}</strong>
-              {item.reviewedByName && ` by ${item.reviewedByName}`}
+              {item.autoConfirmed && (
+                <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/60 border border-current/20 text-[10px] font-semibold align-middle">
+                  <Bot className="w-3 h-3" /> auto-confirmed
+                </span>
+              )}
+              {item.reviewedByName && !item.autoConfirmed && ` by ${item.reviewedByName}`}
               {item.reviewedAt && ` · ${when(item.reviewedAt)}`}
               {item.reviewNote && <div className="mt-0.5">{item.reviewNote}</div>}
+              {item.autoConfirmed && (
+                <div className="mt-1 opacity-80">
+                  Approved automatically from the screenshot checks — no human reviewed it.
+                  Confirm this one against your bank statement.
+                </div>
+              )}
             </div>
           )}
 

@@ -24,6 +24,7 @@ import {
   QrCode,
   Upload,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 
 const ENV_OPTIONS = [
@@ -119,6 +120,9 @@ function ManualSettingsForm({ settings, setSettings }) {
   };
 
   const hasUpiId = !!(settings.upiId || '').trim();
+  // Auto-confirm has nothing to check without a screenshot, and no way to spot a
+  // reused receipt without a UTR — the backend rejects the combination too.
+  const autoConfirmAllowed = settings.requireUtr !== false && settings.requireScreenshot !== false;
 
   return (
     <div className="space-y-4">
@@ -237,9 +241,71 @@ function ManualSettingsForm({ settings, setSettings }) {
         </label>
       </div>
 
+      {/* ── Auto-confirm ──────────────────────────────────────────────────────
+          Off by default and gated on both proof requirements, mirroring the
+          backend validation in upiManualAdapter.validateSettings(). */}
+      <div className="border-t border-slate-100 pt-4 space-y-2">
+        <label className={`flex items-start gap-2 ${autoConfirmAllowed ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+          <input
+            type="checkbox"
+            disabled={!autoConfirmAllowed}
+            checked={settings.autoConfirmOnProof === true}
+            onChange={(e) => set('autoConfirmOnProof', e.target.checked)}
+            className="w-4 h-4 mt-0.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span className="text-sm text-slate-700">
+            Auto-confirm when all screenshot checks pass
+            {!autoConfirmAllowed && (
+              <span className="block text-xs text-slate-400 mt-0.5">
+                Turn on both “Require UTR” and “Require screenshot” to enable this.
+              </span>
+            )}
+          </span>
+        </label>
+
+        {settings.autoConfirmOnProof === true && (
+          <>
+            <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 flex gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                A screenshot is an image, not a bank record. Fake UPI receipt generators exist and
+                will pass every automated check, so this trades that risk for instant confirmation.
+                Reconcile against your bank statement before each departure.
+              </span>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Auto-confirm limit <span className="text-slate-400">(₹ per payment — blank means no limit)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={settings.autoConfirmMaxAmount ?? ''}
+                placeholder="e.g. 2000"
+                onChange={(e) => set('autoConfirmMaxAmount', e.target.value === '' ? null : Number(e.target.value))}
+                className="input-field text-sm w-40"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Payments above this always go to Payment Verification for a human to approve.
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+
       <div className="text-xs bg-slate-50 border border-slate-200 text-slate-600 rounded-lg p-3">
-        Bookings paid this way are <strong>not confirmed automatically</strong>. Each payment lands in
-        <strong> Payment Verification</strong> for your team to approve against the bank statement.
+        {settings.autoConfirmOnProof === true ? (
+          <>
+            Payments whose screenshot passes every check are <strong>confirmed automatically</strong>.
+            Everything else — and anything over the limit — still lands in
+            <strong> Payment Verification</strong> for your team.
+          </>
+        ) : (
+          <>
+            Bookings paid this way are <strong>not confirmed automatically</strong>. Each payment lands in
+            <strong> Payment Verification</strong> for your team to approve against the bank statement.
+          </>
+        )}
       </div>
     </div>
   );
