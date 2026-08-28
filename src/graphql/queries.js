@@ -1271,24 +1271,6 @@ export const MANUAL_PAYMENTS = gql`
         reviewedAt
         reviewedByName
         reviewNote
-        autoConfirmed
-        ocr {
-          verdict
-          passed
-          failed
-          scannedAt
-          readAmount
-          readUtr
-          readVpas
-          readStatus
-          readPaidAt
-          checks {
-            key
-            label
-            status
-            detail
-          }
-        }
         customerName
         phone
         email
