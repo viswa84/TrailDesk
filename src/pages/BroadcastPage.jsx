@@ -24,9 +24,15 @@ async function api(path, options = {}) {
   return data;
 }
 
-// Template whose {{1}}/{{2}} are filled from a whole weekend of departures
-// rather than from one of them — see the weekend auto-fill block below.
+// Templates filled from a whole weekend of departures rather than from one of
+// them — see the weekend auto-fill block below.
+//
+// The flat one carries the whole list in {{2}}; the stacked one spends a
+// placeholder per visible line, because a template parameter may not contain a
+// newline and the approved body is the only place a line break can live.
 const WEEKEND_LINEUP_TEMPLATE = 'weekend_trek_lineup';
+const WEEKEND_LINEUP_STACKED = 'weekend_trek_lineup_v2';
+const WEEKEND_LINEUP_TEMPLATES = [WEEKEND_LINEUP_TEMPLATE, WEEKEND_LINEUP_STACKED];
 
 // The upcoming Saturday–Sunday as YYYY-MM-DD: the window a weekend broadcast
 // almost always targets, so the admin usually just presses the button.
@@ -166,10 +172,18 @@ export default function BroadcastPage() {
         toast.error('No open departures in that date range.');
         return;
       }
+      // The stacked template spends one placeholder per visible line, the flat
+      // one puts the whole list in {{2}}. Both shapes come back from the same
+      // call, so which template is selected decides which one is written.
+      const stacked = tmplName === WEEKEND_LINEUP_STACKED;
       setParamValues((prev) => {
         const bodyParams = [...prev.bodyParams];
         bodyParams[0] = r.weekendLabel;
-        bodyParams[1] = r.lineupText;
+        if (stacked) {
+          (r.lines || []).forEach((line, i) => { bodyParams[i + 1] = line; });
+        } else {
+          bodyParams[1] = r.lineupText;
+        }
         return { ...prev, bodyParams };
       });
       toast.success(`Filled ${r.departureCount} departure(s) across ${r.trekNames.length} trek(s).`);
@@ -178,7 +192,7 @@ export default function BroadcastPage() {
     } finally {
       setWeekendLoading(false);
     }
-  }, [weekend, toast]);
+  }, [weekend, toast, tmplName]);
 
   const isHttpsUrl = (u) => /^https:\/\/\S+$/i.test((u || '').trim());
 
@@ -814,7 +828,7 @@ export default function BroadcastPage() {
             </p>
 
             {/* ── Auto-fill the whole weekend's lineup ── */}
-            {tmplName === WEEKEND_LINEUP_TEMPLATE && (
+            {WEEKEND_LINEUP_TEMPLATES.includes(tmplName) && (
               <div className="p-3 bg-sky-50/60 border border-sky-200 rounded-lg space-y-2">
                 <label className="block text-xs font-bold text-sky-700 uppercase tracking-wider">
                   Auto-fill the weekend lineup
