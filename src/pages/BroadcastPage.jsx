@@ -24,6 +24,22 @@ async function api(path, options = {}) {
   return data;
 }
 
+// Template whose {{1}}/{{2}} are filled from a whole weekend of departures
+// rather than from one of them — see the weekend auto-fill block below.
+const WEEKEND_LINEUP_TEMPLATE = 'weekend_trek_lineup';
+
+// The upcoming Saturday–Sunday as YYYY-MM-DD: the window a weekend broadcast
+// almost always targets, so the admin usually just presses the button.
+function nextWeekendRange() {
+  const now = new Date();
+  const sat = new Date(now);
+  sat.setDate(now.getDate() + ((6 - now.getDay() + 7) % 7));
+  const sun = new Date(sat);
+  sun.setDate(sat.getDate() + 1);
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { from: iso(sat), to: iso(sun) };
+}
+
 const BOOKING_STATUSES = ['pending', 'paid', 'partial', 'failed'];
 
 // Personalization tokens resolved per-recipient by the backend at send time.
@@ -128,7 +144,41 @@ export default function BroadcastPage() {
   useEffect(() => {
     setParamValues({ headerParams: [], bodyParams: [], buttonParams: {}, headerMedia: { url: '', filename: '' } });
     setSelectedDepartureId('');
+    setWeekendInfo(null);
   }, [selectedTemplate]);
+
+  // ── Weekend-lineup auto-fill ──────────────────────────────────────────────
+  // The weekend template carries the whole lineup in {{2}}. Typing it by hand
+  // would mean retyping every seat count, so it is generated from live
+  // departures instead and stays editable afterwards.
+  const [weekend, setWeekend] = useState(nextWeekendRange);
+  const [weekendLoading, setWeekendLoading] = useState(false);
+  const [weekendInfo, setWeekendInfo] = useState(null);
+
+  const fillWeekendLineup = useCallback(async () => {
+    setWeekendLoading(true);
+    try {
+      const r = await api(
+        `/api/marketing/weekend-lineup?from=${encodeURIComponent(weekend.from)}&to=${encodeURIComponent(weekend.to)}`
+      );
+      setWeekendInfo(r);
+      if (!r.departureCount) {
+        toast.error('No open departures in that date range.');
+        return;
+      }
+      setParamValues((prev) => {
+        const bodyParams = [...prev.bodyParams];
+        bodyParams[0] = r.weekendLabel;
+        bodyParams[1] = r.lineupText;
+        return { ...prev, bodyParams };
+      });
+      toast.success(`Filled ${r.departureCount} departure(s) across ${r.trekNames.length} trek(s).`);
+    } catch (e) {
+      toast.error(`Could not build the lineup: ${e.message}`);
+    } finally {
+      setWeekendLoading(false);
+    }
+  }, [weekend, toast]);
 
   const isHttpsUrl = (u) => /^https:\/\/\S+$/i.test((u || '').trim());
 
@@ -762,6 +812,51 @@ export default function BroadcastPage() {
                 <code key={t.token} className="px-1 py-0.5 mr-1 bg-slate-100 rounded font-mono">{t.token}</code>
               ))}
             </p>
+
+            {/* ── Auto-fill the whole weekend's lineup ── */}
+            {tmplName === WEEKEND_LINEUP_TEMPLATE && (
+              <div className="p-3 bg-sky-50/60 border border-sky-200 rounded-lg space-y-2">
+                <label className="block text-xs font-bold text-sky-700 uppercase tracking-wider">
+                  Auto-fill the weekend lineup
+                </label>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <span className="block text-[11px] text-sky-700 mb-1">From</span>
+                    <input
+                      type="date"
+                      value={weekend.from}
+                      onChange={(e) => setWeekend({ ...weekend, from: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[11px] text-sky-700 mb-1">To</span>
+                    <input
+                      type="date"
+                      value={weekend.to}
+                      onChange={(e) => setWeekend({ ...weekend, to: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fillWeekendLineup}
+                    disabled={weekendLoading || !weekend.from || !weekend.to}
+                    className="btn-secondary flex items-center gap-1.5"
+                  >
+                    {weekendLoading
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : <RefreshCcw size={14} />}
+                    Fill from live departures
+                  </button>
+                </div>
+                <p className="text-[11px] text-sky-700">
+                  {weekendInfo
+                    ? `${weekendInfo.departureCount} departure(s), ${weekendInfo.trekNames.length} trek(s) — edit the text below before sending.`
+                    : 'Reads every open departure in the range and writes the dates and the trek list into the fields below.'}
+                </p>
+              </div>
+            )}
 
             {/* ── Auto-fill from a departure (optional) ── */}
             {departures.length > 0 && (
